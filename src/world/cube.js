@@ -13,7 +13,7 @@ export function createCube(color) {
   group.add(pivot)
 
   const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.55 })
-  const glow = 0.28 // keeps the cube readable in the dark room
+  const glow = 0.12 // keeps the cube readable in the dark room
   mat.emissive = new THREE.Color(color).multiplyScalar(glow)
   const body = new THREE.Mesh(bodyGeo, mat)
   body.position.y = SIZE / 2
@@ -23,7 +23,7 @@ export function createCube(color) {
 
   const eyes = [-1, 1].map(s => {
     const e = new THREE.Mesh(eyeGeo, eyeMat)
-    e.position.set(s * 0.2, SIZE / 2 + 0.07, SIZE / 2 + 0.002)
+    e.position.set(s * 0.19, 0.07, SIZE / 2 + 0.002)
     body.add(e)
     return e
   })
@@ -33,6 +33,7 @@ export function createCube(color) {
 
   return {
     group,
+    setVisible(v) { group.visible = v },
     setColor(c) { mat.color.set(c); mat.emissive.set(c).multiplyScalar(glow) },
     update(t, dt, moving) {
       phase += dt * (moving ? 11 : 2.2)
