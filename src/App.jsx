@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createGame } from './world/game'
+import { setHomeKind } from './game/areas'
 import { prefetchPreviews } from './world/preview'
 import { resolveDefaults } from './world/furnish'
 import { setAudio, startOnFirstGesture, sfx } from './game/audio'
@@ -50,10 +51,13 @@ function App() {
   const [viewMenu, setViewMenu] = useState(false) // the camera picker under the compass
   const viewPick = useRef(null)
 
+  // a couple lives in the four-room house; everyone else in their starter home (rebuilt when that changes)
+  const homeKind = s.couple.state === 'active' ? 'couple' : 'solo'
   useEffect(() => {
     let alive = true
     let g = null
     const saved = store.get()
+    setHomeKind(homeKind)
     const boot = async () => {
       // canvas text (signs, name plates) needs Oswald loaded before it is drawn
       try { await Promise.all([document.fonts.load('600 40px Oswald'), document.fonts.load('400 40px Oswald')]) } catch { /* the fallback font is fine */ }
@@ -80,8 +84,8 @@ function App() {
       if (debug) { window.__cc = g; window.__store = store }
     }
     boot()
-    return () => { alive = false; g?.dispose() }
-  }, [])
+    return () => { alive = false; g?.dispose(); game.current = null; setReady(false); setEd(null) }
+  }, [homeKind])
 
   // keep the 3D world in sync with the app state
   const skin = tryOn.skin ?? store.equippedTier('skin')
@@ -97,7 +101,7 @@ function App() {
 
   // what the home looks like follows the saved state (this also handles undo, redo and reset)
   useEffect(() => { if (s.layout) game.current?.setLayout(s.layout) }, [s.layout, ready])
-  useEffect(() => { ['study', 'bedroom', 'kitchen', 'living'].forEach(id => game.current?.setStyle(id, s.style[id])) }, [s.style, ready])
+  useEffect(() => { (game.current?.roomIds || []).forEach(id => game.current?.setStyle(id, s.style[id])) }, [s.style, ready])
   const fenceTier = s.equipped.fence ? ITEM_BY_ID[s.equipped.fence].tier : 0
   const signTier = s.equipped.sign ? ITEM_BY_ID[s.equipped.sign].tier : 0
   useEffect(() => { game.current?.setFence(fenceTier) }, [fenceTier, ready])
@@ -141,10 +145,10 @@ function App() {
   const tryItem = useCallback((slot, tier) => setTryOn(t => ({ ...t, [slot]: tier })), [])
   const openShopAt = useCallback(cat => { setShopCat(cat); setOpen('shop') }, [])
 
-  const AREA_OF = { study: 'study', bedroom: 'bedroom', kitchen: 'kitchen', 'living room': 'living' }
+  const AREA_OF = { home: 'home', study: 'study', bedroom: 'bedroom', kitchen: 'kitchen', 'living room': 'living' }
   const startEdit = () => {
     setOpen(null)
-    game.current?.enterEdit(AREA_OF[view.room] || 'study', editInset())
+    game.current?.enterEdit(AREA_OF[view.room] || game.current?.roomIds[0], editInset())
   }
   const stopEdit = () => { game.current?.exitEdit(); setOpen(null) }
   const resetArea = id => { store.resetArea(id, resolveDefaults(id)); sfx('pick') }

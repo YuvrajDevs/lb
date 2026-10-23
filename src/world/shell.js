@@ -117,8 +117,12 @@ export function makeShell(spec) {
   // ---------- skirting + door frames (the only trim) ----------
   // (skirting starts 4 mm below the floor so its underside never shares a plane with the panelling's)
   box(walls.back, [W, 0.28, 0.08], [0, -0.004, -HZ + 0.04], TRIM)
-  // the front wall's runs (skirting, panelling) stop either side of the front door and the balcony doorway
-  frontRuns.forEach(([a, b]) => box(walls.front, [b - a, 0.28, 0.08], [(a + b) / 2, -0.004, HZ - 0.04], TRIM))
+  // the front wall's runs (skirting, panelling) stop either side of the front door and the balcony doorway,
+  // 1.5 cm short of the opening so their ends never sit in the same plane as the wall's cut edge
+  // (the skirting stops a centimetre before the panelling, so their ends don't share a plane either)
+  const pull = d => ([a, b]) => [a === -HX ? a : a + d, b === HX ? b : b - d]
+  const trimRuns = frontRuns.map(pull(0.025))
+  frontRuns.map(pull(0.035)).forEach(([a, b]) => box(walls.front, [b - a, 0.28, 0.08], [(a + b) / 2, -0.004, HZ - 0.04], TRIM))
   const sideTrim = (g, x, door) => {
     if (!door) return box(g, [0.08, 0.28, D], [x, -0.004, 0], TRIM)
     const a = door[0] + HZ, b = HZ - door[1]
@@ -182,7 +186,7 @@ export function makeShell(spec) {
     }
   }
   wain(walls.back, 'x', -HZ + 0.025, W)
-  frontRuns.forEach(([a, b]) => wain(walls.front, 'x', HZ - 0.025, b - a, (a + b) / 2))
+  trimRuns.forEach(([a, b]) => wain(walls.front, 'x', HZ - 0.025, b - a, (a + b) / 2))
   const sidePanel = (g, x, door) => {
     if (!door) return wain(g, 'z', x, D)
     const a = door[0] + HZ, b = HZ - door[1]

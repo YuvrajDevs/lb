@@ -4,6 +4,20 @@
 // `on: n` puts the item on top of entry n of the same list. Wall items give `wall`, `at` (metres along it) and `v` (metres up).
 
 export const DEFAULTS = {
+  // the starter home: everything a new player begins with, in one room
+  home: [
+    { id: 'beds-2', at: [-3.7, -2.1], rot: 0 },
+    { id: 'wardrobes-2', at: [4.5, -3.0], rot: 0 },
+    { id: 'tables-2', at: [3.4, 0.4], rot: 0 },                        // 2 the table
+    { id: 'lamps-2', on: 2, at: [3.0, 0.4] },
+    { id: 'seating-3', at: [3.4, 1.8], rot: 2 },
+    { id: 'shelves-2', at: [-5.1, 1.0], rot: 1 },
+    { id: 'lamps-4', at: [-2.4, -3.1], rot: 0 },
+    { id: 'rugs-1', at: [0.0, -0.2], rot: 0 },
+    { id: 'plants-2', at: [2.4, -3.1], rot: 0 },
+    { id: 'pendants-1', at: [0.0, -0.4], rot: 0 },
+    { id: 'curtains-1', wall: 'back', at: 0.0, v: 1.7 },
+  ],
   study: [
     { id: 'tables-4', at: [-0.8, -3.0], rot: 0 },                       // 0 writing desk under the window
     { id: 'lamps-2', on: 0, at: [-1.4, -3.0] },

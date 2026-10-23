@@ -107,7 +107,8 @@ export function addExterior(walls, o) {
 
   // ---- front ----
   const fHoles = [
-    ...(doorFront != null ? [[doorFront - 0.8, doorFront + 0.8, 0.02, 3.2]] : []),
+    // (the cladding stops 2 cm back from the door's edge, behind the door casing, so their ends never share a plane)
+    ...(doorFront != null ? [[doorFront - 0.82, doorFront + 0.82, 0.02, 3.24]] : []), // (top tucked behind the door's head trim)
     ...windows.map(x => [x - FRONT_WIN.w / 2, x + FRONT_WIN.w / 2, FRONT_WIN.y[0], FRONT_WIN.y[1]]),
     ...(balcony != null ? [[balcony - BALCONY_DOOR.w / 2, balcony + BALCONY_DOOR.w / 2, BALCONY_DOOR.y[0], BALCONY_DOOR.y[1]]] : []),
   ]
@@ -157,7 +158,7 @@ export function addExterior(walls, o) {
   if (balcony != null) {
     const bx = balcony
     windowTrim(walls.front, faces.front, bx, BALCONY_DOOR.w, BALCONY_DOOR.y[0], BALCONY_DOOR.y[1], { shutters: false, flowers: false })
-    box(walls.front, [3.4, 0.2, 1.3], [bx, -0.18, HZ + T + 0.65], '#b9a07a')
+    box(walls.front, [3.4, 0.2, 1.3], [bx, -0.17, HZ + T + 0.65], '#b9a07a') // floor 3 cm up: clear of the wall's sliver under the doorway
     const zr = HZ + T + 1.25
     box(walls.front, [3.4, 0.08, 0.08], [bx, 1.0, zr], TRIM)
     ;[-1, 1].forEach(s => box(walls.front, [0.08, 0.08, 1.2], [bx + s * 1.66, 1.0, HZ + T + 0.65], TRIM))

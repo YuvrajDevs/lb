@@ -256,7 +256,7 @@ export function makeFrame(parent, w, h, pos, rotY, kind) {
     new THREE.PlaneGeometry(w, h),
     new THREE.MeshStandardMaterial({ map: artTexture(kind, w / h), color: '#b8b0a4', roughness: 0.8 })
   )
-  pic.position.z = 0.034
+  pic.position.z = 0.045 // 1.5 cm proud of the frame (4 mm flickered from a distance)
   pic.userData.keep = true
   g.add(pic)
   parent.add(g)

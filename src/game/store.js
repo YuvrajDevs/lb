@@ -18,7 +18,7 @@ const today = () => toDateStr(new Date())
 function fresh() {
   const t = today()
   return {
-    profile: { name: 'Sera', house: 'Sera & DeM' },
+    profile: { name: 'Sera', house: "Sera's home" },
     boxets: 1500,
     owned: starterOwned(), // itemId -> count: the standard homes' furniture to start with
     equipped: { skin: null, hat: null, fence: null, sign: null },
@@ -30,17 +30,18 @@ function fresh() {
     today: t, // overridable with the dev "next day" button
     settings: { quality: 'medium', perfV: 2, music: true, sfx: true, chat: true, names: true, hints: true, reduceMotion: false },
     world: {
-      name: "Sera & DeM's block",
+      name: "Sera's block",
       slots: WORLD_BASE_SLOTS,
       fund: 120,
       members: [
-        { id: 'me', name: 'Sera', house: 'Sera & DeM', online: true, kind: 'couple', you: true },
+        { id: 'me', name: 'Sera', house: "Sera's home", online: true, kind: 'solo', you: true },
         { id: 'm1', name: 'Mochi', house: "Mochi's nook", online: true, kind: 'solo' },
         { id: 'm2', name: 'Alex', house: "Alex's den", online: false, kind: 'solo' },
       ],
       invites: [{ id: 'i1', name: 'Juno', dir: 'out' }],
     },
-    couple: { partner: 'DeM', since: '2025-02-14', state: 'active' },
+    // a new player starts on their own, in the starter home; becoming a couple moves them into the big house
+    couple: { partner: null, since: null, state: 'none' },
     toasts: [],
   }
 }
@@ -226,6 +227,16 @@ export const store = {
     },
     skipDays(n) { for (let i = 0; i < n; i++) store.dev.nextDay() },
     reset() { try { localStorage.removeItem(KEY) } catch { /* ignore */ } state = fresh(); set({}) },
+    /** try either home: become a couple with a made-up partner, or go back to being on your own */
+    toggleCouple() {
+      const on = state.couple.state !== 'active'
+      const partner = 'DeM'
+      set({
+        couple: on ? { partner, since: toDateStr(new Date()), state: 'active' } : { partner: null, since: null, state: 'none' },
+        profile: { ...state.profile, house: on ? `${state.profile.name} & ${partner}` : `${state.profile.name}'s home` },
+        world: { ...state.world, members: state.world.members.map(m => (m.you ? { ...m, kind: on ? 'couple' : 'solo', house: on ? `${state.profile.name} & ${partner}` : `${state.profile.name}'s home` } : m)) },
+      })
+    },
   },
 }
 

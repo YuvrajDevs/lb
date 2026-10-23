@@ -94,7 +94,9 @@ export default function World({ onClose }) {
             <div className="cloud-art" aria-hidden="true"><Icon name="cloud" size={64} /><Icon name="heart" size={26} className="hrt" /></div>
             <div>
               <h3>{s.profile.house}</h3>
-              <p className="soft">{s.profile.name} & {s.couple.partner} · together since {s.couple.since}</p>
+              {s.couple.state === 'active'
+                ? <p className="soft">{s.profile.name} & {s.couple.partner} · together since {s.couple.since}</p>
+                : <p className="soft">You&rsquo;re on your own for now, in your starter home. Becoming a couple turns your two homes into one four-room house.</p>}
             </div>
           </div>
           <div className="perks">

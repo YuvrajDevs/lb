@@ -14,7 +14,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
-import { AREA_LIST, areaOf } from '../game/areas.js'
+import { areaList, areaOf, getHomeKind } from '../game/areas.js'
 import { CELL, TABLE_TOP, overlap, floorRect } from '../game/grid.js'
 
 const HALF = 0.42 // cube collision half-extent
@@ -74,12 +74,16 @@ export function createGame(container, opts = {}) {
     scene.background = t
   }
   // the layout of every room: the player's saved one, or the standard furnishing for a new home
-  const layout = opts.layout || Object.fromEntries(AREA_LIST.map(id => [id, resolveDefaults(id)]))
+  const layout = opts.layout ? { ...opts.layout } : Object.fromEntries(areaList().map(id => [id, resolveDefaults(id)]))
+  // a saved home that has never had this kind of house (a couple moving to their starter home, or back) gets its
+  // standard furnishing for the rooms it is missing
+  const missing = opts.layout ? areaList().filter(id => !layout[id]) : []
+  missing.forEach(id => { layout[id] = resolveDefaults(id); opts.onLayoutFix?.(id, layout[id]) })
   // repairs for saved homes (and, for pictures, the standard furnishing too):
   // - furniture standing where the rules now say nothing may go (doorways, the path) is taken out, with anything on it
   // - wall pieces over a window (windows grew) or a doorway are taken down
   // - pictures are hung at eye level once (they used to hang far too high), or just above the furniture under them
-  AREA_LIST.forEach(id => {
+  areaList().forEach(id => {
     const area = areaOf(id)
     const list = layout[id] || []
     const blockedFloor = e => !e.wall && !e.on && infoOf(e.id).kind === 'floor' &&
@@ -223,10 +227,17 @@ export function createGame(container, opts = {}) {
     return { cube, pos, path: [], yaw: 0, moving: false }
   }
   const byId = id => rooms.find(r => r.id === id)
-  const me = makeActor('#ff8fb8', byId('study'), 1.2, 1.6)
-  const partner = makeActor('#9ad0ff', byId('bedroom'), 1.8, 0.4)
+  const solo = getHomeKind() === 'solo'
+  const me = makeActor('#ff8fb8', byId('study') || rooms[0], 1.2, 1.6)
+  const partner = makeActor('#9ad0ff', byId('bedroom') || rooms[0], 1.8, 0.4)
+  if (solo) partner.cube.setVisible(false) // a solo player has no partner at home
 
-  const roomAt = a => rooms.find(r => r.col === (a.pos.x > 0 ? 1 : 0) && r.level === levelOf(a.pos.y)) || rooms[0]
+  // the room someone is in (or nearest to, out in the garden) on their storey
+  const roomAt = a => {
+    const lvl = levelOf(a.pos.y)
+    const same = rooms.filter(r => r.level === lvl)
+    return (same.length ? same : rooms).reduce((b, r) => (Math.abs(r.ox - a.pos.x) < Math.abs(b.ox - a.pos.x) ? r : b))
+  }
 
   const marker = new THREE.Mesh(
     new THREE.RingGeometry(0.22, 0.3, 28),
@@ -238,6 +249,7 @@ export function createGame(container, opts = {}) {
 
   // ---- view control ----
   const stairPrompt = () => {
+    if (!S) return null
     if (onStair(me.pos.x, me.pos.z)) return null
     if (levelOf(me.pos.y) === 0 && Math.hypot(me.pos.x - S.x, me.pos.z - S.footZ) < 1.5) return 'up'
     if (levelOf(me.pos.y) === 1 && Math.hypot(me.pos.x - S.x, me.pos.z - S.landingZ) < 1.5) return 'down'
@@ -301,6 +313,7 @@ export function createGame(container, opts = {}) {
 
   // straight-line route inside a room, or through the doorway between side-by-side rooms
   function routeTo(a, dest) {
+    if (rooms.length === 1) return [dest]
     const from = roomAt(a)
     const toCol = dest.x > 0 ? 1 : 0
     if (toCol === from.col) return [dest]
@@ -319,7 +332,7 @@ export function createGame(container, opts = {}) {
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -me.pos.y)
     if (!ray.ray.intersectPlane(plane, hit)) return
     const dest = new THREE.Vector3(
-      THREE.MathUtils.clamp(hit.x, -COL + 0.6, COL - 0.6),
+      THREE.MathUtils.clamp(hit.x, (solo ? -HX : -COL) + 0.6, (solo ? HX : COL) - 0.6),
       me.pos.y,
       THREE.MathUtils.clamp(hit.z, -HZ + HALF, HZ - HALF)
     )
@@ -483,7 +496,7 @@ export function createGame(container, opts = {}) {
   }
   const hits = (list, x, z, skipStair = false) => list.some(c => !(skipStair && c.stair) && x > c.minX - HALF && x < c.maxX + HALF && z > c.minZ - HALF && z < c.maxZ + HALF)
   // standing in line with the staircase: its side colliders step aside so you can walk onto it from either end
-  const inStairColumn = x => Math.abs(x - S.x) < STAIR_LANE
+  const inStairColumn = x => !!S && Math.abs(x - S.x) < STAIR_LANE
   const onStair = (x, z) => inStairColumn(x) && z >= S.topZ && z <= S.startZ
   function blocked(x, z, level) {
     return hits(colliders[level], x, z, inStairColumn(x)) || hits(furnitureBlocks[level], x, z)
@@ -526,7 +539,7 @@ export function createGame(container, opts = {}) {
   }
 
   // the staircase is a ramp you walk up and down; Space (or the button) just walks you there and over it
-  const stairY = z => FH * THREE.MathUtils.clamp((S.startZ - z) / (S.startZ - S.topZ), 0, 1)
+  const stairY = z => (S ? FH * THREE.MathUtils.clamp((S.startZ - z) / (S.startZ - S.topZ), 0, 1) : 0)
   function takeStairs() {
     const p = stairPrompt()
     if (!p) return
@@ -668,15 +681,26 @@ export function createGame(container, opts = {}) {
     if (me.path.length && dir.lengthSq() > 0 && !iMoved) me.path = []
     me.moving = iMoved
 
-    // --- partner wanders between the rooms on its storey ---
-    if (partner.path.length) {
+    // --- partner wanders between the rooms, takes the stairs, and now and then steps out into the garden ---
+    if (solo) { /* nobody else lives in a starter home */ } else if (partner.path.length) {
       toTarget.subVectors(partner.path[0], partner.pos)
       toTarget.y = 0
       if (toTarget.length() < 0.18) partner.path.shift()
       else dir.copy(toTarget).normalize()
     } else {
       dir.set(0, 0, 0)
-      if (t > wanderAt && Math.random() < 0.3) {
+      const outside = partner.pos.z > HZ + 0.4
+      const door = house.door, inDoor = new THREE.Vector3(door.x, 0, HZ - 0.9), outDoor = new THREE.Vector3(door.x, 0, HZ + 1.4)
+      if (t > wanderAt && outside) {
+        // back in through the front door
+        partner.path = [outDoor, inDoor, new THREE.Vector3(door.x + (Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3)]
+        wanderAt = t + 8 + Math.random() * 6
+      } else if (t > wanderAt && levelOf(partner.pos.y) === 0 && Math.random() < 0.2) {
+        // out into the garden for a bit
+        const spot = new THREE.Vector3(door.x + (Math.random() - 0.5) * 8, 0, HZ + 2.2 + Math.random() * 2.5)
+        partner.path = [...routeTo(partner, inDoor), outDoor, spot]
+        wanderAt = t + 10 + Math.random() * 8
+      } else if (t > wanderAt && Math.random() < 0.3) {
         partner.path = stairRoute(partner, levelOf(partner.pos.y) === 0 ? 'up' : 'down')
         wanderAt = t + 8 + Math.random() * 6
       } else if (t > wanderAt) {
@@ -766,7 +790,7 @@ export function createGame(container, opts = {}) {
         fadeTo(`${r.id}.${name}`, g, goal, dt)
       })
       const editedHere = editing() && view.editArea === r.id
-      if (r.row === 0 || editedHere) fadeTo(`${r.id}.ceil`, r.ceiling, !closedIn() && (cp.y > r.oy + 4.2 || editedHere) ? 0 : 1, dt)
+      if (r.top || editedHere) fadeTo(`${r.id}.ceil`, r.ceiling, !closedIn() && (cp.y > r.oy + 4.2 || editedHere) ? 0 : 1, dt)
     })
     const roofGoal = !closedIn() && cp.y > house.roofBase + 0.2 ? 0 : 1
     roofFade += (roofGoal - roofFade) * (frameCount < 3 ? 1 : Math.min(1, dt * 10))
@@ -851,7 +875,7 @@ export function createGame(container, opts = {}) {
       view.editArea = null
       view.elGoal = view.mode === 'close' ? CLOSE_EL : DEFAULT_EL
       me.cube.setVisible(view.mode !== 'eyes')
-      partner.cube.setVisible(true)
+      partner.cube.setVisible(!solo)
       report()
     },
     setEditInset(px) { view.inset = px },
@@ -907,6 +931,7 @@ export function createGame(container, opts = {}) {
     /** name on the garden sign, e.g. setName('Alex & Sam') */
     setName: house.setName,
     roomNames: rooms.map(r => r.name),
+    roomIds: rooms.map(r => r.id),
     // screenshot helpers (used with ?debug)
     debug: {
       scene, house, three: THREE, camera: () => active, canvas: renderer.domElement,

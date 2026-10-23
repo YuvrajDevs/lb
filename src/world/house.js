@@ -6,10 +6,11 @@ import { buildStudy } from './rooms/study.js'
 import { buildBedroom, STAIR_HOLE } from './rooms/bedroom.js'
 import { buildKitchen } from './rooms/kitchen.js'
 import { buildLiving, STAIR } from './rooms/living.js'
+import { buildHome } from './rooms/home.js'
 import { buildItem } from './items/index.js'
 import { signs as buildSign } from './items/decor.js'
 import { ITEM_BY_ID } from '../game/catalog.js'
-import { GARDEN, WINDOWS } from '../game/areas.js'
+import { WINDOWS, PLOTS, getHomeKind, gardenArea } from '../game/areas.js'
 import { furnishArea, paintTexture, floorTex } from './furnish.js'
 import { CLIFF_Z, streamX } from './scenery.js'
 
@@ -18,8 +19,6 @@ export const SLAB = 0.72
 export const FH = H + SLAB // height of one storey
 export const COL = W + 2 * T // spacing between neighbouring rooms
 
-const BUSHES = [[-10.4, 5.2, 0.8], [10.4, 5.6, 0.8], [-12.2, -1.0, 0.5], [12.2, 0.4, 0.5]] // x, z, radius
-const PLOT = { x: COL + 1.4, zBack: -(D / 2 + T + 1.4), zFront: D / 2 + T + 5.2 } // the fenced garden
 
 function signTexture(text) {
   const c = document.createElement('canvas')
@@ -39,18 +38,25 @@ function signTexture(text) {
 }
 
 /**
- * A two-storey doll house at night: study (top-left), bedroom (top-right), kitchen (bottom-left),
- * living room (bottom-right), roof, and a fenced garden with a name sign.
- * All static geometry is merged (see bake.js) so the whole house is a few hundred draw calls at most.
+ * A doll house at night with a fenced garden and a name sign. For a couple: two storeys, study (top-left),
+ * bedroom (top-right), kitchen (bottom-left), living room (bottom-right). For a solo player: the starter home,
+ * one room on a smaller plot. All static geometry is merged (see bake.js): a few hundred draw calls at most.
  */
 export function buildHouse(opts = {}) {
   const group = new THREE.Group()
-  const specs = [
-    { id: 'study', name: 'study', col: 0, row: 0, build: buildStudy },
-    { id: 'bedroom', name: 'bedroom', col: 1, row: 0, build: buildBedroom },
-    { id: 'kitchen', name: 'kitchen', col: 0, row: 1, build: buildKitchen },
-    { id: 'living', name: 'living room', col: 1, row: 1, build: () => buildLiving(FH) },
-  ]
+  const solo = getHomeKind() === 'solo'
+  const P = PLOTS[getHomeKind()]
+  const PLOT = { x: P.x, zBack: -(D / 2 + T + 1.4), zFront: D / 2 + T + 5.2 } // the fenced garden
+  const BUSHES = P.bushes
+  const specs = solo
+    ? [{ id: 'home', name: 'home', col: 0.5, row: 1, build: buildHome }]
+    : [
+      { id: 'study', name: 'study', col: 0, row: 0, build: buildStudy },
+      { id: 'bedroom', name: 'bedroom', col: 1, row: 0, build: buildBedroom },
+      { id: 'kitchen', name: 'kitchen', col: 0, row: 1, build: buildKitchen },
+      { id: 'living', name: 'living room', col: 1, row: 1, build: () => buildLiving(FH) },
+    ]
+  const topRow = Math.min(...specs.map(s => s.row))
 
   const colliders = [[], []] // [ground, upper]
   const frames = []
@@ -74,15 +80,15 @@ export function buildHouse(opts = {}) {
     fill.position.set(0, 3.0, 1.4) // well inside the room: close to the front wall it left a bright spot on it
     sh.root.add(fill)
     return {
-      id: s.id, name: s.name, col: s.col, row: s.row, level, ox, oy, sh, placed, light, fill, furnished: null,
+      id: s.id, name: s.name, col: s.col, row: s.row, level, ox, oy, sh, placed, light, fill, furnished: null, top: s.row === topRow,
       walls: sh.walls, ceiling: sh.ceiling, door: sh.door, doorX: sh.doorX,
       center: new THREE.Vector3(ox, oy + 2.25, 0),
     }
   })
 
   // ---------- roof (gable, attic window, chimney) ----------
-  const roofBase = FH + H + 0.22
-  const hw = COL + 0.6, rh = 3.6, depth = D + 2 * T + 1.0
+  const roofBase = (solo ? 0 : FH) + H + 0.22
+  const hw = (solo ? HX + T : COL) + 0.6, rh = solo ? 2.6 : 3.6, depth = D + 2 * T + 1.0
   const roof = new THREE.Group()
   const tri = new THREE.Shape()
   tri.moveTo(-hw, 0); tri.lineTo(hw, 0); tri.lineTo(0, rh); tri.closePath()
@@ -116,19 +122,21 @@ export function buildHouse(opts = {}) {
   })
   box(roof, [hw * 2 + 0.8, 0.22, 0.3], [0, roofBase - 0.02, depth / 2 - 0.1], '#f6f1e6')
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.1, 10, 28), std('#f3eee4'))
-  ring.position.set(0, roofBase + 1.5, depth / 2 + 0.02)
+  const atticY = roofBase + (solo ? 1.05 : 1.5)
+  ring.position.set(0, atticY, depth / 2 + 0.02)
   roof.add(ring)
   const atticWin = new THREE.Mesh(
     new THREE.CircleGeometry(0.7, 28),
     new THREE.MeshStandardMaterial({ color: '#ffe2a8', emissive: '#ffcc66', emissiveIntensity: 1.8 })
   )
-  atticWin.position.set(0, roofBase + 1.5, depth / 2 + 0.015)
+  atticWin.position.set(0, atticY, depth / 2 + 0.015)
   roof.add(atticWin)
-  box(roof, [0.1, 1.5, 0.05], [0, roofBase + 0.75, depth / 2 + 0.03], '#f3eee4')
-  box(roof, [1.5, 0.1, 0.05], [0, roofBase + 1.45, depth / 2 + 0.03], '#f3eee4')
-  box(roof, [1.1, 2.6, 1.1], [7.2, roofBase + 0.9, -1.2], '#b0705a')
-  box(roof, [1.3, 0.2, 1.3], [7.2, roofBase + 3.5, -1.2], '#7a4a40')
-  glow(roof, [0, roofBase + 1.5, depth / 2 + 0.3], '#ffcc66', 3.4, 0.55)
+  box(roof, [0.1, 1.5, 0.05], [0, atticY - 0.75, depth / 2 + 0.03], '#f3eee4')
+  box(roof, [1.5, 0.1, 0.05], [0, atticY - 0.05, depth / 2 + 0.03], '#f3eee4')
+  const chimX = solo ? 3.2 : 7.2, chimH = solo ? 2.0 : 2.6
+  box(roof, [1.1, chimH, 1.1], [chimX, roofBase + 0.9, -1.2], '#b0705a')
+  box(roof, [1.3, 0.2, 1.3], [chimX, roofBase + 0.9 + chimH - 0.1, -1.2], '#7a4a40')
+  glow(roof, [0, atticY, depth / 2 + 0.3], '#ffcc66', 3.4, 0.55)
   group.add(roof)
 
   // ---------- fenced garden ----------
@@ -139,11 +147,10 @@ export function buildHouse(opts = {}) {
   const street = new THREE.Group() // road, lamps, trees, the sign's lamp: only shown from the street view
   const zc = (PLOT.zBack + PLOT.zFront) / 2
   box(garden, [PLOT.x * 2 + 0.6, 0.5, PLOT.zFront - PLOT.zBack + 0.6], [0, -1.0, zc], '#35564f')
-  // path of stepping stones from the gate to the house
-  // stepping stones from the gate to the front door (the door is on the living room, world x = 2.3)
-  ;[[0.2, 8.4], [0.7, 7.4], [1.3, 6.4], [1.9, 5.5], [2.3, 4.9]].forEach(([x, z]) => cyl(garden, 0.5, 0.08, [x, -0.54, z], '#c9c2b2', {}, 14))
-  glow(street, [2.3, 3.3, 4.2], '#ffcc66', 2.6, 0.5)
-  pool(street, [2.3, -0.5, 5.2], '#ffcc66', 2.2, 0.28)
+  // stepping stones from the gate to the front door
+  for (let k = 0; k < 5; k++) { const t = k / 4; cyl(garden, 0.5, 0.08, [0.2 + (P.doorX - 0.2) * t, -0.54, 8.4 - 3.5 * t], '#c9c2b2', {}, 14) }
+  glow(street, [P.doorX, 3.3, 4.2], '#ffcc66', 2.6, 0.5)
+  pool(street, [P.doorX, -0.5, 5.2], '#ffcc66', 2.2, 0.28)
 
   // the cliff walk: a wet, glossy stone path that mirrors the lamps, and a low railing at the edge of the drop to the sea
   const wet = new THREE.MeshPhysicalMaterial({ color: '#3a3558', roughness: 0.16, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.08 })
@@ -234,12 +241,12 @@ export function buildHouse(opts = {}) {
   // (the two beside the house are smaller and sit in the gap to the fence, so they never poke through a wall)
   BUSHES.forEach(([x, z, r]) => {
     sphere(garden, r, [x, -0.5 + r * 0.5, z], '#2f6a54')
-    sphere(garden, r * 0.7, [x + (Math.abs(x) > 12 ? 0 : 0.6), -0.5 + r * 0.3, z + 0.5], '#3b7a62')
+    sphere(garden, r * 0.7, [x + (r < 0.6 ? 0 : 0.6), -0.5 + r * 0.3, z + 0.5], '#3b7a62')
   })
   group.add(garden, defaultFence, itemFence, gardenPlaced, street)
 
   // name sign on two posts, lit by its own street lamp (kept separate so it can be re-texted: setName('X & Y'))
-  const SX = -5.0, SZ = PLOT.zFront - 0.6
+  const SX = P.signX, SZ = PLOT.zFront - 0.6
   const signMat = new THREE.MeshStandardMaterial({ map: signTexture('Sera & DeM'), roughness: 0.8, emissive: '#7a5a3c', emissiveIntensity: 0.55 })
   signMat.emissiveMap = signMat.map
   const defaultSign = new THREE.Group()
@@ -370,7 +377,7 @@ export function buildHouse(opts = {}) {
   function furnish(areaId, entries, { bakeIt = true } = {}) {
     if (areaId === 'garden') {
       gardenPlaced.clear()
-      const { group: g } = furnishArea(GARDEN, entries, { y0: -0.5, switches })
+      const { group: g } = furnishArea(gardenArea(), entries, { y0: -0.5, switches })
       gardenPlaced.add(g)
       if (bakeIt) { gardenPlaced.updateMatrixWorld(true); bake(gardenPlaced, { clone: true }) }
       return
@@ -389,7 +396,7 @@ export function buildHouse(opts = {}) {
     r.sh.setFloor(st?.floor ? floorTex(st.floor) : null)
   }
   rooms.forEach(r => { r.areaSpec = areaSpec(r.id) })
-  ;['study', 'bedroom', 'kitchen', 'living'].forEach(id => {
+  rooms.map(r => r.id).forEach(id => {
     furnish(id, opts.layout?.[id] || [], { bakeIt: false })
     setStyle(id, opts.style?.[id])
     prepared.add(id)
@@ -412,15 +419,17 @@ export function buildHouse(opts = {}) {
   bake(gardenPlaced, { clone: true })
   bake(street, { clone: true })
 
+  // the room with the front door; and the staircase (only the two-storey house has one)
+  const entry = rooms.find(r => r.door) || rooms[0]
   const living = rooms.find(r => r.id === 'living')
-  const stairs = {
+  const stairs = living ? {
     x: living.ox + STAIR.x,
     footZ: STAIR.zFoot,
     topZ: STAIR.zTop,
     startZ: STAIR.zStart,
     landingZ: -1.9,
     hole: { x0: living.ox + STAIR_HOLE.x0, z0: STAIR_HOLE.z0, z1: STAIR_HOLE.z1 },
-  }
+  } : null
 
   return {
     group, lights, rooms, colliders, frames, roof, roofBase, stairs, setName, streetProps: street,
@@ -438,7 +447,7 @@ export function buildHouse(opts = {}) {
       defaultSign.visible = outside && !itemSign
       if (itemSign) itemSign.group.visible = outside
     },
-    door: { pivot: living.door, x: living.ox + living.doorX, z: HZ + 0.15 },
+    door: { pivot: entry.door, x: entry.ox + entry.doorX, z: HZ + 0.15 },
     gate: { leaves: gateLeaves, z: PLOT.zFront },
     bounds: { halfW: PLOT.x + 0.6, yMin: -1.25, yMax: roofBase + rh },
   }

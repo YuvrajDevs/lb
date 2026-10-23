@@ -99,6 +99,7 @@ export default function Settings({ onClose, debug }) {
               <button className="btn ghost" onClick={() => store.dev.nextDay()}>Next day</button>
               <button className="btn ghost" onClick={() => store.dev.skipDays(2)}>Skip 2 days</button>
               <button className="btn ghost" onClick={() => store.dev.reset()}>Reset all</button>
+              <button className="btn ghost" onClick={() => store.dev.toggleCouple()}>{s.couple.state === 'active' ? 'Go solo (starter home)' : 'Become a couple (big house)'}</button>
             </div>
           </section>
         )}
