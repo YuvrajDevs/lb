@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
+import { DEFAULT_SKIN, skinSpec, buildHat } from './skins.js'
 
 const SIZE = 0.9
 export const FLOAT = 1.3 // gap between floor and the cube's underside: it hovers a little above chair height
@@ -28,7 +29,8 @@ export function createCube(color) {
   group.add(floatNode)
   floatNode.add(pivot)
 
-  const body = new THREE.Mesh(bodyGeo, new THREE.MeshStandardMaterial({ color, roughness: 0.55, emissive: new THREE.Color(color).multiplyScalar(0.3) }))
+  const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.55, emissive: new THREE.Color(color).multiplyScalar(0.3) })
+  const body = new THREE.Mesh(bodyGeo, bodyMat)
   body.position.y = SIZE / 2
   body.castShadow = false // shadows are baked once; the cube has its own soft contact shadow below
   body.receiveShadow = true
@@ -40,6 +42,11 @@ export function createCube(color) {
     body.add(e)
     return e
   })
+
+  // hats sit on a little pivot on top of the body
+  const hatPivot = new THREE.Group()
+  hatPivot.position.set(0, SIZE / 2, 0)
+  body.add(hatPivot)
 
   // soft contact shadow on the floor under the cube
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.7), blobMat)
@@ -54,6 +61,24 @@ export function createCube(color) {
   return {
     group,
     setVisible(v) { group.visible = v },
+    /** skin: a tier number from the shop (1-10), or null for the default pink cube */
+    setSkin(tier) {
+      const spec = tier ? skinSpec(tier) : DEFAULT_SKIN
+      bodyMat.map = spec.tex
+      bodyMat.color.set(spec.color)
+      bodyMat.emissive.set(spec.emissiveColor || spec.color).multiplyScalar(spec.glow)
+      if (spec.tex) bodyMat.emissiveMap = spec.tex
+      else bodyMat.emissiveMap = null
+      bodyMat.needsUpdate = true
+    },
+    /** hat: a tier number from the shop (1-10), or null for none */
+    setHat(tier) {
+      hatPivot.clear()
+      if (!tier) return
+      const h = new THREE.Group()
+      buildHat(tier, h)
+      hatPivot.add(h)
+    },
     update(t, dt, moving) {
       phase += dt * (moving ? 4.2 : 1.6)
       const bob = Math.sin(phase) * (moving ? 0.05 : 0.07)

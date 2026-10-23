@@ -29,7 +29,7 @@ const levelOf = y => (y > FH * 0.5 ? 1 : 0)
 
 export function createGame(container, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' })
-  const maxPR = Math.min(window.devicePixelRatio, 2)
+  let maxPR = Math.min(window.devicePixelRatio, 2)
   let pr = maxPR
   renderer.setPixelRatio(pr)
   renderer.shadowMap.enabled = true
@@ -144,7 +144,11 @@ export function createGame(container, opts = {}) {
 
   // ---- input ----
   const keys = new Set()
+  let inputOn = true
+  let idle = false
+  const typingNow = () => ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)
   const onKeyDown = e => {
+    if (!inputOn || typingNow()) return
     keys.add(e.key.toLowerCase())
     if (e.key === ' ') { e.preventDefault(); takeStairs() }
   }
@@ -465,6 +469,8 @@ export function createGame(container, opts = {}) {
     }
 
     report()
+    // while a window is open the world only needs to stay alive, not smooth
+    if (idle && (frameCount % 4)) return
     if (shadowFrames > 0) { renderer.shadowMap.needsUpdate = true; shadowFrames-- }
     renderer.render(scene, active)
   }
@@ -473,6 +479,19 @@ export function createGame(container, opts = {}) {
   return {
     setView,
     takeStairs,
+    /** lock the keyboard while a window (shop, settings...) is open */
+    setInputEnabled(on) { inputOn = on; idle = !on; if (!on) keys.clear() },
+    /** 'low' | 'medium' | 'high': caps the render sharpness */
+    setQuality(q) {
+      const cap = { low: 1, medium: 1.5, high: 2 }[q] || 2
+      maxPR = Math.min(window.devicePixelRatio, cap)
+      pr = Math.min(pr, maxPR)
+      renderer.setPixelRatio(pr)
+      renderer.setSize(container.clientWidth, container.clientHeight)
+    },
+    /** tier numbers from the shop (1-10) or null */
+    setSkin(tier) { me.cube.setSkin(tier) },
+    setHat(tier) { me.cube.setHat(tier) },
     setAzimuth,
     rotateBy(rad) { setAzimuth(view.azGoal + rad) },
     resetAzimuth() {

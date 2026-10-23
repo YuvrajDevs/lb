@@ -46,6 +46,19 @@ In "my eyes" you can walk from the street gate, up the path, through the front d
 
 Each house sits in its own fenced plot with a name sign lit by its own street lamp (currently "Sera & DeM"). `game.setName('Alex & Sam')` changes it, and this is where a couple's shared name will go when two plots merge. From outside (street view) and in first person the house is closed in: the cutaway side only exists in the doll-house views.
 
+## Shop and screens
+
+The dock at the bottom opens every screen: **Shop, Wardrobe, Items, World, Daily gift, Settings**. Boxets (the currency) show top-left with your earning rate.
+
+- **Shop:** 18 categories x 10 tiers = **180 items**. Tier 1 costs **100 Boxets**, climbing to **2,400** at tier 10 (100, 140, 200, 280, 400, 560, 800, 1,150, 1,650, 2,400). Categories: beds, cupboards, tables, bookshelves, seating, lamps, ceiling lights, rugs, plants, wall art, curtains, wall paint, flooring, fences, name signs, garden lights, cube skins and cube hats. Rarity (common, rare, epic, legendary) follows the tier. Skins and hats have a **Try on** button that previews them on your cube in the world.
+- **Wardrobe:** dress your cube (skin and hat) with a live picture of the result.
+- **Items:** everything you own. (Placing furniture inside rooms is the next phase.)
+- **World:** neighbours and slots (4 free, 5th for 500, 6th for 1,000 Boxets from a shared fund), the live earning rate, and the couple page.
+- **Daily gift:** each calendar day since you joined has its own reward and can only be claimed that day; missed days are lost, not owed.
+- **Settings:** names, graphics quality, motion, hints, chat, controls.
+
+Where the numbers live: `src/game/catalog.js` (items and prices), `src/game/economy.js` (earning, daily reward, slot prices), `src/game/store.js` (local save, standing in for the server). `src/world/items/*` holds the 3D model of every item, and `src/world/preview.js` renders the shop pictures.
+
 ## Roadmap
 
 The game design (worlds, partnerships, couples, the Boxets economy) and the phased build plan are in [`docs/DESIGN.md`](docs/DESIGN.md).
@@ -57,6 +70,8 @@ The game design (worlds, partnerships, couples, the Boxets economy) and the phas
 - `src/world/rooms/*.js`: the furniture and lamps for each room
 - `src/world/kit.js`: shared helpers and procedural textures
 - `src/world/bake.js`, `src/world/fx.js`: geometry merging and the fake-lighting helpers
+- `src/ui/`: the screens (Shop, Wardrobe, World, Settings, Daily gift) and their stylesheet
+- `src/game/`: catalog, economy rules and the local store (no 3D code)
 - `src/world/cube.js`: the floating cube
 - `src/world/game.js`: renderer, cameras, input, movement, stairs, wall fading
 - `src/App.jsx`, `src/Compass.jsx`: the small UI
