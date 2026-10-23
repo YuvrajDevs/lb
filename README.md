@@ -46,6 +46,10 @@ In "my eyes" you can walk from the street gate, up the path, through the front d
 
 Each house sits in its own fenced plot with a name sign lit by its own street lamp (currently "Sera & DeM"). `game.setName('Alex & Sam')` changes it, and this is where a couple's shared name will go when two plots merge. From outside (street view) and in first person the house is closed in: the cutaway side only exists in the doll-house views.
 
+## Roadmap
+
+The game design (worlds, partnerships, couples, the Boxets economy) and the phased build plan are in [`docs/DESIGN.md`](docs/DESIGN.md).
+
 ## Layout
 
 - `src/world/house.js`: assembles the four rooms, roof, garden, sun and collision boxes

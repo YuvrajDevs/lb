@@ -1,6 +1,6 @@
 # cc — design and build plan
 
-A cosy 3D neighbourhood for friends and couples. Everyone has a house, earns coins by spending time and playing together, and spends them on rooms, furniture and skins. Web first (Three.js), app later (Capacitor wrapper).
+A cosy 3D neighbourhood for friends and couples. Everyone has a house, earns Boxets by spending time and playing together, and spends them on rooms, furniture and skins. Web first (Three.js), app later (Capacitor wrapper).
 
 Status: the visual prototype is done (see README). Everything below the "Rules" heading is **not built yet**.
 
@@ -11,39 +11,42 @@ Status: the visual prototype is done (see README). Everything below the "Rules" 
 ### 1.1 Houses
 | Stage | House | Notes |
 |---|---|---|
-| Solo | **Starter house: 1 bedroom**, small fenced garden | Free, one per player. *Not built yet.* |
+| Solo | **Starter house: a single room** (bed, cupboard, table, bookshelf, lamp), small fenced garden | Free, one per player. *Not built yet.* |
 | Partnership | Each member keeps their own house; all houses share **one fence** | Up to 4 houses (see 1.4) |
-| Couple | Both houses vanish in a **cloud**; a **standard bigger house** appears (the current 4-room house) | Shared name sign ("X & Y") |
+| Couple | A **big cloud** covers both plots. The couple picks **either one of their two locations** to build on; the ground there **grows** and the **standard bigger house** (the current 4-room house) rises out of the cloud | Shared name sign ("X & Y") |
 
 - A person can be in at most **2 worlds**.
-- A couple is a *unit* inside a partnership: its one big house sits in the shared fence, and counts as **1 house** (not 2).
+- A couple is a *unit* inside a partnership: its one big house sits in the shared fence, and counts as **1 house** (not 2). The plot they did **not** pick is freed, so the world gets a spare slot back.
+- The couple chooses the location; the ground expansion pushes neighbouring plots along the row (no overlap).
 - Joining a world or a couple needs **acceptance** by the person being invited. Either side can leave.
 
 ### 1.2 Earning
-- **Base:** `15 coins / 30 min` of *active* time per player.
+- **Base:** `15 Boxets / 30 min` of *active* time per player.
 - **Active** = the player moved, interacted, or played a game in the last 2 minutes, with the tab visible. Idle tabs earn nothing. Decided by the server.
 - **Partnership multiplier** (per person): `min(online_active_members, 3)×`. With 3 of 5 online and active together, everyone earns 3×. Cap at 3× is deliberate: uncapped, a group of n earns n² in total.
-- **Couple multiplier:** 3× while both partners are active at the same time. In the example: 15 coins → **45 coins per 30 min each**.
+- **Couple multiplier:** 3× while both partners are active at the same time. In the example: 15 Boxets → **45 Boxets per 30 min each**.
 - **Stacking:** multipliers multiply (couple 3× × partnership up to 3×). The hard backstops are the **30-minute window** (earning needs a full window of overlap) and a **daily cap** per player (see 6).
 - Mini-games, quizzes and visiting a friend's house add small extra rewards, each with their own daily cap.
 
-### 1.3 Daily login reward (not a streak)
-- One reward per calendar day on first login. **It never resets.** Missing days costs nothing.
-- The reward depends on **total days logged in**, so staying longer always pays more:
-  `reward(day) = min(20 + 2 × day, 150)` coins, tunable in config.
-- **Milestones** add a cosmetic on days 7, 30, 100, 365.
-- The server decides "today" using the player's saved time zone, so changing the device clock does nothing.
+### 1.3 Daily login reward
+- Rewards follow the **calendar day since you joined**: day 1, day 2, day 3 ... Each day's reward can be claimed **only on that day**.
+- **Missed days are gone, not owed.** If you skip day 3 and day 4 and log in on day 5, you get the **day-5 reward only**. Nothing is backfilled and nothing resets, so a missed day just costs you that day's reward.
+- Rewards rise the longer you have been around: `reward(day) = min(20 + 2 × day, 150)` Boxets, tunable in config.
+- **Milestones** add a cosmetic on days 7, 30, 100, 365 (claimable on that day only).
+- One claim per day, enforced by `login_log`. The server decides "today" from the player's saved time zone, so changing the device clock does nothing.
+
+> Note: this replaces the earlier "total days logged in" idea. Under that idea, skipping day 3 would still have paid the 4th-login amount on day 5; now it pays the day-5 amount.
 
 ### 1.4 World size and growth
 - A world starts with room for **4 houses**.
-- The **5th slot costs 500 coins**, the **6th costs 1000 coins**. Hard cap **6** (also protects performance).
-- The cost is paid from a shared **world fund** that any member can contribute coins to.
+- The **5th slot costs 500 Boxets**, the **6th costs 1000 Boxets**. Hard cap **6** (also protects performance).
+- The cost is paid from a shared **world fund** that any member can contribute Boxets to.
 - Who can invite or remove: the world's creator can remove; any member can invite (and the invite still needs the invitee's acceptance). Open to change.
 
 ### 1.5 Couple house, inventory and breakups
 - Every item records its **original owner**.
 - On merge, both inventories pool into a **shared inventory**. Purchases afterwards are also shared but remember who bought them.
-- Furnishing the bigger house: **place anything anywhere**, or press "auto-furnish", which picks randomly from the pooled items. New items can be bought and placed any time.
+- Furnishing the bigger house: **place anything anywhere**, or press "auto-furnish". Auto-furnish **prefers matching items**: every catalog item has a style tag and a colour palette; it finds the most common style among the pooled items, fills the rooms with those first, and only then fills gaps from the rest. New items can be bought and placed any time.
 - **Ending a couple:** needs a request plus a short cooldown (24 h). Each person gets back **their own items** and a restored solo house. Items bought jointly go to the buyer. The shared name sign is removed.
 - The couple house layout is fixed (4 rooms); larger houses can be added later as purchasable tiers.
 
@@ -56,7 +59,7 @@ Status: the visual prototype is done (see README). Everything below the "Rules" 
 | 3D | Three.js (current) | light, works in browsers, wrappable as an app |
 | UI | React + Vite (current) | already in place |
 | Backend | **Supabase** (Postgres, Auth, Realtime) | free tier covers a few players; one service for login, data and live messages |
-| Economy logic | **Postgres functions / Edge Functions** | the server alone grants coins; the browser can never award itself anything |
+| Economy logic | **Postgres functions / Edge Functions** | the server alone grants Boxets; the browser can never award itself anything |
 | Hosting | Cloudflare Pages or Vercel (free) | static site |
 | App later | Capacitor | reuses the same code for iOS / Android |
 
@@ -67,26 +70,30 @@ Free-tier limits change, so re-check them before launch. If realtime limits ever
 ## 3. Data model (Supabase / Postgres)
 
 ```
-profiles      id, display_name, timezone, coins, login_days, last_login_date, created_at
-worlds        id, name, owner_id, slots (4..6), fund_coins, created_at
+profiles      id, display_name, timezone, boxets, login_days, last_login_date, created_at
+worlds        id, name, owner_id, slots (4..6), fund_boxets, created_at
 world_members id, world_id, profile_id, house_id, joined_at          -- unique (world_id, profile_id)
 houses        id, owner_id, kind ('solo'|'couple'), name, layout jsonb   -- layout = placed items
 couples       id, a_id, b_id, house_id, created_at, ended_at, end_requested_at
 items         id, catalog_id, original_owner, current_holder, placed_in (house_id|null), placement jsonb
-catalog       id, kind, name, price, mesh_id                           -- what exists to buy
+catalog       id, kind, name, price, mesh_id, style, palette[]         -- what exists to buy; style/palette drive auto-furnish
 invites       id, from_id, to_id, type ('world'|'couple'), status, created_at
 presence      profile_id, world_id, house_id, last_active_at           -- written by heartbeat, read by earning
-earn_log      id, profile_id, window_start, base, multiplier, coins    -- audit trail, unique (profile_id, window_start)
-login_log     profile_id, date                                         -- unique, enforces one reward/day
+earn_log      id, profile_id, window_start, base, multiplier, boxets    -- audit trail, unique (profile_id, window_start)
+login_log     profile_id, date, day_number                             -- unique (profile_id, date), enforces one reward/day
+chat_messages id, world_id, house_id|null, from_id, text, created_at, deleted
+reports       id, reporter_id, message_id, reason, created_at
+blocks        blocker_id, blocked_id
 ```
 
 All tables use **row-level security**: players read only their own world, and write only through functions.
 
 ### Server functions (the only way money moves)
-- `claim_daily()` — idempotent per day; applies the formula in 1.3.
-- `heartbeat(active)` — updates `presence`; no coins.
-- `settle_earning()` — runs every few minutes: for each 30-minute window, computes who was active and how many, applies multipliers and caps, writes `earn_log`, adds coins. Unique key stops double-paying.
-- `buy_item(catalog_id)`, `place_item(item_id, placement)`, `auto_furnish(house_id)`.
+- `claim_daily()` — idempotent per day; computes `day_number` from the join date and applies the formula in 1.3 (never pays for missed days).
+- `send_chat(world_id, text)` — length cap, rate limit, word filter, blocked-user check; `report_message`, `block`.
+- `heartbeat(active)` — updates `presence`; no Boxets.
+- `settle_earning()` — runs every few minutes: for each 30-minute window, computes who was active and how many, applies multipliers and caps, writes `earn_log`, adds Boxets. Unique key stops double-paying.
+- `buy_item(catalog_id)`, `place_item(item_id, placement)`, `auto_furnish(house_id)` (style-matching).
 - `invite`, `accept_invite`, `leave_world`, `request_couple_end`, `confirm_couple_end`, `buy_slot(world_id)`.
 
 ---
@@ -124,19 +131,20 @@ Each phase ends with something playable and testable.
 - Test on a real phone and measure frame rate. *(Gate: we know our mobile budget.)*
 
 **Phase 1 — Accounts and a saved solo house**
-- Login, profile, one saved house. Build the **1-bedroom starter house** and starter garden fence.
-- Daily login reward + modal (`claim_daily`).
+- Login, profile, one saved house. Build the **single-room starter house** (bed, cupboard, table, bookshelf, lamp) and starter garden fence.
+- Daily login reward + modal (`claim_daily`), including the missed-days rule (skip days 3–4, log in on 5 → day-5 reward only).
 - *Done when:* you log in, see your own house, claim a reward once per day.
 
 **Phase 2 — Two real players in one house**
 - Realtime channel per house: positions at ~5 Hz, only while moving; smoothing on the receiver.
 - Replace the bot partner. Presence heartbeat.
+- **Chat:** speech bubbles over cubes and a small log; world-members only, 120-character cap, rate limit, word filter, report and block (see 6).
 - *Done when:* two browsers see each other walk and the stairs work for both.
 
 **Phase 3 — Earning (server-authoritative)**
 - `heartbeat` + `settle_earning` with active-time rules, daily caps and the `earn_log`.
 - Coin display, simple earning feedback (no spammy popups).
-- *Done when:* a scripted test of 1, 2, 3, 4 active players yields the exact expected coins.
+- *Done when:* a scripted test of 1, 2, 3, 4 active players yields the exact expected Boxets.
 
 **Phase 4 — Worlds and the shared fence**
 - Invites, accept, leave. `plots.js` lays out 1–6 houses in a row with one merged fence and name sign. Far houses use a **low-detail shell** (no interior, no lights).
@@ -149,8 +157,8 @@ Each phase ends with something playable and testable.
 - Item ownership recorded from day one.
 
 **Phase 6 — Couples**
-- Couple invite → cloud transition (particle puff, houses swap) → standard couple house.
-- Pooled inventory, auto-furnish, 3× couple earning, shared name sign.
+- Couple invite → they **choose one of their two locations** → a **big cloud** covers both plots → the ground there grows (neighbours shift along the row) → the standard couple house rises out of the cloud. The other plot is freed.
+- Pooled inventory, style-matching auto-furnish, 3× couple earning, shared name sign.
 - Breakup: request + 24 h cooldown, items returned to original owners.
 - *Done when:* merge and un-merge leave every item with the right person.
 
@@ -158,19 +166,20 @@ Each phase ends with something playable and testable.
 - One quiz (e.g. couple quiz), one mini-game, visiting a friend's house. Each with caps.
 
 **Phase 8 — Polish and launch**
-- Safety: report/block, name filtering, age notice. Sound. Onboarding. PWA install, then Capacitor.
+- Safety review (age notice, name filtering), sound, onboarding, PWA install, then Capacitor.
 
 ---
 
 ## 6. Anti-abuse and balance
 
-- Server-only coin changes; all functions check ownership and run in transactions.
+- Server-only Boxet changes; all functions check ownership and run in transactions.
 - Active-time detection from real input; a full 30-minute window is required, so brief overlaps earn nothing.
-- **Daily coin cap** per player (suggested: 600, tunable), plus caps per activity.
+- **Daily Boxet cap** per player (suggested: 600, tunable), plus caps per activity.
 - Multipliers cannot exceed 9× in total (3 × 3), and only with full-window overlap.
 - One account per device-ish: rate limit sign-ups and invites; invites expire after 7 days.
 - Log everything (`earn_log`, `login_log`) so balance can be tuned and disputes settled.
 - Keep purchases **cosmetic** so nothing is pay-to-win.
+- **Chat safety:** messages only reach members of the same world; max 120 characters; rate limit (e.g. 1 message / 2 s); server-side word filter; **report** and **block** on every message; moderators can delete; chat history kept short (e.g. 7 days). Each player can switch chat off.
 
 ---
 
@@ -186,11 +195,18 @@ Each phase ends with something playable and testable.
 
 ---
 
-## 8. Open questions
+## 8. Decisions made
 
-1. **Cloud transition style:** a stylised puff of cloud over the plot for about 2 seconds, with the new house rising out? (needs a visual pass)
-2. **Auto-furnish:** random from pooled items (as described) — should it prefer matching styles/colours, or stay purely random?
-3. **Who controls placement in a couple house?** Both equally (assumed).
-4. **Solo starter contents:** what comes free (bed, desk, lamp)? Suggest 5–6 plain pieces.
-5. **Moderation:** friends-only world chat is planned later; do you want text chat at all in v1, or only emotes?
-6. **Currency name** and the first few shop items / prices.
+- **Couple merge:** a big cloud covers both plots; the couple picks either location, the ground grows, the standard house rises out of the cloud; the other plot is freed.
+- **Auto-furnish:** prefers matching style and colour.
+- **Starter house:** a single room with a bed, cupboard, table, bookshelf and lamp.
+- **Chat:** included, with the safety rules above.
+- **Currency:** **Boxets**.
+- **Daily login:** rewards follow the calendar day since joining; missed days are lost, never backfilled.
+
+## 9. Still open
+
+1. First shop items and prices (suggestion: a lamp 40, a rug 60, a plant 30, a new wall colour 80 Boxets).
+2. Maximum number of **couples** per world (each counts as 1 house, so up to 6).
+3. Who may remove a member from a world (currently: the creator).
+4. How big the grown plot is, and how neighbouring plots move when it grows.
