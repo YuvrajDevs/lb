@@ -25,7 +25,7 @@ function Swatch({ item, on, onClick }) {
   )
 }
 
-export default function Editor({ game, ed, onExit, onOpenShop, onReset }) {
+export default function Editor({ game, ed, onExit, onOpenShop, onReset, onAuto }) {
   const s = useStore()
   const area = ed?.areaId
   const [tab, setTab] = useState('items')
@@ -190,6 +190,7 @@ export default function Editor({ game, ed, onExit, onOpenShop, onReset }) {
         </div>
         <button className="bar-btn" disabled={!store.canUndo()} onClick={() => { store.undo(); sfx('pick') }} title="Undo (Ctrl+Z)"><Icon name="undo" size={17} /></button>
         <button className="bar-btn" disabled={!store.canRedo()} onClick={() => { store.redo(); sfx('pick') }} title="Redo"><Icon name="redo" size={17} /></button>
+        <button className="bar-btn" onClick={() => onAuto(area)} title="Fill the room with things you own but haven't placed, in a matching style">Auto-furnish</button>
         <button className="bar-btn" onClick={() => onReset(area)} title="Back to the standard furnishing">Reset</button>
       </div>
       {armedDrag && <div className="ed-drag-hint" aria-hidden="true" />}

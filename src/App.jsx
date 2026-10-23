@@ -3,6 +3,7 @@ import { createGame } from './world/game'
 import { setHomeKind } from './game/areas'
 import { prefetchPreviews } from './world/preview'
 import { resolveDefaults } from './world/furnish'
+import { autoFurnish } from './world/autofurnish'
 import { setAudio, startOnFirstGesture, sfx } from './game/audio'
 import { ITEM_BY_ID } from './game/catalog'
 import { store } from './game/store'
@@ -152,6 +153,13 @@ function App() {
   }
   const stopEdit = () => { game.current?.exitEdit(); setOpen(null) }
   const resetArea = id => { store.resetArea(id, resolveDefaults(id)); sfx('pick') }
+  const autoArea = id => {
+    const { list, added } = autoFurnish(id, store.get().layout[id] || [], store.available)
+    if (!added) { store.notify('Nothing left to place here: buy a few more things in the shop', 'warn'); return }
+    store.setArea(id, list)
+    store.notify(`Placed ${added} thing${added === 1 ? '' : 's'} to match the room`, 'good')
+    sfx('place')
+  }
 
   const online = s.world.members.filter(m => m.online).length
   const rate = windowEarning({ onlineActive: online, withPartner: s.couple.state === 'active' })
@@ -204,7 +212,7 @@ function App() {
       {s.settings.hints && !open && !editing && <p className="hud hint">{HINTS[view.mode]}</p>}
 
       {!editing && <Dock open={open} onOpen={id => (id === 'edit' ? startEdit() : setOpen(id))} giftReady={store.canClaim()} />}
-      {editing && <Editor game={game.current} ed={ed} onExit={stopEdit} onOpenShop={() => setOpen('shop')} onReset={resetArea} />}
+      {editing && <Editor game={game.current} ed={ed} onExit={stopEdit} onOpenShop={() => setOpen('shop')} onReset={resetArea} onAuto={autoArea} />}
 
       {open === 'shop' && <Shop onClose={close} onTry={tryItem} initial={shopCat} key={shopCat} />}
       {open === 'inventory' && <Inventory onClose={close} />}

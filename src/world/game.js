@@ -5,7 +5,7 @@ import { HX, HZ } from './kit.js'
 import { resolveDefaults, footOf, infoOf } from './furnish.js'
 import { createEditor } from './editor.js'
 import { makeEnvironment } from './env.js'
-import { buildScenery, FOG_COLOR, FOG_NEAR, FOG_FAR } from './scenery.js'
+import { buildScenery, FOG_COLOR, FOG_NEAR, FOG_FAR, CLIFF_Z } from './scenery.js'
 import { bake } from './bake.js'
 import { setCurtain } from './switches.js'
 import { findZFighting, settleCoplanar } from './zfight.js'
@@ -14,7 +14,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
-import { areaList, areaOf, getHomeKind } from '../game/areas.js'
+import { areaList, areaOf, getHomeKind, plot } from '../game/areas.js'
 import { CELL, TABLE_TOP, overlap, floorRect } from '../game/grid.js'
 
 const HALF = 0.42 // cube collision half-extent
@@ -27,6 +27,7 @@ const STREET_AZ = 0.14
 const STREET_EL = 0.2 // from out over the sea, looking up the cliff at the house
 const FOV = 35
 const DOOR_Z = 1.9 // every doorway between side-by-side rooms sits here
+const PLOT_FRONT = 3.6 + 0.3 + 5.2 // where the garden's front fence (and its gate) runs
 const STAIR_LANE = 0.5 // how far off the middle of the staircase you can still step onto it
 const STEP_UP = 0.6 // the biggest height change one step can make
 const LOOK = 0.0024 // mouse look, radians per pixel
@@ -325,18 +326,96 @@ export function createGame(container, opts = {}) {
     ]
   }
 
+  // ---- pathfinding: a shortest walk around walls, furniture and fences, on a 25 cm grid of one storey ----
+  const GRID = 0.25
+  function findPath(fromV, toV, level) {
+    const P = plot()
+    const minX = -P.x - 1, maxX = P.x + 1, minZ = -HZ - 1, maxZ = level === 0 ? CLIFF_Z : HZ + 2
+    const nx = Math.ceil((maxX - minX) / GRID), nz = Math.ceil((maxZ - minZ) / GRID)
+    const idx = (i, j) => j * nx + i
+    const cx = x => Math.round((x - minX) / GRID), cz = z => Math.round((z - minZ) / GRID)
+    const wx = i => minX + i * GRID, wz = j => minZ + j * GRID
+    const free = new Map()
+    const ok = (i, j) => {
+      if (i < 0 || j < 0 || i >= nx || j >= nz) return false
+      const k = idx(i, j)
+      if (!free.has(k)) free.set(k, !blocked(wx(i), wz(j), level) && !onStair(wx(i), wz(j)))
+      return free.get(k)
+    }
+    const si = cx(fromV.x), sj = cz(fromV.z)
+    let ti = cx(toV.x), tj = cz(toV.z)
+    // if the goal itself is taken (clicked on a sofa), aim for the nearest free spot next to it
+    if (!ok(ti, tj)) {
+      let best = null
+      for (let r = 1; r < 12 && !best; r++) for (let di = -r; di <= r; di++) for (let dj = -r; dj <= r; dj++) if (!best && ok(ti + di, tj + dj)) best = [ti + di, tj + dj]
+      if (!best) return null
+      ;[ti, tj] = best
+    }
+    // A* with diagonal steps
+    const open = [[0, si, sj]], g = new Map([[idx(si, sj), 0]]), came = new Map()
+    const h = (i, j) => Math.hypot(i - ti, j - tj)
+    let found = false, guard = 0
+    while (open.length && guard++ < 40000) {
+      let bi = 0
+      for (let k = 1; k < open.length; k++) if (open[k][0] < open[bi][0]) bi = k
+      const [, i, j] = open.splice(bi, 1)[0]
+      if (i === ti && j === tj) { found = true; break }
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const ni = i + di, nj = j + dj
+        if (!ok(ni, nj) || (di && dj && (!ok(i + di, j) || !ok(i, j + dj)))) continue
+        const cost = g.get(idx(i, j)) + (di && dj ? 1.414 : 1)
+        const k = idx(ni, nj)
+        if (cost < (g.get(k) ?? Infinity)) { g.set(k, cost); came.set(k, idx(i, j)); open.push([cost + h(ni, nj), ni, nj]) }
+      }
+    }
+    if (!found) return null
+    // walk back, then keep only the corners (drop points you can see past)
+    const cells = []
+    for (let k = idx(ti, tj); k !== undefined; k = came.get(k)) cells.push([k % nx, Math.floor(k / nx)])
+    cells.reverse()
+    const clear = (a, b) => { const n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * 2); for (let t = 1; t < n; t++) if (!ok(Math.round(a[0] + (b[0] - a[0]) * t / n), Math.round(a[1] + (b[1] - a[1]) * t / n))) return false; return true }
+    const pts = [cells[0]]
+    for (let k = 2; k < cells.length; k++) if (!clear(pts[pts.length - 1], cells[k])) pts.push(cells[k - 1])
+    pts.push(cells[cells.length - 1])
+    return pts.slice(1).map(([i, j]) => new THREE.Vector3(wx(i), fromV.y, wz(j)))
+  }
+
+  // a walk on the ground floor between the house, the garden and the cliff walk: through the front door and the
+  // garden gate as needed (zones: 0 inside, 1 garden, 2 outside the fence)
+  function groundRoute(a, dest) {
+    const zoneOf = z => (z < HZ + 0.3 ? 0 : z < PLOT_FRONT ? 1 : 2)
+    const y = a.pos.y
+    const door = house.door
+    const inDoor = new THREE.Vector3(door.x, y, HZ - 0.9), outDoor = new THREE.Vector3(door.x, y, HZ + 1.4)
+    const gateIn = new THREE.Vector3(0, y, PLOT_FRONT - 1.0), gateOut = new THREE.Vector3(0, y, PLOT_FRONT + 1.0)
+    const from = zoneOf(a.pos.z), to = zoneOf(dest.z)
+    if (from === to) return from === 0 ? routeTo(a, dest) : [dest]
+    const path = []
+    if (from === 0) path.push(...routeTo(a, inDoor), outDoor) // out of the front door
+    if (from === 2) path.push(gateOut, gateIn) // in through the gate
+    if (to === 2 && from !== 2) path.push(gateIn, gateOut) // out through the gate
+    if (to === 0) return [...path, outDoor, inDoor, ...routeTo({ pos: inDoor }, dest)] // in at the front door
+    return [...path, dest]
+  }
+
   function clickMove(e) {
     const r = el.getBoundingClientRect()
     const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
     ray.setFromCamera(ndc, camera)
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -me.pos.y)
     if (!ray.ray.intersectPlane(plane, hit)) return
-    const dest = new THREE.Vector3(
-      THREE.MathUtils.clamp(hit.x, (solo ? -HX : -COL) + 0.6, (solo ? HX : COL) - 0.6),
-      me.pos.y,
-      THREE.MathUtils.clamp(hit.z, -HZ + HALF, HZ - HALF)
-    )
-    me.path = routeTo(me, dest)
+    // on the ground floor you can click out in the garden or on the cliff walk too
+    const ground = levelOf(me.pos.y) === 0
+    const outsideClick = ground && hit.z > HZ + 0.6
+    const P = plot()
+    const dest = outsideClick
+      ? new THREE.Vector3(THREE.MathUtils.clamp(hit.x, -P.x + 0.6, P.x - 0.6), me.pos.y, Math.min(hit.z, CLIFF_Z - 1.4))
+      : new THREE.Vector3(
+        THREE.MathUtils.clamp(hit.x, (solo ? -HX : -COL) + 0.6, (solo ? HX : COL) - 0.6),
+        me.pos.y,
+        THREE.MathUtils.clamp(hit.z, -HZ + HALF, HZ - HALF)
+      )
+    me.path = findPath(me.pos, dest, levelOf(me.pos.y)) || (ground ? groundRoute(me, dest) : routeTo(me, dest))
     marker.position.set(dest.x, me.pos.y + 0.03, dest.z)
     markerLife = 1
   }
@@ -693,12 +772,13 @@ export function createGame(container, opts = {}) {
       const door = house.door, inDoor = new THREE.Vector3(door.x, 0, HZ - 0.9), outDoor = new THREE.Vector3(door.x, 0, HZ + 1.4)
       if (t > wanderAt && outside) {
         // back in through the front door
-        partner.path = [outDoor, inDoor, new THREE.Vector3(door.x + (Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3)]
+        const home = new THREE.Vector3(door.x + (Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3)
+        partner.path = findPath(partner.pos, home, 0) || [outDoor, inDoor, home]
         wanderAt = t + 8 + Math.random() * 6
       } else if (t > wanderAt && levelOf(partner.pos.y) === 0 && Math.random() < 0.2) {
         // out into the garden for a bit
         const spot = new THREE.Vector3(door.x + (Math.random() - 0.5) * 8, 0, HZ + 2.2 + Math.random() * 2.5)
-        partner.path = [...routeTo(partner, inDoor), outDoor, spot]
+        partner.path = findPath(partner.pos, spot, 0) || [...routeTo(partner, inDoor), outDoor, spot]
         wanderAt = t + 10 + Math.random() * 8
       } else if (t > wanderAt && Math.random() < 0.3) {
         partner.path = stairRoute(partner, levelOf(partner.pos.y) === 0 ? 'up' : 'down')
@@ -708,7 +788,7 @@ export function createGame(container, opts = {}) {
         const pool = rooms.filter(r => r.level === lvl)
         const r = pool[Math.floor(Math.random() * pool.length)]
         const dest = new THREE.Vector3(r.ox + (Math.random() * 2 - 1) * (HX - 1.4), partner.pos.y, (Math.random() * 2 - 1) * (HZ - 1.2))
-        partner.path = routeTo(partner, dest)
+        partner.path = findPath(partner.pos, dest, lvl) || routeTo(partner, dest)
         wanderAt = t + 6 + Math.random() * 8
       }
     }
@@ -940,7 +1020,7 @@ export function createGame(container, opts = {}) {
       pickAt(clientX, clientY) { const o = pick({ clientX, clientY }); return o ? { id: o.userData.itemId, kind: o.userData.interactive } : null },
       useAt(clientX, clientY) { return interactAt({ clientX, clientY }) },
       /** run frames by hand (a hidden browser tab barely runs them) */
-      tick(n = 1) { for (let i = 0; i < n; i++) { last -= 100; frame() } },
+      tick(n = 1) { for (let i = 0; i < n; i++) { last -= 1000; frame() } },
       placeIn(id, lx, lz, yaw = me.yaw, pitch = 0) {
         const r = byId(id)
         me.pos.set(r.ox + lx, r.oy, lz); me.yaw = yaw; view.pitch = pitch; me.path = []
@@ -956,7 +1036,7 @@ export function createGame(container, opts = {}) {
         wanderAt = 1e9
       },
       partnerWhere() { return { x: +partner.pos.x.toFixed(2), y: +partner.pos.y.toFixed(2), z: +partner.pos.z.toFixed(2), climbing: onStair(partner.pos.x, partner.pos.z) } },
-      where() { return { x: +me.pos.x.toFixed(2), y: +me.pos.y.toFixed(2), z: +me.pos.z.toFixed(2), room: roomAt(me).name, door: +doorOpen.toFixed(2) } },
+      where() { return { x: +me.pos.x.toFixed(2), y: +me.pos.y.toFixed(2), z: +me.pos.z.toFixed(2), room: roomAt(me).name, door: +doorOpen.toFixed(2), path: me.path.map(p => [+p.x.toFixed(1), +p.z.toFixed(1)]) } },
       blockedAt(level, x, z) { return blocked(x, z, level) ? colliders[level].filter(c => x > c.minX - HALF && x < c.maxX + HALF && z > c.minZ - HALF && z < c.maxZ + HALF) : false },
       // flood-fill the walkable floor of both storeys + garden and report what is connected
       reach() {
