@@ -163,7 +163,7 @@ export default function Editor({ game, ed, onExit, onOpenShop, onReset }) {
       </aside>
 
       {sel && selItem && (
-        <div className="sel-tools" style={{ left: sel.screen.x, top: sel.screen.y }}>
+        <div className="sel-tools" style={{ left: Math.min(Math.max(sel.screen.x, 140), window.innerWidth - 140), top: Math.max(sel.screen.y, 128) }}>
           <span className="sel-name">{selItem.name}</span>
           {sel.canRotate && <button onClick={() => game.editor.rotate()} aria-label="Rotate (R)" title="Rotate (R)"><Icon name="rotate" size={17} /></button>}
           {left(selItem.id) > 0 && <button onClick={() => game.editor.duplicate()} aria-label="Place another" title="Place another"><Icon name="copy" size={17} /></button>}
