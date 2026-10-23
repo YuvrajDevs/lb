@@ -178,6 +178,22 @@ export function seating(t, g) {
     box(g, [0.6, 0.05, 0.6], [0, 1.1, 0], cush)
     return
   }
+  if (t === 8) {
+    // "Cloud Sofa": a calm cream sofa with two seat cushions, two back cushions and a soft glow underneath
+    const body = '#efe4d0', soft = '#fbf4e6', pillow = '#cfe3f6'
+    box(g, [2.6, 0.32, 1.2], [0, 0.14, 0], body)                 // base
+    box(g, [2.6, 0.95, 0.3], [0, 0.46, -0.45], body)             // back
+    ;[-1, 1].forEach(x => box(g, [0.3, 0.7, 1.2], [x * 1.15, 0.46, 0], body)) // arms
+    ;[-0.5, 0.5].forEach(x => {
+      box(g, [0.96, 0.2, 0.86], [x, 0.46, 0.1], soft)            // seat cushions
+      box(g, [0.94, 0.52, 0.2], [x, 0.66, -0.22], soft)          // back cushions
+    })
+    box(g, [0.34, 0.34, 0.1], [-0.95, 0.72, 0.0], pillow).rotation.z = 0.2
+    box(g, [0.34, 0.34, 0.1], [0.95, 0.72, 0.0], pillow).rotation.z = -0.2
+    box(g, [2.4, 0.04, 1.0], [0, 0.0, 0.0], '#bfe4ff', em('#8fc8ff', 1.4))
+    glow(g, [0, 0.08, 0.1], '#9fd0ff', 3.2, 0.35)
+    return
+  }
   const w = t === 4 ? 1.3 : t === 6 ? 3.0 : 2.4
   box(g, [w, 0.5, 1.2], [0, 0, 0], col)
   box(g, [w, 0.85, 0.3], [0, 0.5, -0.45], t >= 7 ? cush : col)
@@ -190,13 +206,6 @@ export function seating(t, g) {
     box(g, [1.0, 0.16, 0.9], [-w / 2 + 0.6, 0.5, 1.1], cush)
   }
   if (t === 7) for (let i = -1; i <= 1; i++) for (let j = 0; j < 2; j++) box(g, [0.14, 0.14, 0.06], [i * 0.5, 0.95 + j * 0.2, -0.28], '#e8c86a')
-  if (t === 8) {
-    // stepped cloud-white back with soft sky-blue cushions, all boxy
-    box(g, [w - 0.5, 0.22, 0.34], [0, 1.35, -0.45], '#ffffff')
-    ;[-1, 1].forEach(x => box(g, [0.8, 0.5, 0.2], [x * (w / 2 - 0.9), 0.9, -0.2], '#cfe6ff', { roughness: 0.9 }))
-    box(g, [w - 0.4, 0.04, 1.3], [0, 0.02, 0.05], '#bfe4ff', em('#8fc8ff', 1.6))
-    glow(g, [0, 0.1, 0.1], '#8fc8ff', 3.4, 0.4)
-  }
   if (t >= 9) [-1, 1].forEach(s => box(g, [0.08, 0.1, 1.3], [s * (w / 2 - 0.02), 0.78, 0], GOLD, METAL))
   if (t === 10) {
     box(g, [w + 0.4, 0.05, 1.4], [0, 0, 0], '#7f9bff', em('#7f9bff', 2.4))
