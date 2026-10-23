@@ -261,6 +261,6 @@ input[type='text'], input:not([type]), .field input, .invite input {
   .stairs { bottom: 134px; }
   .pill small { display: none; }
   .top-right .views { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 16px); overflow-x: auto; }
-  .top-right .views button { padding: 6px 9px; font-size: 11.5px; }
+  .top-right .views button { padding: 6px 9px; font-size: 11.5px; white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
