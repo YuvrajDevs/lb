@@ -13,7 +13,7 @@ export const std = (color, extra = {}) => {
   const plain = Object.values(extra).every(v => typeof v !== 'object')
   const key = plain ? `${color}|${JSON.stringify(extra)}` : null
   if (key && matCache.has(key)) return matCache.get(key)
-  const m = new THREE.MeshStandardMaterial({ color, roughness: 0.88, metalness: 0, ...extra })
+  const m = new THREE.MeshStandardMaterial({ color, roughness: 0.46, metalness: 0.04, ...extra })
   if (key) matCache.set(key, m)
   return m
 }
@@ -59,8 +59,8 @@ export function wall(w, h, thick, holes, face, edge) {
   const geo = new THREE.ExtrudeGeometry(s, { depth: thick, bevelEnabled: false })
   // own materials: walls fade independently, so they must not be shared
   const m = new THREE.Mesh(geo, [
-    new THREE.MeshStandardMaterial({ color: face, roughness: 0.9 }),
-    new THREE.MeshStandardMaterial({ color: edge, roughness: 0.9 }),
+    new THREE.MeshStandardMaterial({ color: face, roughness: 0.62, metalness: 0.02 }),
+    new THREE.MeshStandardMaterial({ color: edge, roughness: 0.62 }),
   ])
   m.castShadow = true
   m.receiveShadow = true

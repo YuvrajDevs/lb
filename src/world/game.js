@@ -4,6 +4,7 @@ import { createCube, FLOAT } from './cube.js'
 import { HX, HZ } from './kit.js'
 import { resolveDefaults, footOf, infoOf } from './furnish.js'
 import { createEditor } from './editor.js'
+import { makeEnvironment } from './env.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
@@ -123,11 +124,13 @@ export function createGame(container, opts = {}) {
       }`,
   }
   let bloomOn = true
+  scene.environment = makeEnvironment(renderer)
+  scene.environmentIntensity = 0.7
   composer = new EffectComposer(renderer)
   composer.setPixelRatio(pr)
   composer.setSize(container.clientWidth, container.clientHeight)
   const renderPass = new RenderPass(scene, camera)
-  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.34, 0.55, 1.15)
+  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.12, 0.4, 1.4)
   composer.addPass(renderPass)
   composer.addPass(bloom)
   composer.addPass(new ShaderPass(GRADE))

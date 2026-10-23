@@ -86,7 +86,7 @@ export function buildHouse(opts = {}) {
   tri.moveTo(-hw, 0); tri.lineTo(hw, 0); tri.lineTo(0, rh); tri.closePath()
   const prism = new THREE.Mesh(
     new THREE.ExtrudeGeometry(tri, { depth, bevelEnabled: false }),
-    [new THREE.MeshStandardMaterial({ color: '#a9c4b0', roughness: 0.9 }), new THREE.MeshStandardMaterial({ color: '#9a5a50', roughness: 0.8 })]
+    [new THREE.MeshStandardMaterial({ color: '#a9c4b0', roughness: 0.6 }), new THREE.MeshPhysicalMaterial({ color: '#9a5a50', roughness: 0.38, clearcoat: 0.5, clearcoatRoughness: 0.3 })]
   )
   prism.position.set(0, roofBase, -depth / 2)
   prism.castShadow = true
@@ -247,7 +247,7 @@ export function buildHouse(opts = {}) {
 
   // ---------- global lights: dim blue night + moon ----------
   const lights = new THREE.Group()
-  lights.add(new THREE.HemisphereLight('#8497e6', '#3c3668', 1.35))
+  lights.add(new THREE.HemisphereLight('#8497e6', '#3c3668', 0.9))
   const moon = new THREE.DirectionalLight('#9ab8ff', 2.2)
   moon.target.position.set(0, 5.5, 0)
   moon.position.set(-4.5, 5.5 + 9.2, -20)
@@ -258,6 +258,12 @@ export function buildHouse(opts = {}) {
   moon.shadow.bias = -0.0005
   moon.shadow.normalBias = 0.04
   lights.add(moon, moon.target)
+  // coloured rim lights, like the neon spill in the references: they graze the glossy surfaces from both sides
+  const rimL = new THREE.DirectionalLight('#a46cff', 1.1)
+  rimL.position.set(-18, 7, 8)
+  const rimR = new THREE.DirectionalLight('#ff8a5a', 0.9)
+  rimR.position.set(18, 5, 10)
+  lights.add(rimL, rimR)
 
   // ---------- the garden: swap the fence or the sign for ones from the shop ----------
   const fenceRuns = [

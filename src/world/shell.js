@@ -31,7 +31,8 @@ export function makeShell(spec) {
 
   // ---------- slab + floor (pieces, so a stairwell hole can be cut) ----------
   const slabMat = std(EDGE, { emissive: '#6c5a3c', emissiveIntensity: 0.35 })
-  const floorMat = new THREE.MeshStandardMaterial({ map: plankTexture(floorColor), roughness: 0.7 })
+  // lacquered floor: a clear coat on top, so lamps and windows leave soft reflections and a sheen
+  const floorMat = new THREE.MeshPhysicalMaterial({ map: plankTexture(floorColor), roughness: 0.34, metalness: 0.0, clearcoat: 0.7, clearcoatRoughness: 0.22, envMapIntensity: 1 })
   rectsAround(holeFloor).forEach(([x0, x1, z0, z1]) => {
     const sx0 = x0 <= -HX + 1e-6 ? -HX - T : x0
     const sx1 = x1 >= HX - 1e-6 ? HX + T : x1
