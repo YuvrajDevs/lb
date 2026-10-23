@@ -6,6 +6,7 @@ import { sfx } from '../game/audio'
 import { useStore } from './useStore'
 import { Icon } from './icons'
 import Preview from './Preview'
+import { editInset } from './layout'
 
 const AREA_ICON = { study: 'table', bedroom: 'bed', kitchen: 'plant', living: 'sofa', garden: 'fence' }
 const SNAPS = [['fine', '0.1'], ['normal', '0.3'], ['big', '0.6']]
@@ -84,7 +85,7 @@ export default function Editor({ game, ed, onExit, onOpenShop, onReset }) {
       <div className="ed-top">
         <div className="ed-areas" role="tablist" aria-label="Where to edit">
           {AREA_LIST.map(id => (
-            <button key={id} role="tab" aria-selected={area === id} className={area === id ? 'on' : ''} onClick={() => game.enterEdit(id, window.innerWidth < 760 ? 250 : 340)}>
+            <button key={id} role="tab" aria-selected={area === id} className={area === id ? 'on' : ''} onClick={() => game.enterEdit(id, editInset())}>
               <Icon name={AREA_ICON[id]} size={16} /> {areaOf(id).label}
             </button>
           ))}

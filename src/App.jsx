@@ -13,6 +13,7 @@ import Dock from './ui/Dock'
 import Toasts from './ui/Toasts'
 import Shop, { Inventory } from './ui/Shop'
 import Editor from './ui/Editor'
+import { editInset } from './ui/layout'
 import Wardrobe from './ui/Wardrobe'
 import Settings from './ui/Settings'
 import World from './ui/World'
@@ -44,6 +45,7 @@ function App() {
   const [shopCat, setShopCat] = useState('beds')
   const [tryOn, setTryOn] = useState({ skin: null, hat: null })
   const [ed, setEd] = useState(null) // the room editor's live state
+  const [rotateNote, setRotateNote] = useState(true)
 
   useEffect(() => {
     const saved = store.get()
@@ -116,7 +118,7 @@ function App() {
   const AREA_OF = { study: 'study', bedroom: 'bedroom', kitchen: 'kitchen', 'living room': 'living' }
   const startEdit = () => {
     setOpen(null)
-    game.current?.enterEdit(AREA_OF[view.room] || 'study', window.innerWidth < 760 ? 250 : 340)
+    game.current?.enterEdit(AREA_OF[view.room] || 'study', editInset())
   }
   const stopEdit = () => { game.current?.exitEdit(); setOpen(null) }
   const resetArea = id => { store.resetArea(id, resolveDefaults(id)); sfx('pick') }
@@ -171,6 +173,28 @@ function App() {
       {open === 'world' && <World onClose={close} />}
       {open === 'daily' && <DailyReward onClose={close} />}
       {open === 'settings' && <Settings onClose={close} debug={debug} />}
+
+      {rotateNote && (
+        <div className="rotate-note" role="note">
+          <span>📱 Turn your phone sideways for the best view</span>
+          <button aria-label="Dismiss" onClick={() => setRotateNote(false)}>×</button>
+        </div>
+      )}
+
+      {!editing && !open && (
+        <div className="pad" aria-label="Move">
+          {[['u', '▲', 'w', 'arrowup'], ['l', '◀', 'a', 'arrowleft'], ['d', '▼', 's', 'arrowdown'], ['r', '▶', 'd', 'arrowright']].map(([cls, label, key]) => (
+            <button
+              key={cls}
+              className={cls}
+              aria-label={`Move ${cls}`}
+              onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); game.current?.setKey(key, true) }}
+              onPointerUp={() => game.current?.setKey(key, false)}
+              onPointerCancel={() => game.current?.setKey(key, false)}
+            >{label}</button>
+          ))}
+        </div>
+      )}
 
       <Toasts />
     </div>

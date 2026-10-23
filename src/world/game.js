@@ -522,8 +522,9 @@ export function createGame(container, opts = {}) {
       const want = view.insetNow ?? 0
       view.insetNow = want + (shift - want) * Math.min(1, dt * 8)
       if (Math.abs(view.insetNow) > 0.5) {
-        const sx = window.innerWidth < 760 ? 0 : view.insetNow / 2
-        const sy = window.innerWidth < 760 ? -view.insetNow / 2 : 0
+        const portrait = window.innerWidth < window.innerHeight
+        const sx = portrait ? 0 : view.insetNow / 2
+        const sy = portrait ? -view.insetNow / 2 : 0
         camera.setViewOffset(w, h, -sx, -sy, w, h)
       } else if (camera.view?.enabled) camera.clearViewOffset()
     }
@@ -576,6 +577,8 @@ export function createGame(container, opts = {}) {
     takeStairs,
     /** lock the keyboard while a window (shop, settings...) is open */
     setInputEnabled(on) { inputOn = on; if (!on) keys.clear() },
+    /** press or release a movement key from an on-screen button (touch) */
+    setKey(k, on) { if (on && inputOn) keys.add(k); else keys.delete(k) },
     /** true while a window covers the world: render it at a quarter of the speed */
     setIdle(b) { idle = b },
 
