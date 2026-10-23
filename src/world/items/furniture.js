@@ -180,16 +180,16 @@ export function seating(t, g) {
   }
   if (t === 8) {
     // "Cloud Sofa": a calm cream sofa with two seat cushions, two back cushions and a soft glow underneath
-    const body = '#efe4d0', soft = '#fbf4e6', pillow = '#cfe3f6'
+    const body = '#cdb694', soft = '#fff8ea', pillow = '#7fa6d8'
     box(g, [2.6, 0.32, 1.2], [0, 0.14, 0], body)                 // base
     box(g, [2.6, 0.95, 0.3], [0, 0.46, -0.45], body)             // back
-    ;[-1, 1].forEach(x => box(g, [0.3, 0.7, 1.2], [x * 1.15, 0.46, 0], body)) // arms
-    ;[-0.5, 0.5].forEach(x => {
-      box(g, [0.96, 0.2, 0.86], [x, 0.46, 0.1], soft)            // seat cushions
-      box(g, [0.94, 0.52, 0.2], [x, 0.66, -0.22], soft)          // back cushions
+    ;[-1, 1].forEach(x => box(g, [0.3, 0.7, 1.2], [x * 1.15, 0.46, 0], '#bfa57e')) // arms, a shade darker
+    ;[-0.46, 0.46].forEach(x => {
+      box(g, [0.82, 0.2, 0.8], [x, 0.46, 0.12], soft)            // seat cushions, clear of the arms
+      box(g, [0.8, 0.5, 0.18], [x, 0.66, -0.2], soft)            // back cushions
     })
-    box(g, [0.34, 0.34, 0.1], [-0.95, 0.72, 0.0], pillow).rotation.z = 0.2
-    box(g, [0.34, 0.34, 0.1], [0.95, 0.72, 0.0], pillow).rotation.z = -0.2
+    box(g, [0.3, 0.3, 0.1], [-0.58, 0.78, 0.0], pillow).rotation.z = 0.25
+    box(g, [0.3, 0.3, 0.1], [0.58, 0.78, 0.0], pillow).rotation.z = -0.25
     box(g, [2.4, 0.04, 1.0], [0, 0.0, 0.0], '#bfe4ff', em('#8fc8ff', 1.4))
     glow(g, [0, 0.08, 0.1], '#9fd0ff', 3.2, 0.35)
     return
