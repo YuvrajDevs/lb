@@ -39,6 +39,13 @@ const P = {
   bolt: 'M13 3L5 14h6l-1 7 8-11h-6z',
   sliders: 'M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M8 15v4',
   info: 'M12 8v.01M12 11v6M3 12a9 9 0 1018 0 9 9 0 00-18 0z',
+  edit: 'M4 20l4-1L19 8l-3-3L5 16zM14 6l3 3',
+  rotate: 'M20 11a8 8 0 10-2.300 6.300M20 4v7h-7',
+  trash: 'M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6',
+  undo: 'M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3',
+  redo: 'M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3',
+  grid: 'M4 4h16v16H4zM4 9.300h16M4 14.700h16M9.300 4v16M14.700 4v16',
+  copy: 'M8 8h11v12H8zM5 16V4h11',
 }
 
 export function Icon({ name, size = 20, className = '', title }) {

@@ -185,6 +185,7 @@ export function signs(t, g, text = 'Sera & DeM') {
   if (t === 8) { box(g, [0.08, 1.7, 0.08], [-w / 2 + 0.1, 0, 0], '#2f3138'); box(g, [w * 0.8, 0.08, 0.08], [-w * 0.1, 1.7, 0], '#2f3138'); cyl(g, 0.008, 0.2, [-w * 0.35, 1.5, 0], '#2f3138', {}, 4); cyl(g, 0.008, 0.2, [w * 0.2, 1.5, 0], '#2f3138', {}, 4); sphere(g, 0.12, [0.0, 1.6, 0.2], '#ffe2a8', em('#ffbe70', 2.4)); glow(g, [0, 1.6, 0.2], '#ffbe70', 2.4, 0.7) }
   if (t === 9) { [-w / 2 + 0.15, w / 2 - 0.15].forEach(x => box(g, [0.12, 1.0, 0.12], [x, 0, 0], GOLD, METAL)); box(g, [w + 0.1, 0.07, 0.16], [0, 0.95 + w * 0.31 + 0.05, 0], GOLD, METAL); pool(g, [0, 0, 0.8], '#ffbe70', 1.6, 0.35) }
   if (t === 10) { box(g, [w * 0.8, 0.04, 0.5], [0, 0, 0], '#8bffd0', em('#5fffd0', 2)); glow(g, [0, 1.15, 0.1], '#5fffd0', 4.6, 0.5); glow(g, [0, 0.1, 0], '#5fffd0', 3.2, 0.5) }
+  return { setText(txt) { mat.map.dispose(); mat.map = signTexture(txt, t); if (mat.emissiveMap) mat.emissiveMap = mat.map; mat.needsUpdate = true } }
 }
 
 export function gardenlights(t, g) {
@@ -201,3 +202,5 @@ export function gardenlights(t, g) {
   else if (t === 9) { cyl(g, 0.12, 0.7, [0, 0, 0], '#7a7a88', {}, 6); const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.4), std('#bff0ff', { ...em(lit, 2), transparent: true, opacity: 0.9 })); c.position.y = 1.15; c.scale.y = 1.6; g.add(c); glow(g, [0, 1.15, 0], lit, 3.4, 0.8); pool(g, [0, 0, 0], lit, 2.2, 0.4) }
   else { for (let i = 0; i < 9; i++) { const a = i * 2.4; sphere(g, 0.07 + (i % 3) * 0.02, [Math.sin(a) * (0.3 + (i % 4) * 0.2), 0.3 + i * 0.2, Math.cos(a) * (0.3 + (i % 4) * 0.2)], '#f4ffd0', em(lit, 2.6)); glow(g, [Math.sin(a) * (0.3 + (i % 4) * 0.2), 0.3 + i * 0.2, Math.cos(a) * (0.3 + (i % 4) * 0.2)], lit, 1.0, 0.8) } pool(g, [0, 0, 0], lit, 2.4, 0.3) }
 }
+
+export { wallTexture, floorTexture }

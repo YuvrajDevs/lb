@@ -3,7 +3,7 @@ import { Icon } from './icons'
 const ITEMS = [
   ['shop', 'shop', 'Shop'],
   ['wardrobe', 'wardrobe', 'Wardrobe'],
-  ['inventory', 'cube', 'Items'],
+  ['edit', 'edit', 'Edit home'],
   ['world', 'world', 'World'],
   ['daily', 'gift', 'Daily'],
   ['settings', 'settings', 'Settings'],

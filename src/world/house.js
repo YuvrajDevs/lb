@@ -6,6 +6,11 @@ import { buildStudy } from './rooms/study.js'
 import { buildBedroom, STAIR_HOLE } from './rooms/bedroom.js'
 import { buildKitchen } from './rooms/kitchen.js'
 import { buildLiving, STAIR } from './rooms/living.js'
+import { buildItem } from './items/index.js'
+import { signs as buildSign } from './items/decor.js'
+import { ITEM_BY_ID } from '../game/catalog.js'
+import { GARDEN } from '../game/areas.js'
+import { furnishArea, paintTexture, floorTex } from './furnish.js'
 
 export { H }
 export const SLAB = 0.72
@@ -36,7 +41,7 @@ function signTexture(text) {
  * living room (bottom-right), roof, and a fenced garden with a name sign.
  * All static geometry is merged (see bake.js) so the whole house is a few hundred draw calls at most.
  */
-export function buildHouse() {
+export function buildHouse(opts = {}) {
   const group = new THREE.Group()
   const specs = [
     { id: 'study', name: 'study', col: 0, row: 0, build: buildStudy },
@@ -58,8 +63,12 @@ export function buildHouse() {
     const level = 1 - s.row
     sh.colliders.forEach(c => colliders[level].push({ minX: c.minX + ox, maxX: c.maxX + ox, minZ: c.minZ, maxZ: c.maxZ }))
     sh.frames.forEach(f => frames.push(f))
+    const placed = new THREE.Group() // everything the player has put in this room
+    sh.root.add(placed)
+    const light = new THREE.PointLight('#ffd9a0', 14, 10, 2)
+    sh.root.add(light)
     return {
-      id: s.id, name: s.name, col: s.col, row: s.row, level, ox, oy,
+      id: s.id, name: s.name, col: s.col, row: s.row, level, ox, oy, sh, placed, light, furnished: null,
       walls: sh.walls, ceiling: sh.ceiling, door: sh.door, doorX: sh.doorX,
       center: new THREE.Vector3(ox, oy + 2.25, 0),
     }
@@ -118,6 +127,9 @@ export function buildHouse() {
 
   // ---------- fenced garden ----------
   const garden = new THREE.Group()
+  const defaultFence = new THREE.Group() // the standard picket fence (hidden when a fence from the shop is applied)
+  const itemFence = new THREE.Group()
+  const gardenPlaced = new THREE.Group() // garden lights the player has placed
   const street = new THREE.Group() // road, lamps, trees, the sign's lamp: only shown from the street view
   const zc = (PLOT.zBack + PLOT.zFront) / 2
   box(garden, [PLOT.x * 2 + 0.6, 0.5, PLOT.zFront - PLOT.zBack + 0.6], [0, -1.0, zc], '#35564f')
@@ -150,12 +162,12 @@ export function buildHouse() {
   })
 
   const fence = '#f2eadb'
-  const post = (x, z, h = 0.6) => box(garden, [0.13, h, 0.13], [x, -0.5, z], fence)
+  const post = (x, z, h = 0.6) => box(defaultFence, [0.13, h, 0.13], [x, -0.5, z], fence)
   const run = (x0, z0, x1, z1) => {
     const len = Math.hypot(x1 - x0, z1 - z0)
     const n = Math.max(1, Math.round(len / 0.75))
     ;[0.2, 0.45].forEach(y => {
-      const r = box(garden, [0.05, 0.07, len], [(x0 + x1) / 2, -0.5 + y, (z0 + z1) / 2], fence)
+      const r = box(defaultFence, [0.05, 0.07, len], [(x0 + x1) / 2, -0.5 + y, (z0 + z1) / 2], fence)
       r.rotation.y = Math.atan2(x1 - x0, z1 - z0)
     })
     for (let i = 0; i <= n; i++) post(x0 + ((x1 - x0) * i) / n, z0 + ((z1 - z0) * i) / n)
@@ -181,18 +193,22 @@ export function buildHouse() {
     sphere(garden, 0.8, [x, -0.1, z], '#2f6a54')
     sphere(garden, 0.55, [x + 0.6, -0.25, z + 0.3], '#3b7a62')
   })
-  group.add(garden, street)
+  group.add(garden, defaultFence, itemFence, gardenPlaced, street)
 
   // name sign on two posts, lit by its own street lamp (kept separate so it can be re-texted: setName('X & Y'))
   const SX = -5.0, SZ = PLOT.zFront - 0.6
   const signMat = new THREE.MeshStandardMaterial({ map: signTexture('Sera & DeM'), roughness: 0.8, emissive: '#7a5a3c', emissiveIntensity: 0.55 })
   signMat.emissiveMap = signMat.map
+  const defaultSign = new THREE.Group()
   const sign = new THREE.Mesh(new THREE.BoxGeometry(3.8, 1.1, 0.14), signMat)
   sign.position.set(SX, -0.5 + 1.25, SZ)
   sign.userData.keep = true
   sign.castShadow = true
-  group.add(sign)
-  ;[SX - 1.6, SX + 1.6].forEach(x => box(group, [0.16, 1.2, 0.16], [x, -0.5, SZ], '#6b4a30'))
+  defaultSign.add(sign)
+  ;[SX - 1.6, SX + 1.6].forEach(x => box(defaultSign, [0.16, 1.2, 0.16], [x, -0.5, SZ], '#6b4a30'))
+  group.add(defaultSign)
+  let itemSign = null
+  let signText = 'Sera & DeM'
   // lamp post with an arm reaching over the board and a cone of light falling on it
   const PX = SX - 2.9
   cyl(street, 0.07, 3.0, [PX, -0.5, SZ], '#2f3138', {}, 8)
@@ -206,6 +222,8 @@ export function buildHouse() {
   wash(street, [SX, 1.25, SZ + 0.09], 3.7, 1.05, '#ffcf8a', 0.26)
   pool(street, [SX, -0.5, SZ + 0.9], '#ffbe70', 2.6, 0.3)
   const setName = text => {
+    signText = text
+    itemSign?.setText(text)
     signMat.map.dispose()
     signMat.map = signTexture(text)
     signMat.emissiveMap = signMat.map
@@ -237,15 +255,93 @@ export function buildHouse() {
   moon.shadow.normalBias = 0.04
   lights.add(moon, moon.target)
 
+  // ---------- the garden: swap the fence or the sign for ones from the shop ----------
+  const fenceRuns = [
+    [-PLOT.x, PLOT.zBack, PLOT.x, PLOT.zBack], [-PLOT.x, PLOT.zBack, -PLOT.x, PLOT.zFront], [PLOT.x, PLOT.zBack, PLOT.x, PLOT.zFront],
+    [-PLOT.x, PLOT.zFront, -gate, PLOT.zFront], [gate, PLOT.zFront, PLOT.x, PLOT.zFront],
+  ]
+  function setFence(tier) {
+    itemFence.clear()
+    defaultFence.visible = !tier
+    if (!tier) return
+    const item = ITEM_BY_ID[`fences-${tier}`]
+    fenceRuns.forEach(([x0, z0, x1, z1]) => {
+      const len = Math.hypot(x1 - x0, z1 - z0)
+      const n = Math.ceil(len / 2.8)
+      for (let k = 0; k < n; k++) {
+        const t = (k + 0.5) / n
+        const seg = buildItem(item)
+        seg.scale.x = len / (n * 2.8)
+        seg.position.set(x0 + (x1 - x0) * t, -0.5, z0 + (z1 - z0) * t)
+        seg.rotation.y = Math.atan2(-(z1 - z0), x1 - x0)
+        itemFence.add(seg)
+      }
+    })
+  }
+  function setSign(tier) {
+    if (itemSign) { group.remove(itemSign.group); itemSign = null }
+    defaultSign.visible = !tier
+    if (!tier) return
+    const g = new THREE.Group()
+    const api = buildSign(tier, g, signText)
+    g.position.set(SX, -0.5, SZ)
+    group.add(g)
+    itemSign = { group: g, setText: api.setText }
+  }
+
+  // ---------- furnishing: put the layouts on the grid ----------
+  const roomById = id => rooms.find(r => r.id === id)
+  const prepared = new Set()
+  function applyLight(r, light) {
+    if (!light) { r.light.intensity = 12; r.light.position.set(0, 2.8, 0.5); r.light.color.set('#ffd9a0'); return }
+    r.light.color.set(light.color)
+    r.light.position.set(light.x, Math.min(Math.max(light.y, 1.4), 4.2), light.z)
+    r.light.intensity = light.power
+  }
+  /** rebuild one area from its layout entries; bake=false keeps the pieces separate (while editing) */
+  function furnish(areaId, entries, { bakeIt = true } = {}) {
+    if (areaId === 'garden') {
+      gardenPlaced.clear()
+      const { group: g } = furnishArea(GARDEN, entries, { y0: -0.5 })
+      gardenPlaced.add(g)
+      if (bakeIt) { gardenPlaced.updateMatrixWorld(true); bake(gardenPlaced, { clone: true }) }
+      return
+    }
+    const r = roomById(areaId)
+    r.placed.clear()
+    const { group: g, light } = furnishArea(r.areaSpec || areaSpec(areaId), entries)
+    r.placed.add(g)
+    applyLight(r, light)
+    if (bakeIt) { group.updateMatrixWorld(true); bake(g) }
+    r.furnished = entries
+  }
+  function setStyle(roomId, st) {
+    const r = roomById(roomId)
+    r.sh.setPaint(st?.paint ? paintTexture(st.paint) : null)
+    r.sh.setFloor(st?.floor ? floorTex(st.floor) : null)
+  }
+  rooms.forEach(r => { r.areaSpec = areaSpec(r.id) })
+  ;['study', 'bedroom', 'kitchen', 'living'].forEach(id => {
+    furnish(id, opts.layout?.[id] || [], { bakeIt: false })
+    setStyle(id, opts.style?.[id])
+    prepared.add(id)
+  })
+  furnish('garden', opts.layout?.garden || [], { bakeIt: false })
+  setFence(opts.fence || 0)
+  setSign(opts.sign || 0)
+
   // ---------- merge everything static into a few meshes ----------
   group.updateMatrixWorld(true)
-  shells.forEach(sh => {
-    bake(sh.root, { exclude: [...Object.values(sh.walls), sh.ceiling] })
+  shells.forEach((sh, k) => {
+    bake(sh.root, { exclude: [...Object.values(sh.walls), sh.ceiling, rooms[k].placed] })
+    bake(rooms[k].placed)
     Object.values(sh.walls).forEach(w => bake(w, { clone: true }))
     bake(sh.ceiling, { clone: true })
   })
   bake(roof, { clone: true })
   bake(garden)
+  bake(defaultFence)
+  bake(gardenPlaced, { clone: true })
   bake(street, { clone: true })
 
   const living = rooms.find(r => r.id === 'living')
@@ -260,7 +356,23 @@ export function buildHouse() {
 
   return {
     group, lights, rooms, colliders, frames, roof, roofBase, stairs, setName, streetProps: street,
+    furnish, setStyle, setFence, setSign, roomById, gardenPlaced,
+    /** show only one room (for editing it) or, with null, the whole house again */
+    isolate(areaId) {
+      const all = !areaId
+      rooms.forEach(r => { r.sh.root.visible = all || areaId === 'garden' || r.id === areaId })
+      const outside = areaId === 'garden' || all
+      roof.visible = outside
+      ;[garden, defaultFence, itemFence, gardenPlaced].forEach(o => { o.visible = outside })
+      defaultFence.visible = outside && !itemFence.children.length
+      itemFence.visible = outside
+      defaultSign.visible = outside && !itemSign
+      if (itemSign) itemSign.group.visible = outside
+    },
     door: { pivot: living.door, x: living.ox + living.doorX, z: HZ + 0.15 },
     bounds: { halfW: PLOT.x + 0.6, yMin: -1.25, yMax: roofBase + rh },
   }
 }
+
+import { areaOf } from '../game/areas.js'
+const areaSpec = id => areaOf(id)

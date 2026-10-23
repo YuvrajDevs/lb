@@ -64,8 +64,8 @@ export default function Settings({ onClose, debug }) {
 
         <section>
           <h3><Icon name="music" size={16} /> Sound</h3>
-          <Toggle label="Music" hint="Coming soon" value={s.settings.music} onChange={v => set('music', v)} disabled />
-          <Toggle label="Sound effects" hint="Coming soon" value={s.settings.sfx} onChange={v => set('sfx', v)} disabled />
+          <Toggle label="Music" hint="A slow, quiet tune that plays itself" value={s.settings.music} onChange={v => set('music', v)} />
+          <Toggle label="Sound effects" hint="Clicks, buying, placing furniture" value={s.settings.sfx} onChange={v => set('sfx', v)} />
         </section>
 
         <section>

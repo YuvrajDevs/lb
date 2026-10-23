@@ -1,11 +1,15 @@
 import { ITEM_BY_ID, CAT_BY_ID } from './catalog.js'
 import { dailyReward, milestoneOf, dayNumber, toDateStr, nextSlotPrice, WORLD_BASE_SLOTS } from './economy.js'
+import { starterOwned } from './defaults.js'
+import { sfx } from './audio.js'
 
 // A tiny local store (localStorage) that stands in for the server until accounts exist.
 // All money rules live in economy.js; every action here is one the server will own later.
 
-const KEY = 'cc:v2'
+const KEY = 'cc:v3'
 const listeners = new Set()
+let undoStack = []
+let redoStack = []
 
 const today = () => toDateStr(new Date())
 
@@ -14,8 +18,10 @@ function fresh() {
   return {
     profile: { name: 'Sera', house: 'Sera & DeM' },
     boxets: 1500,
-    owned: {}, // itemId -> count
-    equipped: { skin: null, hat: null },
+    owned: starterOwned(), // itemId -> count: the standard homes' furniture to start with
+    equipped: { skin: null, hat: null, fence: null, sign: null },
+    layout: null, // { areaId: [placed items] }, filled in when the world first builds the standard furnishing
+    style: {}, // { roomId: { paint, floor } }
     joined: t,
     claimedDays: [], // day numbers already claimed
     today: t, // overridable with the dev "next day" button
@@ -58,6 +64,7 @@ function set(patch) {
 
 let toastId = 1
 function toast(text, kind = 'info') {
+  if (kind === 'warn') sfx('error')
   const t = { id: toastId++, text, kind }
   set({ toasts: [...state.toasts, t] })
   setTimeout(() => set({ toasts: state.toasts.filter(x => x.id !== t.id) }), 3600)
@@ -66,6 +73,8 @@ function toast(text, kind = 'info') {
 export const store = {
   get: () => state,
   subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
+
+  notify(text, kind = 'info') { toast(text, kind) },
 
   // ---- shop ----
   owns: id => (state.owned[id] || 0) > 0,
@@ -82,8 +91,56 @@ export const store = {
     const it = ITEM_BY_ID[id]
     if (!r.ok) { if (it) toast(r.reason, 'warn'); return false }
     set({ boxets: state.boxets - it.price, owned: { ...state.owned, [id]: (state.owned[id] || 0) + 1 } })
+    sfx('buy')
     toast(`Bought ${it.name}`, 'good')
     return true
+  },
+
+  // ---- the home: what is placed where ----
+  placedCount(id) {
+    let n = 0
+    Object.values(state.layout || {}).forEach(list => list.forEach(e => { if (e.id === id) n++ }))
+    return n
+  },
+  available: id => (state.owned[id] || 0) - store.placedCount(id),
+  /** called once, when the world first builds the standard furnishing */
+  initLayout(layout) { if (!state.layout) set({ layout }) },
+  setArea(areaId, list) {
+    undoStack.push(state.layout)
+    if (undoStack.length > 40) undoStack.shift()
+    redoStack = []
+    set({ layout: { ...state.layout, [areaId]: list } })
+  },
+  canUndo: () => undoStack.length > 0,
+  canRedo: () => redoStack.length > 0,
+  undo() {
+    if (!undoStack.length) return null
+    redoStack.push(state.layout)
+    set({ layout: undoStack.pop() })
+    return state.layout
+  },
+  redo() {
+    if (!redoStack.length) return null
+    undoStack.push(state.layout)
+    set({ layout: redoStack.pop() })
+    return state.layout
+  },
+  /** back to the standard furnishing, using only what you still have free (nothing is ever duplicated) */
+  resetArea(areaId, defaults) {
+    const used = {}
+    Object.entries(state.layout || {}).forEach(([k, list]) => { if (k !== areaId) list.forEach(e => { used[e.id] = (used[e.id] || 0) + 1 }) })
+    const dropped = new Set()
+    const out = []
+    defaults.forEach(e => {
+      if (e.on && dropped.has(e.on)) { dropped.add(e.uid); return }
+      if ((state.owned[e.id] || 0) - (used[e.id] || 0) <= 0) { dropped.add(e.uid); return }
+      used[e.id] = (used[e.id] || 0) + 1
+      out.push(e)
+    })
+    store.setArea(areaId, out)
+  },
+  applyStyle(areaId, kind, tier) {
+    set({ style: { ...state.style, [areaId]: { ...(state.style[areaId] || {}), [kind]: tier || null } } })
   },
 
   // ---- cube ----
@@ -104,6 +161,7 @@ export const store = {
     const amount = dailyReward(day)
     const ms = milestoneOf(day)
     set({ boxets: state.boxets + amount, claimedDays: [...state.claimedDays, day] })
+    sfx('claim')
     toast(`+${amount} Boxets${ms ? ` and ${ms}!` : ''}`, 'good')
     return { amount, ms }
   },

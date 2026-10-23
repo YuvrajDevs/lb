@@ -19,7 +19,7 @@ export function makeShell(spec) {
   const {
     name, wall: wallColor = '#ece6dc', floorColor = '#b98a5a', doorL = null, doorR = null,
     win = [-2.2, 0.6], holeFloor = null, holeCeil = null, frameKinds = [0, 3, 2], skyKind = 0,
-    wainscot = '#c9bfae', curtain = '#b8c4b0', cove = '#ffd9a0',
+    wainscot = '#c9bfae', cove = '#ffd9a0',
     ext = { storey: 'upper', color: '#a9c4b0', batten: '#bcd4c2', windows: [-3.2, 3.2] },
   } = spec
   const doorFront = ext.doorFront ?? null
@@ -154,13 +154,6 @@ export function makeShell(spec) {
   wash(walls.left, [-HX + 0.06, H - 0.95, 0], D - 0.6, 1.5, cove, 0.24, Math.PI / 2)
   wash(walls.right, [HX - 0.06, H - 0.95, 0], D - 0.6, 1.5, cove, 0.24, Math.PI / 2)
 
-  // boxy curtains + rod either side of the window
-  ;[WX0 - 0.5, WX1 + 0.5].forEach(x => {
-    box(walls.back, [0.8, 2.6, 0.16], [x, 1.75, -HZ + 0.16], curtain)
-    box(walls.back, [0.12, 2.6, 0.18], [x + (x < wxm ? 0.2 : -0.2), 1.75, -HZ + 0.16], '#ffffff', { transparent: true, opacity: 0.12 })
-  })
-  box(walls.back, [WX1 - WX0 + 2.0, 0.07, 0.07], [wxm, 4.4, -HZ + 0.2], '#3a3c46')
-
   // outside: cladding, windows, shutters, door/porch or balcony (see exterior.js)
   const { door } = addExterior(walls, {
     ...ext, extLeft: !!ext.extLeft, extRight: !!ext.extRight, backHole: [WX0, WX1, WY0, WY1],
@@ -188,5 +181,20 @@ export function makeShell(spec) {
   })
   root.add(ceiling)
 
-  return { root, walls, ceiling, colliders, solid, frames, door, doorX: doorFront, win: [WX0, WX1] }
+  // ---------- things the player can restyle: wall paint and floor ----------
+  const wallFaces = [back, left, right, front].map(m => m.material[0])
+  const defaultFloor = floorMat.map
+  const setPaint = tex => {
+    wallFaces.forEach(m => {
+      m.map = tex || null
+      m.color.set(tex ? '#ffffff' : wallColor)
+      m.needsUpdate = true
+    })
+  }
+  const setFloor = tex => {
+    floorMat.map = tex || defaultFloor
+    floorMat.needsUpdate = true
+  }
+
+  return { root, walls, ceiling, colliders, solid, frames, door, doorX: doorFront, win: [WX0, WX1], setPaint, setFloor }
 }

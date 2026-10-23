@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createGame } from './world/game'
 import { prefetchPreviews } from './world/preview'
+import { resolveDefaults } from './world/furnish'
+import { setAudio, startOnFirstGesture, sfx } from './game/audio'
 import { ITEM_BY_ID } from './game/catalog'
 import { store } from './game/store'
 import { windowEarning } from './game/economy'
@@ -10,6 +12,7 @@ import Compass from './Compass'
 import Dock from './ui/Dock'
 import Toasts from './ui/Toasts'
 import Shop, { Inventory } from './ui/Shop'
+import Editor from './ui/Editor'
 import Wardrobe from './ui/Wardrobe'
 import Settings from './ui/Settings'
 import World from './ui/World'
@@ -40,9 +43,22 @@ function App() {
   const [open, setOpen] = useState(null)
   const [shopCat, setShopCat] = useState('beds')
   const [tryOn, setTryOn] = useState({ skin: null, hat: null })
+  const [ed, setEd] = useState(null) // the room editor's live state
 
   useEffect(() => {
-    const g = createGame(mount.current, { onView: setView })
+    const saved = store.get()
+    const g = createGame(mount.current, {
+      onView: setView,
+      layout: saved.layout,
+      style: saved.style,
+      fence: saved.equipped.fence ? ITEM_BY_ID[saved.equipped.fence].tier : 0,
+      sign: saved.equipped.sign ? ITEM_BY_ID[saved.equipped.sign].tier : 0,
+      onLayoutInit: store.initLayout,
+      onLayoutChange: (id, list) => store.setArea(id, list),
+      onEditor: setEd,
+      onBlocked: reason => store.notify(reason, 'warn'),
+      onSfx: sfx,
+    })
     game.current = g
     if (debug) { window.__cc = g; window.__store = store }
     return () => g.dispose()
@@ -55,7 +71,37 @@ function App() {
   useEffect(() => { game.current?.setHat(hat) }, [hat])
   useEffect(() => { game.current?.setName(s.profile.house) }, [s.profile.house])
   useEffect(() => { game.current?.setQuality(s.settings.quality) }, [s.settings.quality])
-  useEffect(() => { game.current?.setInputEnabled(!open) }, [open])
+  const editing = !!ed?.active
+  useEffect(() => { game.current?.setInputEnabled(!open && !editing) }, [open, editing])
+  useEffect(() => { game.current?.setIdle(!!open && !editing) }, [open, editing])
+
+  // what the home looks like follows the saved state (this also handles undo, redo and reset)
+  useEffect(() => { if (s.layout) game.current?.setLayout(s.layout) }, [s.layout])
+  useEffect(() => { ['study', 'bedroom', 'kitchen', 'living'].forEach(id => game.current?.setStyle(id, s.style[id])) }, [s.style])
+  const fenceTier = s.equipped.fence ? ITEM_BY_ID[s.equipped.fence].tier : 0
+  const signTier = s.equipped.sign ? ITEM_BY_ID[s.equipped.sign].tier : 0
+  useEffect(() => { game.current?.setFence(fenceTier) }, [fenceTier])
+  useEffect(() => { game.current?.setSign(signTier) }, [signTier])
+
+  // sound
+  useEffect(() => { startOnFirstGesture() }, [])
+  useEffect(() => { setAudio(s.settings) }, [s.settings])
+  useEffect(() => {
+    const onClick = e => { if (e.target.closest?.('button')) sfx('click') }
+    window.addEventListener('click', onClick)
+    return () => window.removeEventListener('click', onClick)
+  }, [])
+
+  // Ctrl+Z / Ctrl+Y while editing
+  useEffect(() => {
+    const onKey = e => {
+      if (!editing || !(e.ctrlKey || e.metaKey)) return
+      if (e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) store.redo(); else store.undo() }
+      if (e.key.toLowerCase() === 'y') { e.preventDefault(); store.redo() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [editing])
 
   // pictures for the shop are made in the background once the world is up
   useEffect(() => {
@@ -66,6 +112,14 @@ function App() {
   const close = useCallback(() => { setOpen(null); setTryOn({ skin: null, hat: null }) }, [])
   const tryItem = useCallback((slot, tier) => setTryOn(t => ({ ...t, [slot]: tier })), [])
   const openShopAt = useCallback(cat => { setShopCat(cat); setOpen('shop') }, [])
+
+  const AREA_OF = { study: 'study', bedroom: 'bedroom', kitchen: 'kitchen', 'living room': 'living' }
+  const startEdit = () => {
+    setOpen(null)
+    game.current?.enterEdit(AREA_OF[view.room] || 'study', window.innerWidth < 760 ? 250 : 340)
+  }
+  const stopEdit = () => { game.current?.exitEdit(); setOpen(null) }
+  const resetArea = id => { store.resetArea(id, resolveDefaults(id)); sfx('pick') }
 
   const online = s.world.members.filter(m => m.online).length
   const rate = windowEarning({ onlineActive: online, withPartner: s.couple.state === 'active' })
@@ -93,22 +147,23 @@ function App() {
           onReset={() => game.current?.resetAzimuth()}
           onNudge={d => game.current?.rotateBy(d)}
         />
-        <div className="panel views">
+        {!editing && <div className="panel views">
           {VIEWS.map(([id, label]) => (
             <button key={id} className={view.mode === id ? 'on' : ''} onClick={() => game.current?.setView(id)}>{label}</button>
           ))}
-        </div>
+        </div>}
       </aside>
 
-      {view.stairs && !open && (
+      {view.stairs && !open && !editing && (
         <button className="hud stairs" onClick={() => game.current?.takeStairs()}>
           {view.stairs === 'up' ? '▲ go upstairs' : '▼ go downstairs'} <span>space</span>
         </button>
       )}
 
-      {s.settings.hints && !open && <p className="hud hint">{HINTS[view.mode]}</p>}
+      {s.settings.hints && !open && !editing && <p className="hud hint">{HINTS[view.mode]}</p>}
 
-      <Dock open={open} onOpen={setOpen} giftReady={store.canClaim()} />
+      {!editing && <Dock open={open} onOpen={id => (id === 'edit' ? startEdit() : setOpen(id))} giftReady={store.canClaim()} />}
+      {editing && <Editor game={game.current} ed={ed} onExit={stopEdit} onOpenShop={() => setOpen('shop')} onReset={resetArea} />}
 
       {open === 'shop' && <Shop onClose={close} onTry={tryItem} initial={shopCat} key={shopCat} />}
       {open === 'inventory' && <Inventory onClose={close} />}

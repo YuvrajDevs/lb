@@ -2,6 +2,9 @@ import * as THREE from 'three'
 import { buildHouse, FH, COL } from './house.js'
 import { createCube, FLOAT } from './cube.js'
 import { HX, HZ } from './kit.js'
+import { resolveDefaults } from './furnish.js'
+import { createEditor } from './editor.js'
+import { AREA_LIST } from '../game/areas.js'
 
 const HALF = 0.42 // cube collision half-extent
 const SPEED = 3.6
@@ -41,7 +44,10 @@ export function createGame(container, opts = {}) {
   container.appendChild(renderer.domElement)
 
   const scene = new THREE.Scene()
-  const house = buildHouse()
+  // the layout of every room: the player's saved one, or the standard furnishing for a new home
+  const layout = opts.layout || Object.fromEntries(AREA_LIST.map(id => [id, resolveDefaults(id)]))
+  if (!opts.layout) opts.onLayoutInit?.(layout)
+  const house = buildHouse({ layout, style: opts.style, fence: opts.fence, sign: opts.sign })
   scene.add(house.group, house.lights)
   const { rooms, colliders, stairs: S } = house
   const houseCenter = new THREE.Vector3(0, (house.bounds.yMin + house.bounds.yMax) / 2, 0)
@@ -54,7 +60,7 @@ export function createGame(container, opts = {}) {
   const camTarget = new THREE.Vector3().copy(rooms[0].center)
   const view = {
     mode: 'room', az: 0, azGoal: 0, el: DEFAULT_EL, elGoal: DEFAULT_EL,
-    dist: 16, pitch: 0, mul: { room: 1, close: 1, street: 1 }, override: null,
+    dist: 16, pitch: 0, mul: { room: 1, close: 1, street: 1, edit: 1 }, override: null, editArea: null, inset: 0,
   }
   let roomDist = 16
   let houseDist = 30
@@ -109,7 +115,8 @@ export function createGame(container, opts = {}) {
     return null
   }
   const shownMode = () => (view.mode === 'room' && view.mul.room > mulMax * 0.9 ? 'house' : view.mode)
-  const closedIn = () => view.mode === 'eyes' || view.mode === 'street' // outside or first person: the house is closed, no cutaway
+  const editing = () => view.mode === 'edit'
+  const closedIn = () => view.mode === 'eyes' || view.mode === 'street' || (editing() && view.editArea === 'garden') // outside or first person: the house is closed, no cutaway
 
   function report() {
     const info = { mode: shownMode(), az: view.az, room: roomAt(me).name, stairs: stairPrompt() }
@@ -194,11 +201,12 @@ export function createGame(container, opts = {}) {
   }
 
   el.addEventListener('pointerdown', e => {
+    if (editing()) return
     drag = { x: e.clientX, y: e.clientY, moved: false }
     el.setPointerCapture(e.pointerId)
   })
   el.addEventListener('pointermove', e => {
-    if (!drag) return
+    if (editing() || !drag) return
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y
     if (!drag.moved && Math.hypot(dx, dy) < 5) return
     drag.moved = true
@@ -214,6 +222,7 @@ export function createGame(container, opts = {}) {
     }
   })
   const endDrag = e => {
+    if (editing()) { drag = null; return }
     if (drag && !drag.moved && !closedIn() && e.type === 'pointerup') clickMove(e)
     drag = null
   }
@@ -222,7 +231,7 @@ export function createGame(container, opts = {}) {
   el.addEventListener('wheel', e => {
     e.preventDefault()
     if (view.mode === 'eyes') return
-    const [lo, hi] = view.mode === 'room' ? [0.4, mulMax] : view.mode === 'street' ? [0.3, 1.4] : [0.4, 2]
+    const [lo, hi] = view.mode === 'room' ? [0.4, mulMax] : view.mode === 'street' ? [0.3, 1.4] : view.mode === 'edit' ? [0.5, 1.6] : [0.4, 2]
     view.mul[view.mode] = THREE.MathUtils.clamp(view.mul[view.mode] * (e.deltaY > 0 ? 1.1 : 0.9), lo, hi)
   }, { passive: false })
 
@@ -264,6 +273,20 @@ export function createGame(container, opts = {}) {
     a.moving = true
     if (c.s >= 1) { a.pos.y = up ? FH : 0; a.climb = null }
   }
+
+  // ---- the room editor ----
+  const editor = createEditor({
+    canvas: renderer.domElement,
+    house,
+    getCamera: () => active,
+    getLayout: id => layout[id],
+    commit: (id, list, label) => { layout[id] = list; opts.onLayoutChange?.(id, list, label) },
+    onState: s => opts.onEditor?.(s),
+    onBlocked: r => opts.onBlocked?.(r),
+    requestShadow: () => { shadowFrames = 3 },
+    sfx: n => opts.onSfx?.(n),
+  })
+  const EDIT_EL = { top: 1.2, angle: 0.8, front: 0.3 }
 
   // ---- loop ----
   let last = performance.now()
@@ -417,6 +440,9 @@ export function createGame(container, opts = {}) {
         goalTarget.set(me.pos.x, me.pos.y + FLOAT + 0.4, me.pos.z)
       } else if (view.mode === 'street') {
         goalTarget.set(0, 4.6, 3.0)
+      } else if (view.mode === 'edit') {
+        if (view.editArea === 'garden') goalTarget.set(0, 0.4, 6.4)
+        else { const er = rooms.find(r => r.id === view.editArea); goalTarget.set(er.ox, er.oy + 1.1, 0.2) }
       } else {
         // zooming out slides the framing from this room to the middle of the whole house
         const blend = smooth(1, mulMax, view.mul.room)
@@ -425,6 +451,7 @@ export function createGame(container, opts = {}) {
       camTarget.lerp(goalTarget, k)
       const goalDist = view.mode === 'close' ? CLOSE_DIST * view.mul.close
         : view.mode === 'street' ? houseDist * 1.05 * view.mul.street
+        : view.mode === 'edit' ? (view.editArea === 'garden' ? houseDist * 0.62 : roomDist * 0.84) * view.mul.edit
         : roomDist * view.mul.room
       view.dist += (goalDist - view.dist) * k
       camera.position.set(
@@ -433,6 +460,18 @@ export function createGame(container, opts = {}) {
         camTarget.z + Math.cos(view.az) * Math.cos(view.el) * view.dist
       )
       camera.lookAt(camTarget)
+    }
+    // the editor panel covers part of the screen: slide the picture into the space that is left
+    {
+      const w = container.clientWidth, h = container.clientHeight
+      const shift = editing() ? view.inset : 0
+      const want = view.insetNow ?? 0
+      view.insetNow = want + (shift - want) * Math.min(1, dt * 8)
+      if (Math.abs(view.insetNow) > 0.5) {
+        const sx = window.innerWidth < 760 ? 0 : view.insetNow / 2
+        const sy = window.innerWidth < 760 ? -view.insetNow / 2 : 0
+        camera.setViewOffset(w, h, -sx, -sy, w, h)
+      } else if (camera.view?.enabled) camera.clearViewOffset()
     }
 
     // --- outside walls the camera is beyond fade away; roof and top ceilings too when seen from above ---
@@ -448,7 +487,8 @@ export function createGame(container, opts = {}) {
         }
         fadeTo(`${r.id}.${name}`, g, goal, dt)
       })
-      if (r.row === 0) fadeTo(`${r.id}.ceil`, r.ceiling, !closedIn() && cp.y > r.oy + 4.2 ? 0 : 1, dt)
+      const editedHere = editing() && view.editArea === r.id
+      if (r.row === 0 || editedHere) fadeTo(`${r.id}.ceil`, r.ceiling, !closedIn() && (cp.y > r.oy + 4.2 || editedHere) ? 0 : 1, dt)
     })
     const roofGoal = !closedIn() && cp.y > house.roofBase + 0.2 ? 0 : 1
     roofFade += (roofGoal - roofFade) * Math.min(1, dt * 10)
@@ -468,6 +508,7 @@ export function createGame(container, opts = {}) {
       marker.scale.setScalar(1.4 - markerLife * 0.4)
     }
 
+    editor.frame()
     report()
     // while a window is open the world only needs to stay alive, not smooth
     if (idle && (frameCount % 4)) return
@@ -480,7 +521,54 @@ export function createGame(container, opts = {}) {
     setView,
     takeStairs,
     /** lock the keyboard while a window (shop, settings...) is open */
-    setInputEnabled(on) { inputOn = on; idle = !on; if (!on) keys.clear() },
+    setInputEnabled(on) { inputOn = on; if (!on) keys.clear() },
+    /** true while a window covers the world: render it at a quarter of the speed */
+    setIdle(b) { idle = b },
+
+    // ---- editing the home ----
+    editor,
+    enterEdit(areaId, inset = 0) {
+      if (!editing()) view.prevMode = view.mode
+      view.mode = 'edit'
+      view.editArea = areaId
+      view.inset = inset
+      view.az = 0; view.azGoal = 0
+      view.elGoal = areaId === 'garden' ? 0.75 : EDIT_EL.angle
+      view.mul.edit = 1
+      me.path = []
+      active = camera
+      me.cube.setVisible(false)
+      partner.cube.setVisible(false)
+      house.isolate(areaId)
+      editor.enter(areaId)
+      report()
+    },
+    exitEdit() {
+      if (!editing()) return
+      editor.exit()
+      house.isolate(null)
+      view.mode = view.prevMode && view.prevMode !== 'edit' ? view.prevMode : 'room'
+      view.editArea = null
+      view.elGoal = view.mode === 'close' ? CLOSE_EL : DEFAULT_EL
+      me.cube.setVisible(view.mode !== 'eyes')
+      partner.cube.setVisible(true)
+      report()
+    },
+    setEditInset(px) { view.inset = px },
+    setEditView(name) { view.elGoal = EDIT_EL[name] ?? EDIT_EL.angle },
+    /** the saved layouts changed (undo, redo, reset): redraw whatever differs */
+    setLayout(next) {
+      Object.keys(next).forEach(id => {
+        if (layout[id] === next[id]) return
+        layout[id] = next[id]
+        house.furnish(id, next[id], { bakeIt: !(editor.active && editor.areaId === id) })
+      })
+      editor.refresh()
+      shadowFrames = 3
+    },
+    setStyle(roomId, st) { house.setStyle(roomId, st) },
+    setFence(tier) { house.setFence(tier); shadowFrames = 3 },
+    setSign(tier) { house.setSign(tier) },
     /** 'low' | 'medium' | 'high': caps the render sharpness */
     setQuality(q) {
       const cap = { low: 1, medium: 1.5, high: 2 }[q] || 2
