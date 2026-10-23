@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CATEGORIES, itemsOf, rarityOf, CAT_BY_ID, ITEM_BY_ID } from '../game/catalog'
+import { CATEGORIES, itemsOf, rarityOf, ITEM_BY_ID } from '../game/catalog'
 import { AREA_LIST, areaOf } from '../game/areas'
 import { store } from '../game/store'
 import { sfx } from '../game/audio'
