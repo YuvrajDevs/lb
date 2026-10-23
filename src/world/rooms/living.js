@@ -13,7 +13,8 @@ export function buildLiving(riseTo) {
   const sh = makeShell({
     name: 'living room', wall: '#d6dde8', wainscot: '#9fb0c8', curtain: '#6f84a8', cove: '#9aa8ff',
     floorColor: '#b88f62', doorL: [0.9, 2.9], win: [-1.0, 2.0],
-    holeCeil: STAIR_HOLE, skyKind: 1, frameKinds: [3, 0, 4], facade: { windows: [3.4], door: -3.4 },
+    holeCeil: STAIR_HOLE, skyKind: 1, frameKinds: [3, 0, 4],
+    ext: { storey: 'ground', color: '#eadfc6', batten: null, windows: [3.4], doorFront: -3.4, extRight: true },
   })
   const { root, walls, solid, frames } = sh
 

@@ -4,6 +4,7 @@ import {
   labelTexture, makeFrame, rectFloor, rectsAround,
 } from './kit.js'
 import { wash } from './fx.js'
+import { addExterior } from './exterior.js'
 
 const TRIM = '#f3eee4'
 const EDGE = '#efe7d6'
@@ -18,8 +19,10 @@ export function makeShell(spec) {
   const {
     name, wall: wallColor = '#ece6dc', floorColor = '#b98a5a', doorL = null, doorR = null,
     win = [-2.2, 0.6], holeFloor = null, holeCeil = null, frameKinds = [0, 3, 2], skyKind = 0,
-    wainscot = '#c9bfae', curtain = '#b8c4b0', cove = '#ffd9a0', facade = { windows: [-3.2, 3.2], door: null },
+    wainscot = '#c9bfae', curtain = '#b8c4b0', cove = '#ffd9a0',
+    ext = { storey: 'upper', color: '#a9c4b0', batten: '#bcd4c2', windows: [-3.2, 3.2] },
   } = spec
+  const doorFront = ext.doorFront ?? null
 
   const root = new THREE.Group()
   const colliders = []
@@ -66,13 +69,16 @@ export function makeShell(spec) {
   right.position.set(HX + T, 0, -HZ)
   walls.right.add(right)
 
-  const front = wall(W, H, T, [], wallColor, EDGE)
+  const front = wall(W, H, T, doorFront != null ? [[doorFront - 0.8 + HX, 0.02, doorFront + 0.8 + HX, 3.2]] : [], wallColor, EDGE)
   front.position.set(-HX, 0, HZ)
   walls.front.add(front)
 
   // wall colliders (with doorway gaps)
   solid(-HX - T, HX + T, -HZ - T, -HZ)
-  solid(-HX - T, HX + T, HZ, HZ + T)
+  if (doorFront != null) {
+    solid(-HX - T, doorFront - 0.8, HZ, HZ + T)
+    solid(doorFront + 0.8, HX + T, HZ, HZ + T)
+  } else solid(-HX - T, HX + T, HZ, HZ + T)
   const sideWall = (x0, x1, door) => {
     if (!door) return solid(x0, x1, -HZ, HZ)
     solid(x0, x1, -HZ, door[0])
@@ -155,21 +161,10 @@ export function makeShell(spec) {
   })
   box(walls.back, [WX1 - WX0 + 2.0, 0.07, 0.07], [wxm, 4.4, -HZ + 0.2], '#3a3c46')
 
-  // outside of the front wall: lit windows and (for one room) the front door, seen from the street
-  const fz = HZ + T + 0.03
-  ;(facade.windows || []).forEach(x => {
-    box(walls.front, [1.5, 1.5, 0.08], [x, 1.7, fz], TRIM)
-    box(walls.front, [1.28, 1.28, 0.06], [x, 1.81, fz + 0.02], std('#ffe0a8', { emissive: '#ffc070', emissiveIntensity: 1.6 }))
-    box(walls.front, [0.06, 1.28, 0.08], [x, 1.81, fz + 0.04], TRIM)
-    box(walls.front, [1.28, 0.06, 0.08], [x, 2.4, fz + 0.04], TRIM)
+  // outside: cladding, windows, shutters, door/porch or balcony (see exterior.js)
+  const { door } = addExterior(walls, {
+    ...ext, extLeft: !!ext.extLeft, extRight: !!ext.extRight, backHole: [WX0, WX1, WY0, WY1],
   })
-  if (facade.door != null) {
-    const dx = facade.door
-    box(walls.front, [1.8, 3.3, 0.1], [dx, 0, fz], TRIM)
-    box(walls.front, [1.5, 3.1, 0.08], [dx, 0.05, fz + 0.04], '#3f6f78')
-    box(walls.front, [0.14, 0.14, 0.1], [dx + 0.45, 1.5, fz + 0.09], '#e8c070')
-    box(walls.front, [1.9, 0.12, 0.7], [dx, -0.03, fz + 0.3], '#cfc8b8')
-  }
 
   // frames on the inside of the open front wall (visible from inside / eyes view)
   frames.push(
@@ -193,5 +188,5 @@ export function makeShell(spec) {
   })
   root.add(ceiling)
 
-  return { root, walls, ceiling, colliders, solid, frames, win: [WX0, WX1] }
+  return { root, walls, ceiling, colliders, solid, frames, door, doorX: doorFront, win: [WX0, WX1] }
 }

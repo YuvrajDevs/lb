@@ -38,6 +38,10 @@ The scene is built to stay light as more houses are added:
 - The moon's shadows are **baked once** (the shadow map is not redrawn every frame).
 - **Adaptive resolution** lowers the pixel ratio when frames get slow and raises it again when there is headroom.
 
+## Walking the whole house in first person
+
+In "my eyes" you can walk from the street gate, up the path, through the front door (it swings open as you approach), through every room and doorway, and up the stairs: walk into the foot of the staircase (or press Space) and you climb to the bedroom; do the same from the landing to come back down. The fence, sign and bushes block you. `game.debug.reach()` flood-fills the floor plan and reports which spots are connected.
+
 ## Garden
 
 Each house sits in its own fenced plot with a name sign lit by its own street lamp (currently "Sera & DeM"). `game.setName('Alex & Sam')` changes it, and this is where a couple's shared name will go when two plots merge. From outside (street view) and in first person the house is closed in: the cutaway side only exists in the doll-house views.

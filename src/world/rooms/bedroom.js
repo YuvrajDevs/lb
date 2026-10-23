@@ -12,7 +12,8 @@ export function buildBedroom() {
   const sh = makeShell({
     name: 'bedroom', wall: '#ecd9d6', wainscot: '#cfa9ad', curtain: '#c98a9a', cove: '#ff9cc4',
     floorColor: '#c9a273', doorL: [0.9, 2.9], win: [-1.0, 1.8],
-    holeFloor: STAIR_HOLE, skyKind: 1, frameKinds: [1, 4, 0], facade: { windows: [-3.2, 2.4] },
+    holeFloor: STAIR_HOLE, skyKind: 1, frameKinds: [1, 4, 0],
+    ext: { storey: 'upper', color: '#a9c4b0', batten: '#bcd4c2', windows: [-3.2], balcony: 2.4, extRight: true },
   })
   const { root, walls, solid, frames } = sh
 

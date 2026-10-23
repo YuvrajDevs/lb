@@ -274,6 +274,7 @@ export function createGame(container, opts = {}) {
   const fade = {} // `${room}.${wall}` -> current opacity factor
   const applied = {}
   let roofFade = 1, roofApplied = -1
+  let doorOpen = 0
 
   function setOpacity(group, k) {
     group.traverse(o => {
@@ -335,6 +336,14 @@ export function createGame(container, opts = {}) {
         if (f) {
           dir.set(Math.sin(me.yaw) * f, 0, Math.cos(me.yaw) * f)
           iMoved = walk(me, dir, dt, SPEED * 0.8, false)
+          // walking straight into the foot (or the top landing) of the stairs takes them
+          const p = stairPrompt()
+          if (p && f > 0) {
+            const gx = S.x - me.pos.x
+            const gz = (p === 'up' ? S.footZ : S.landingZ) - me.pos.z
+            const toward = (p === 'up' ? -1 : 1) * Math.cos(me.yaw) // facing -z to go up, +z to go down
+            if (Math.hypot(gx, gz) < 0.9 && toward > 0.5) takeStairs()
+          }
         }
       } else {
         const up = new THREE.Vector3(-Math.sin(view.az), 0, -Math.cos(view.az))
@@ -440,7 +449,13 @@ export function createGame(container, opts = {}) {
     const roofGoal = !closedIn() && cp.y > house.roofBase + 0.2 ? 0 : 1
     roofFade += (roofGoal - roofFade) * Math.min(1, dt * 10)
     if (Math.abs(roofFade - roofGoal) < 0.002) roofFade = roofGoal
-    fadeTo('street', house.streetProps, view.mode === 'street' ? 1 : 0, dt)
+    // the street appears when seen from the street view, or when you step out of the front door in first person
+    const outside = me.pos.z > HZ + 0.6 && levelOf(me.pos.y) === 0
+    fadeTo('street', house.streetProps, view.mode === 'street' || (eyes && outside) ? 1 : 0, dt)
+    // front door swings open when you walk up to it
+    const dd = Math.hypot(me.pos.x - house.door.x, me.pos.z - (HZ + 1.0))
+    doorOpen += ((dd < 2.6 && levelOf(me.pos.y) === 0 ? 1 : 0) - doorOpen) * Math.min(1, dt * 5)
+    house.door.pivot.rotation.y = -1.75 * doorOpen
     if (roofApplied !== roofFade) { roofApplied = roofFade; setOpacity(house.roof, roofFade) }
 
     if (markerLife > 0) {
@@ -482,6 +497,50 @@ export function createGame(container, opts = {}) {
         partner.pos.set(r.ox + lx, r.oy, lz); partner.yaw = yaw; partner.path = []; wanderAt = 1e9
       },
       pause() { wanderAt = 1e9 },
+      where() { return { x: +me.pos.x.toFixed(2), y: +me.pos.y.toFixed(2), z: +me.pos.z.toFixed(2), room: roomAt(me).name, door: +doorOpen.toFixed(2) } },
+      blockedAt(level, x, z) { return blocked(x, z, level) ? colliders[level].filter(c => x > c.minX - HALF && x < c.maxX + HALF && z > c.minZ - HALF && z < c.maxZ + HALF) : false },
+      // flood-fill the walkable floor of both storeys + garden and report what is connected
+      reach() {
+        const step = 0.2
+        const cell = v => Math.round(v / step)
+        const fill = (level, sx, sz) => {
+          const seen = new Set()
+          const q = [[cell(sx), cell(sz)]]
+          seen.add(q[0].join())
+          while (q.length) {
+            const [i, j] = q.pop()
+            ;[[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([di, dj]) => {
+              const ni = i + di, nj = j + dj
+              if (ni * step < -15 || ni * step > 15 || nj * step < -7 || nj * step > 12 || blocked(ni * step, nj * step, level)) return
+              const k = `${ni},${nj}`
+              if (!seen.has(k)) { seen.add(k); q.push([ni, nj]) }
+            })
+          }
+          return p => seen.has(`${cell(p[0])},${cell(p[1])}`)
+        }
+        const up = fill(1, rooms[0].ox + 1.2, 1.6)
+        const down = fill(0, house.door.x, HZ + 2.0) // start in the garden, in front of the door
+        const at = (id, lx, lz) => { const r = byId(id); return [r.ox + lx, lz] }
+        return {
+          upper: {
+            study: up(at('study', 1.2, 1.6)),
+            bedroom: up(at('bedroom', 1.0, 2.0)),
+            bedroomBed: up(at('bedroom', -0.2, 2.2)),
+            landing: up([S.x, S.landingZ]),
+            studyDeskSide: up(at('study', 2.6, -2.0)),
+          },
+          ground: {
+            garden: down([house.door.x, HZ + 2.0]),
+            livingViaDoor: down(at('living', -3.4, 2.4)),
+            living: down(at('living', 2.0, 2.0)),
+            livingTV: down(at('living', -3.5, 0.2)),
+            stairFoot: down([S.x, S.footZ]),
+            kitchen: down(at('kitchen', 0.5, 2.4)),
+            kitchenTable: down(at('kitchen', -2.6, 1.0)),
+            kitchenFridgeSide: down(at('kitchen', 3.8, 0.5)),
+          },
+        }
+      },
       info() { return { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, pixelRatio: pr } },
       elevation(v) { view.elGoal = v; view.el = v },
       cam(px, py, pz, tx, ty, tz) { view.override = { pos: new THREE.Vector3(px, py, pz), target: new THREE.Vector3(tx, ty, tz) } },

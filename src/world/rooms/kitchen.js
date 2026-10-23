@@ -12,7 +12,7 @@ export function buildKitchen() {
   const sh = makeShell({
     name: 'kitchen', wall: '#efe6c9', wainscot: '#d4c48c', curtain: '#e0a458', cove: '#ffd9a0',
     floorColor: '#d1b48a', doorR: [0.9, 2.9], win: [-3.2, -0.4], skyKind: 0, frameKinds: [4, 1, 3],
-    facade: { windows: [-3.2, 3.2] },
+    ext: { storey: 'ground', color: '#eadfc6', batten: null, windows: [-3.2, 3.2], extLeft: true },
   })
   const { root, walls, solid, frames } = sh
 

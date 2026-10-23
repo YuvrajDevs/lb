@@ -13,7 +13,7 @@ export function buildStudy() {
   const sh = makeShell({
     name: 'study', wall: '#d8e0d4', wainscot: '#aab8a8', curtain: '#7f9c92', cove: '#8fe0d0',
     floorColor: '#a9794c', doorR: [0.9, 2.9], win: [-2.2, 0.6], frameKinds: [0, 3, 2], skyKind: 0,
-    facade: { windows: [-3.2, 3.2] },
+    ext: { storey: 'upper', color: '#a9c4b0', batten: '#bcd4c2', windows: [-3.2, 3.2], extLeft: true },
   })
   const { root, walls, solid, frames } = sh
 

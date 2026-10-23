@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { D, H, T, W, std, box, cyl, sphere } from './kit.js'
+import { D, H, T, W, HZ, std, box, cyl, sphere } from './kit.js'
 import { bake } from './bake.js'
 import { glow, pool, cone, wash } from './fx.js'
 import { buildStudy } from './rooms/study.js'
@@ -60,7 +60,7 @@ export function buildHouse() {
     sh.frames.forEach(f => frames.push(f))
     return {
       id: s.id, name: s.name, col: s.col, row: s.row, level, ox, oy,
-      walls: sh.walls, ceiling: sh.ceiling,
+      walls: sh.walls, ceiling: sh.ceiling, door: sh.door, doorX: sh.doorX,
       center: new THREE.Vector3(ox, oy + 2.25, 0),
     }
   })
@@ -73,13 +73,33 @@ export function buildHouse() {
   tri.moveTo(-hw, 0); tri.lineTo(hw, 0); tri.lineTo(0, rh); tri.closePath()
   const prism = new THREE.Mesh(
     new THREE.ExtrudeGeometry(tri, { depth, bevelEnabled: false }),
-    [new THREE.MeshStandardMaterial({ color: '#d9d2c4', roughness: 0.9 }), new THREE.MeshStandardMaterial({ color: '#4b5282', roughness: 0.8 })]
+    [new THREE.MeshStandardMaterial({ color: '#a9c4b0', roughness: 0.9 }), new THREE.MeshStandardMaterial({ color: '#9a5a50', roughness: 0.8 })]
   )
   prism.position.set(0, roofBase, -depth / 2)
   prism.castShadow = true
   prism.receiveShadow = true
   roof.add(prism)
-  box(roof, [0.5, 0.25, depth + 0.3], [0, roofBase + rh - 0.05, 0], '#2f3350')
+  box(roof, [0.5, 0.25, depth + 0.3], [0, roofBase + rh - 0.05, 0], '#5c3a38')
+  // shingle rows lying on both slopes, plus barge boards along the gable edges and an eave band
+  const slope = Math.atan2(rh, hw)
+  const slopeLen = Math.hypot(hw, rh)
+  for (let i = 1; i < 14; i++) {
+    const t = i / 14
+    ;[-1, 1].forEach(sd => {
+      const x = sd * hw * (1 - t), y = roofBase + rh * t
+      const row = box(roof, [slopeLen / 14 + 0.05, 0.05, depth + 0.1], [x + sd * 0.4, y + 0.02, 0], i % 2 ? '#a8645a' : '#8a4f48')
+      row.rotation.z = -sd * slope
+      row.position.x = x - sd * (slopeLen / 28) * Math.cos(slope)
+      row.position.y = y + (slopeLen / 28) * Math.sin(slope) + 0.03
+    })
+  }
+  [-1, 1].forEach(sd => {
+    [depth / 2 + 0.05, -depth / 2 - 0.05].forEach(z => {
+      const bb = box(roof, [slopeLen + 0.2, 0.22, 0.14], [sd * hw / 2, roofBase + rh / 2 - 0.02, z], '#f6f1e6')
+      bb.rotation.z = -sd * slope
+    })
+  })
+  box(roof, [hw * 2 + 0.8, 0.22, 0.3], [0, roofBase - 0.02, depth / 2 - 0.1], '#f6f1e6')
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.1, 10, 28), std('#f3eee4'))
   ring.position.set(0, roofBase + 1.5, depth / 2 + 0.02)
   roof.add(ring)
@@ -91,8 +111,8 @@ export function buildHouse() {
   roof.add(atticWin)
   box(roof, [0.1, 1.5, 0.05], [0, roofBase + 0.75, depth / 2 + 0.03], '#f3eee4')
   box(roof, [1.5, 0.1, 0.05], [0, roofBase + 1.45, depth / 2 + 0.03], '#f3eee4')
-  box(roof, [1.1, 2.6, 1.1], [7.2, roofBase + 0.9, -1.2], '#6a4a52')
-  box(roof, [1.3, 0.2, 1.3], [7.2, roofBase + 3.5, -1.2], '#4a3640')
+  box(roof, [1.1, 2.6, 1.1], [7.2, roofBase + 0.9, -1.2], '#b0705a')
+  box(roof, [1.3, 0.2, 1.3], [7.2, roofBase + 3.5, -1.2], '#7a4a40')
   glow(roof, [0, roofBase + 1.5, depth / 2 + 0.3], '#ffb860', 3.4, 0.55)
   group.add(roof)
 
@@ -192,6 +212,17 @@ export function buildHouse() {
     signMat.needsUpdate = true
   }
 
+  // ---------- garden collision: first person can walk out of the front door, but not through the fence ----------
+  const gc = colliders[0]
+  const fw = 0.2
+  gc.push({ minX: -PLOT.x - fw, maxX: PLOT.x + fw, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw })
+  gc.push({ minX: -PLOT.x - fw, maxX: -PLOT.x + fw, minZ: PLOT.zBack, maxZ: PLOT.zFront })
+  gc.push({ minX: PLOT.x - fw, maxX: PLOT.x + fw, minZ: PLOT.zBack, maxZ: PLOT.zFront })
+  gc.push({ minX: -PLOT.x, maxX: PLOT.x, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw })
+  gc.push({ minX: SX - 1.95, maxX: SX + 1.95, minZ: SZ - 0.25, maxZ: SZ + 0.25 })
+  gc.push({ minX: PX - 0.2, maxX: PX + 0.2, minZ: SZ - 0.2, maxZ: SZ + 0.2 })
+  ;[[-10.4, 5.2], [10.4, 5.6], [-11.8, -1.0], [11.9, 0.4]].forEach(([x, z]) => gc.push({ minX: x - 0.9, maxX: x + 0.9, minZ: z - 0.9, maxZ: z + 0.9 }))
+
   // ---------- global lights: dim blue night + moon ----------
   const lights = new THREE.Group()
   lights.add(new THREE.HemisphereLight('#8497e6', '#3c3668', 1.35))
@@ -229,6 +260,7 @@ export function buildHouse() {
 
   return {
     group, lights, rooms, colliders, frames, roof, roofBase, stairs, setName, streetProps: street,
+    door: { pivot: living.door, x: living.ox + living.doorX, z: HZ + 0.15 },
     bounds: { halfW: PLOT.x + 0.6, yMin: -1.25, yMax: roofBase + rh },
   }
 }
