@@ -202,6 +202,10 @@ export function createEditor(ctx) {
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, toneMapped: false, side: THREE.DoubleSide })
     )
     g.renderOrder = 6
+    // a bright outline so the footprint reads clearly on any floor
+    const edge = new THREE.LineSegments(new THREE.EdgesGeometry(g.geometry), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95, depthTest: false, toneMapped: false }))
+    edge.renderOrder = 7
+    g.add(edge)
     if (info.kind === 'wall') {
       const u = (entry.u + fp.cw / 2) * CELL, v = (entry.v + fp.cd / 2) * CELL
       if (entry.wall === 'back') g.position.set(ox + u, y0 + v, oz + 0.04)
