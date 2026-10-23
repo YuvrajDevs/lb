@@ -292,6 +292,14 @@ export function createGame(container, opts = {}) {
     me.path = []
     me.climb = { dir: p, s: 0 }
   }
+  /** a way to the stairs that goes round to the front of them first, so it never cuts through the staircase */
+  function stairRoute(a, dir) {
+    const z = dir === 'up' ? S.footZ : S.landingZ
+    return [
+      ...routeTo(a, new THREE.Vector3(S.x - 1.5, a.pos.y, z)),
+      new THREE.Vector3(S.x, a.pos.y, z),
+    ]
+  }
   function updateClimb(a, dt) {
     const c = a.climb
     c.s = Math.min(1, c.s + dt / CLIMB_TIME)
@@ -446,7 +454,7 @@ export function createGame(container, opts = {}) {
       } else if (t > wanderAt && Math.random() < 0.3 && !partner.climb) {
         const goingUp = levelOf(partner.pos.y) === 0
         partner.stairGoal = goingUp ? 'up' : 'down'
-        partner.path = routeTo(partner, new THREE.Vector3(S.x, partner.pos.y, goingUp ? S.footZ : S.landingZ))
+        partner.path = stairRoute(partner, goingUp ? 'up' : 'down')
         wanderAt = t + 8 + Math.random() * 6
       } else if (t > wanderAt) {
         const lvl = levelOf(partner.pos.y)
@@ -656,7 +664,7 @@ export function createGame(container, opts = {}) {
       forceStairs() {
         wanderAt = 0
         partner.stairGoal = levelOf(partner.pos.y) === 0 ? 'up' : 'down'
-        partner.path = routeTo(partner, new THREE.Vector3(S.x, partner.pos.y, partner.stairGoal === 'up' ? S.footZ : S.landingZ))
+        partner.path = stairRoute(partner, partner.stairGoal)
         wanderAt = 1e9
       },
       partnerWhere() { return { x: +partner.pos.x.toFixed(2), y: +partner.pos.y.toFixed(2), z: +partner.pos.z.toFixed(2), climbing: !!partner.climb } },
