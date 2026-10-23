@@ -451,7 +451,7 @@ export function createGame(container, opts = {}) {
       camTarget.lerp(goalTarget, k)
       const goalDist = view.mode === 'close' ? CLOSE_DIST * view.mul.close
         : view.mode === 'street' ? houseDist * 1.05 * view.mul.street
-        : view.mode === 'edit' ? (view.editArea === 'garden' ? houseDist * 0.62 : roomDist * 0.84) * view.mul.edit
+        : view.mode === 'edit' ? (view.editArea === 'garden' ? houseDist * 0.62 : roomDist * 0.98) * view.mul.edit
         : roomDist * view.mul.room
       view.dist += (goalDist - view.dist) * k
       camera.position.set(

@@ -597,6 +597,16 @@ export function createEditor(ctx) {
       emit()
     },
 
+    /** (debug) what would happen if this item were dropped at these screen coordinates */
+    probe(itemId, clientX, clientY) {
+      const ev = { clientX, clientY }
+      const cand = candidate(itemId, ev, 0)
+      if (!cand) return null
+      const tp = floorPoint(ev, TABLE_TOP)
+      const res = validate(cand)
+      return { cand, tablePoint: tp && { cx: (tp.x - ox) / CELL, cz: (tp.z - oz) / CELL }, ok: res.ok, reason: res.reason, tables: entries().filter(e => e.id.startsWith('tables')).map(t => ({ ...t, rect: rectAt(t.i, t.j, footOf(t)) })) }
+    },
+
     /** called every frame: keeps the selection's toolbar glued to the item */
     frame() {
       if (!st.active || !st.selected) return
