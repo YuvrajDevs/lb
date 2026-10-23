@@ -604,7 +604,8 @@ export function createEditor(ctx) {
       if (!cand) return null
       const tp = floorPoint(ev, TABLE_TOP)
       const res = validate(cand)
-      return { cand, tablePoint: tp && { cx: (tp.x - ox) / CELL, cz: (tp.z - oz) / CELL }, ok: res.ok, reason: res.reason, tables: entries().filter(e => e.id.startsWith('tables')).map(t => ({ ...t, rect: rectAt(t.i, t.j, footOf(t)) })) }
+      const f0 = floorPoint(ev, 0)
+      return { cand, floor0: f0 && { cx: (f0.x - ox) / CELL, cz: (f0.z - oz) / CELL }, y0, tablePoint: tp && { cx: (tp.x - ox) / CELL, cz: (tp.z - oz) / CELL }, ok: res.ok, reason: res.reason, tables: entries().filter(e => e.id.startsWith('tables')).map(t => ({ ...t, rect: rectAt(t.i, t.j, footOf(t)) })) }
     },
 
     /** called every frame: keeps the selection's toolbar glued to the item */
