@@ -191,8 +191,11 @@ export function seating(t, g) {
   }
   if (t === 7) for (let i = -1; i <= 1; i++) for (let j = 0; j < 2; j++) box(g, [0.14, 0.14, 0.06], [i * 0.5, 0.95 + j * 0.2, -0.28], '#e8c86a')
   if (t === 8) {
-    sphere(g, 0.5, [-0.7, 0.9, -0.3], '#ffffff', em('#cfe0ff', 0.3))
-    sphere(g, 0.5, [0.7, 0.9, -0.3], '#ffffff', em('#cfe0ff', 0.3))
+    // stepped cloud-white back with soft sky-blue cushions, all boxy
+    box(g, [w - 0.5, 0.22, 0.34], [0, 1.35, -0.45], '#ffffff')
+    ;[-1, 1].forEach(x => box(g, [0.8, 0.5, 0.2], [x * (w / 2 - 0.9), 0.9, -0.2], '#cfe6ff', { roughness: 0.9 }))
+    box(g, [w - 0.4, 0.04, 1.3], [0, 0.02, 0.05], '#bfe4ff', em('#8fc8ff', 1.6))
+    glow(g, [0, 0.1, 0.1], '#8fc8ff', 3.4, 0.4)
   }
   if (t >= 9) [-1, 1].forEach(s => box(g, [0.08, 0.1, 1.3], [s * (w / 2 - 0.02), 0.78, 0], GOLD, METAL))
   if (t === 10) {
