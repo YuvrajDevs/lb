@@ -54,11 +54,17 @@ function App() {
 
   // a couple lives in the four-room house; everyone else in their starter home (rebuilt when that changes)
   const homeKind = s.couple.state === 'active' ? 'couple' : 'solo'
+  const lastKind = useRef(homeKind)
+  // a couple's breakup takes effect once its 24-hour wait is over
+  useEffect(() => { store.checkBreakup(); const t = setInterval(() => store.checkBreakup(), 30000); return () => clearInterval(t) }, [])
   useEffect(() => {
     let alive = true
     let g = null
     const saved = store.get()
     setHomeKind(homeKind)
+    // two homes becoming one: the new house rises out of a big cloud
+    const intro = lastKind.current === 'solo' && homeKind === 'couple' ? 'merge' : null
+    lastKind.current = homeKind
     const boot = async () => {
       // canvas text (signs, name plates) needs Oswald loaded before it is drawn
       try { await Promise.all([document.fonts.load('600 40px Oswald'), document.fonts.load('400 40px Oswald')]) } catch { /* the fallback font is fine */ }
@@ -73,6 +79,8 @@ function App() {
       onLayoutChange: (id, list) => store.setArea(id, list),
       onLayoutFix: store.fixArea,
       switches: saved.switches,
+      intro,
+      neighbours: saved.world.members.filter(m => !m.you),
       lowerArt: !saved.settings.artLowered, // a one-off: hang the pictures at eye height
       onSwitch: store.setSwitch,
       onEditor: setEd,

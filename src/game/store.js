@@ -217,6 +217,39 @@ export const store = {
     toast('A new house slot is open!', 'good')
   },
 
+  // ---- couple (mock, until the server exists): an invite the other person accepts, and a breakup with a wait ----
+  /** you and `partner` become a couple: your homes merge into the four-room house */
+  becomeCouple(partner) {
+    const p = partner.trim().slice(0, 16)
+    if (!p || state.couple.state === 'active') return false
+    const house = `${state.profile.name} & ${p}`
+    set({
+      couple: { partner: p, since: toDateStr(new Date()), state: 'active', endsAt: null },
+      profile: { ...state.profile, house },
+      world: { ...state.world, members: state.world.members.map(m => (m.you ? { ...m, kind: 'couple', house } : m)) },
+    })
+    toast(`${p} said yes! Your homes are joining…`, 'good')
+    return true
+  },
+  /** ending a couple needs a request and a 24-hour wait; either of you can cancel it before then */
+  requestBreakup() {
+    if (state.couple.state !== 'active') return
+    set({ couple: { ...state.couple, endsAt: Date.now() + 24 * 3600 * 1000 } })
+    toast('Request sent. Your homes separate in 24 hours unless one of you cancels.', 'info')
+  },
+  cancelBreakup() { set({ couple: { ...state.couple, endsAt: null } }); toast('Still together', 'good') },
+  /** called now and then: once the wait is over, the couple ends and each goes back to their own home */
+  checkBreakup(now = Date.now()) {
+    if (state.couple.state !== 'active' || !state.couple.endsAt || now < state.couple.endsAt) return
+    const house = `${state.profile.name}'s home`
+    set({
+      couple: { partner: null, since: null, state: 'none', endsAt: null },
+      profile: { ...state.profile, house },
+      world: { ...state.world, members: state.world.members.map(m => (m.you ? { ...m, kind: 'solo', house } : m)) },
+    })
+    toast('Your couple has ended. You are back in your own home, with your own things.', 'info')
+  },
+
   // ---- dev helpers (only reachable with ?debug) ----
   dev: {
     addBoxets(n) { set({ boxets: state.boxets + n }) },

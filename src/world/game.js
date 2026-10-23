@@ -8,6 +8,7 @@ import { makeEnvironment } from './env.js'
 import { buildScenery, applyPalette, FOG_COLOR, FOG_NEAR, FOG_FAR, CLIFF_Z } from './scenery.js'
 import { bake } from './bake.js'
 import { setCurtain } from './switches.js'
+import { buildNeighbours } from './neighbours.js'
 import { setSeaNear } from '../game/audio.js'
 import { findZFighting, settleCoplanar } from './zfight.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
@@ -153,6 +154,32 @@ export function createGame(container, opts = {}) {
   const scenery = buildScenery(timeNow)
   bake(scenery.statics)
   scene.add(scenery.group)
+  // two homes merging into one: a big cloud covers the plot, the house rises out of it, then the cloud drifts away
+  const merge = opts.intro === 'merge' ? { t: 0, puffs: [] } : null
+  if (merge) {
+    const tex = (() => {
+      const c = document.createElement('canvas'); c.width = c.height = 128
+      const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64)
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.6, 'rgba(255,255,255,0.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)')
+      g.fillStyle = gr; g.fillRect(0, 0, 128, 128)
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t
+    })()
+    for (let i = 0; i < 46; i++) {
+      const a = (i / 46) * Math.PI * 2, r = 4 + Math.random() * 11
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: i % 3 ? '#f4eefc' : '#e2d8f6', transparent: true, depthWrite: false, opacity: 0.95 }))
+      const size = 7 + Math.random() * 7
+      s.scale.set(size, size * 0.8, 1)
+      s.position.set(Math.cos(a) * r, 1 + Math.random() * 9, Math.sin(a) * r * 0.6 + 1)
+      s.userData.drift = new THREE.Vector3(Math.cos(a), 0.4 + Math.random() * 0.4, Math.sin(a)).multiplyScalar(2 + Math.random() * 2)
+      scene.add(s)
+      merge.puffs.push(s)
+    }
+    house.group.position.y = -12
+  }
+
+  // the other homes in your world, along the cliff either side (simple versions, so they cost little)
+  const neighbours = buildNeighbours(opts.neighbours || [], plot().x)
+  scene.add(neighbours)
   scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR) // the island sits in a thick bank of fog (see scenery.js)
   const { rooms, colliders, stairs: S } = house
   const houseCenter = new THREE.Vector3(0, (house.bounds.yMin + house.bounds.yMax) / 2, 0)
@@ -901,6 +928,16 @@ export function createGame(container, opts = {}) {
     gateOpen += (gateWant - gateOpen) * Math.min(1, dt * 5)
     house.gate.leaves.forEach(l => { l.pivot.rotation.y = l.side * 1.6 * gateOpen })
     if (roofApplied !== roofFade) { roofApplied = roofFade; setOpacity(house.roof, roofFade) }
+
+    // the merge: the house rises (after the cloud has gathered), then the cloud thins and drifts apart
+    if (merge && merge.t < 6) {
+      merge.t += dt
+      const rise = THREE.MathUtils.clamp((merge.t - 1.0) / 2.6, 0, 1)
+      house.group.position.y = -12 * Math.pow(1 - rise, 3)
+      const fade = THREE.MathUtils.clamp((merge.t - 3.2) / 2.6, 0, 1)
+      merge.puffs.forEach(p => { p.material.opacity = 0.95 * (1 - fade); if (fade > 0) p.position.addScaledVector(p.userData.drift, dt) })
+      if (merge.t >= 6) { merge.puffs.forEach(p => { scene.remove(p); p.material.dispose() }); house.group.position.y = 0; shadowFrames = 3 }
+    }
 
     // curtains glide open or shut
     curtainAnims.forEach((goal, obj) => {

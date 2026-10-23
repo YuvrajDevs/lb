@@ -1,0 +1,85 @@
+import * as THREE from 'three'
+import { box } from './kit.js'
+import { glow } from './fx.js'
+import { bake } from './bake.js'
+
+// The neighbours: the other homes in your world, each on its own plot along the cliff top. They are drawn
+// simply (a few boxes, lit windows, a roof, a fence and a name board) so a whole street costs very little.
+
+const CLAD = ['#eadfc6', '#c9d6c0', '#d9c8e0', '#e8d0c0', '#c8d8e8']
+const ROOF = ['#9a5a50', '#5a6a8a', '#6a8a5a', '#8a5a7a', '#7a6a50']
+
+function nameBoard(text) {
+  const c = document.createElement('canvas')
+  c.width = 512; c.height = 128
+  const g = c.getContext('2d')
+  g.fillStyle = '#6b4f36'; g.fillRect(0, 0, 512, 128)
+  g.fillStyle = '#fff1d0'; g.font = '600 64px Oswald, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'
+  g.fillText(text, 256, 66, 470)
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
+}
+
+/** one neighbour's home at x (its plot's centre); couple homes are two storeys and wider */
+function home(group, x, member, k) {
+  const couple = member.kind === 'couple'
+  const w = couple ? 22.8 : 11.4, d = 7.8, storeys = couple ? 2 : 1, fh = 5.52
+  const half = couple ? 12.8 : 9.3
+  const g = new THREE.Group()
+  g.position.x = x
+  const clad = CLAD[k % CLAD.length]
+  // lawn, house body, slab lines
+  box(g, [half * 2 + 0.6, 0.5, 15.0], [0, -1.0, 1.9], '#35564f')
+  box(g, [w, storeys * fh - 0.72 + 0.2, d], [0, -0.2, 0], clad)
+  // windows: warm and lit when they are home (online), dark otherwise
+  const lit = new THREE.MeshStandardMaterial({ color: member.online ? '#ffe2a8' : '#2a2c3e', emissive: member.online ? '#ffcc66' : '#000000', emissiveIntensity: member.online ? 1.1 : 0 })
+  for (let s = 0; s < storeys; s++) {
+    const cols = couple ? [-8.6, -3.4, 3.4, 8.6] : [-3.4, 3.4]
+    cols.forEach(cx => {
+      box(g, [1.9, 2.6, 0.06], [cx, s * fh + 1.25, d / 2 + 0.01], lit)
+      box(g, [2.2, 0.12, 0.16], [cx, s * fh + 1.13, d / 2 + 0.04], '#f6f1e6')
+    })
+  }
+  box(g, [1.6, 3.1, 0.08], [couple ? 2.3 : 0, 0, d / 2 + 0.02], '#c8553d') // front door
+  // a simple gable roof
+  const rw = w / 2 + 0.6, rh = couple ? 3.6 : 2.6, top = storeys * fh - 0.72 + 0.22
+  const tri = new THREE.Shape()
+  tri.moveTo(-rw, 0); tri.lineTo(rw, 0); tri.lineTo(0, rh); tri.closePath()
+  const roof = new THREE.Mesh(new THREE.ExtrudeGeometry(tri, { depth: d + 1, bevelEnabled: false }), new THREE.MeshStandardMaterial({ color: ROOF[k % ROOF.length], roughness: 0.6 }))
+  roof.position.set(0, top, -(d + 1) / 2)
+  roof.castShadow = true
+  roof.userData.keep = true
+  g.add(roof)
+  // a low fence round the plot, with a gap for the gate, and a lantern either side of it
+  const zb = -(d / 2 + 1.4), zf = d / 2 + 5.2
+  const rail = (x0, z0, x1, z1) => {
+    const len = Math.hypot(x1 - x0, z1 - z0)
+    ;[0.2, 0.45].forEach(y => { const r = box(g, [0.05, 0.07, len], [(x0 + x1) / 2, -0.5 + y, (z0 + z1) / 2], '#f2eadb'); r.rotation.y = Math.atan2(x1 - x0, z1 - z0) })
+  }
+  rail(-half, zb, half, zb); rail(-half, zb, -half, zf); rail(half, zb, half, zf); rail(-half, zf, -1.3, zf); rail(1.3, zf, half, zf)
+  ;[-1.3, 1.3].forEach(gx => glow(g, [gx, 0.55, zf], '#ffcc66', 1.4, 0.6))
+  // the name board by the gate
+  const board = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.8, 0.1), new THREE.MeshStandardMaterial({ map: nameBoard(member.house), emissive: '#5a4030', emissiveMap: null, emissiveIntensity: 0.3 }))
+  board.material.emissiveMap = board.material.map
+  board.position.set(-4, 0.6, zf - 0.5)
+  board.userData.keep = true
+  g.add(board)
+  group.add(g)
+  return half
+}
+
+/**
+ * Lays the neighbours out along the cliff: to the right first, then to the left beyond the stream.
+ *   members: the world's other homes [{ house, kind, online }], myHalf: half-width of your own plot
+ */
+export function buildNeighbours(members, myHalf) {
+  const group = new THREE.Group()
+  let right = myHalf + 1.2, left = -26 // (the stream and its bridge lie between your plot and the left side)
+  members.forEach((m, k) => {
+    const half = m.kind === 'couple' ? 12.8 : 9.3
+    if (k % 2 === 0) { home(group, right + half, m, k); right += half * 2 + 1.2 } else { home(group, left - half, m, k); left -= half * 2 + 1.2 }
+  })
+  bake(group)
+  return group
+}

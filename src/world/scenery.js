@@ -92,7 +92,8 @@ const STREAM_TOP = -58
 /** height of the land above GROUND_Y */
 function heightAt(x, z) {
   // the garden stays flat, and so does the whole strip along the front (the cliff walk runs its full width)
-  const plot = (Math.abs(x) < 15 && z > -8) || z > FRONT_FLAT
+  // (and a level strip along the cliff top, either side, where the neighbours' plots are; the stream keeps its valley)
+  const plot = (Math.abs(x) < 15 && z > -8) || z > FRONT_FLAT || (Math.abs(x) < 58 && z > -8 && Math.abs(x - streamX(z)) > 5)
   if (plot) return 0
   const back = smooth(-8, -42, z) // rises behind the house
   const side = smooth(16, 40, Math.abs(x)) * 0.45 // gentle mounds to the sides
@@ -254,7 +255,7 @@ function makeLand() {
     const x = pos.getX(i), z = pos.getZ(i)
     // jitter the inner vertices a little so the facets look hand-cut (not on the edges, not on the plot)
     const edge = Math.abs(z - Z1) < 0.01 || Math.abs(z - Z0) < 0.01 || Math.abs(x - X0) < 0.01 || Math.abs(x - X1) < 0.01
-    const inPlot = Math.abs(x) < 16 && z > -9
+    const inPlot = Math.abs(x) < 60 && z > -9
     const jx = edge || inPlot ? 0 : (hash(x, z) - 0.5) * 1.6
     const jz = edge || inPlot ? 0 : (hash(z, x) - 0.5) * 1.6
     pos.setXYZ(i, x + jx, GROUND_Y + heightAt(x + jx, z + jz), z + jz)
@@ -583,7 +584,7 @@ export function buildScenery(palette = 'night') {
     lawn: flat('#3b4f6e'), rock: flat('#4b3c6e'),
   }
   const stoneMats = [flat('#6c5a9a'), flat('#8a78bc'), flat('#54467e')]
-  const free = (x, z) => !(Math.abs(x) < 15.5 && z > -9) && Math.abs(x - streamX(z)) > 2.4 && z < FRONT_FLAT - 1.5 // nothing grows on the cliff walk
+  const free = (x, z) => !(Math.abs(x) < 60 && z > -9) && Math.abs(x - streamX(z)) > 2.4 && z < FRONT_FLAT - 1.5 // nothing grows on the cliff walk
 
   // a forest that thickens toward the hills behind
   for (let i = 0; i < 160; i++) {

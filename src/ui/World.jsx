@@ -28,6 +28,7 @@ export default function World({ onClose }) {
   const s = useStore()
   const [tab, setTab] = useState('world')
   const [name, setName] = useState('')
+  const [partner, setPartner] = useState('')
   const w = s.world
   const price = nextSlotPrice(w.slots)
   const onlineCount = w.members.filter(m => m.online).length
@@ -113,10 +114,18 @@ export default function World({ onClose }) {
               <li>Ending it needs a request and a 24-hour wait. Everyone gets their own items back.</li>
             </ol>
           </details>
-          <div className="btn-row">
-            <button className="btn ghost" disabled>Request to end couple</button>
-            <button className="btn ghost" disabled>Rename the house</button>
-          </div>
+          {s.couple.state === 'active' ? (
+            <div className="btn-row">
+              {s.couple.endsAt
+                ? <><span className="soft">Your homes separate in {Math.max(0, Math.ceil((s.couple.endsAt - Date.now()) / 3600000))} h</span><button className="btn ghost" onClick={() => store.cancelBreakup()}>Cancel the request</button></>
+                : <button className="btn ghost" onClick={() => store.requestBreakup()}>Request to end couple</button>}
+            </div>
+          ) : (
+            <form className="invite" onSubmit={e => { e.preventDefault(); const n = partner; setPartner(''); store.notify(`Couple invite sent to ${n}`, 'info'); setTimeout(() => { store.becomeCouple(n); onClose() }, 1400) }}>
+              <input placeholder="Your partner's name" value={partner} maxLength={16} onChange={e => setPartner(e.target.value)} />
+              <button className="btn primary" disabled={!partner.trim()}>Send couple invite</button>
+            </form>
+          )}
         </div>
       )}
     </Modal>
