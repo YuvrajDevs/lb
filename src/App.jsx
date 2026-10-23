@@ -7,12 +7,14 @@ const VIEWS = [
   ['room', 'room'],
   ['close', 'close-up'],
   ['eyes', 'my eyes'],
+  ['street', 'street'],
 ]
 const HINTS = {
   house: 'drag or Q/E to spin · scroll to zoom into a room · WASD or click to move',
   room: 'WASD / arrows or click the floor to move · drag or Q/E to spin · scroll to zoom',
   close: 'WASD / arrows or click the floor to move · drag or Q/E to spin · scroll to zoom',
   eyes: 'W/S walk · A/D turn · drag to look around',
+  street: 'drag or Q/E to walk around the house · scroll to zoom',
 }
 
 function App() {

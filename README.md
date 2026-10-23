@@ -23,6 +23,7 @@ Doorways join the rooms side by side. A steep staircase in the living room leads
 ## Views
 
 - **house:** the whole doll house, roof and garden included.
+- **street:** standing in the street looking at the closed-up house, its lit windows, front door and the lit name sign. Drag or Q/E walks you around the outside.
 - **room:** fills the screen with the room you are in. Scroll to zoom out smoothly to the whole house, or in.
 - **close-up:** follows your cube. **my eyes:** first person (W/S walk, A/D turn, drag to look); the room closes in with walls, ceiling and frames.
 - **Compass (top right):** drag the dial to spin 360°, click it for the front view, ‹ › turn 45°. Dragging the scene or Q/E also spins (vertical drag tilts). Walls facing the camera fade away so you can always see in.
@@ -39,7 +40,7 @@ The scene is built to stay light as more houses are added:
 
 ## Garden
 
-Each house sits in its own fenced plot with a name sign. `game.setName('Alex & Sam')` changes the sign (this is where a couple's shared name will go when two plots merge).
+Each house sits in its own fenced plot with a name sign lit by its own street lamp (currently "Sera & DeM"). `game.setName('Alex & Sam')` changes it, and this is where a couple's shared name will go when two plots merge. From outside (street view) and in first person the house is closed in: the cutaway side only exists in the doll-house views.
 
 ## Layout
 

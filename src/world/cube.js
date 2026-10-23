@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 
 const SIZE = 0.9
-export const FLOAT = 0.95 // gap between floor and the cube's underside: about seat height of the chair
+export const FLOAT = 1.3 // gap between floor and the cube's underside: it hovers a little above chair height
 const bodyGeo = new RoundedBoxGeometry(SIZE, SIZE, SIZE, 5, 0.14)
 const eyeGeo = new THREE.CircleGeometry(0.1, 28)
 const eyeMat = new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false })

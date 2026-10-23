@@ -9,6 +9,8 @@ const TURN = 2.2 // rad/s in eyes view
 const DEFAULT_EL = 0.05
 const CLOSE_EL = 0.2
 const CLOSE_DIST = 6.5
+const STREET_AZ = 0.14
+const STREET_EL = -0.02
 const FOV = 35
 const DOOR_Z = 1.9 // every doorway between side-by-side rooms sits here
 const CLIMB_TIME = 3.2
@@ -52,7 +54,7 @@ export function createGame(container, opts = {}) {
   const camTarget = new THREE.Vector3().copy(rooms[0].center)
   const view = {
     mode: 'room', az: 0, azGoal: 0, el: DEFAULT_EL, elGoal: DEFAULT_EL,
-    dist: 16, pitch: 0, mul: { room: 1, close: 1 },
+    dist: 16, pitch: 0, mul: { room: 1, close: 1, street: 1 }, override: null,
   }
   let roomDist = 16
   let houseDist = 30
@@ -107,6 +109,7 @@ export function createGame(container, opts = {}) {
     return null
   }
   const shownMode = () => (view.mode === 'room' && view.mul.room > mulMax * 0.9 ? 'house' : view.mode)
+  const closedIn = () => view.mode === 'eyes' || view.mode === 'street' // outside or first person: the house is closed, no cutaway
 
   function report() {
     const info = { mode: shownMode(), az: view.az, room: roomAt(me).name, stairs: stairPrompt() }
@@ -118,11 +121,15 @@ export function createGame(container, opts = {}) {
 
   function setView(name) {
     const eyes = name === 'eyes'
+    const wasStreet = view.mode === 'street'
+    view.override = null
     if (name === 'house') { view.mode = 'room'; view.mul.room = mulMax; view.elGoal = DEFAULT_EL }
     else if (name === 'room') { view.mode = 'room'; view.mul.room = 1; view.elGoal = DEFAULT_EL }
     else if (name === 'close') { view.mode = 'close'; view.elGoal = CLOSE_EL }
+    else if (name === 'street') { view.mode = 'street'; view.mul.street = 1; view.azGoal = STREET_AZ; view.elGoal = STREET_EL }
     else if (eyes) view.mode = 'eyes'
     else return
+    if (wasStreet && name !== 'street') { view.azGoal = 0 }
     me.path = []
     active = eyes ? eyeCam : camera
     me.cube.setVisible(!eyes)
@@ -198,12 +205,12 @@ export function createGame(container, opts = {}) {
     } else {
       view.az = wrap(view.az - dx * 0.008)
       view.azGoal = view.az
-      view.elGoal = THREE.MathUtils.clamp(view.elGoal + dy * 0.004, 0.0, 1.3)
+      view.elGoal = THREE.MathUtils.clamp(view.elGoal + dy * 0.004, view.mode === 'street' ? -0.1 : 0.0, 1.3)
       view.el = view.elGoal
     }
   })
   const endDrag = e => {
-    if (drag && !drag.moved && view.mode !== 'eyes' && e.type === 'pointerup') clickMove(e)
+    if (drag && !drag.moved && !closedIn() && e.type === 'pointerup') clickMove(e)
     drag = null
   }
   el.addEventListener('pointerup', endDrag)
@@ -211,7 +218,7 @@ export function createGame(container, opts = {}) {
   el.addEventListener('wheel', e => {
     e.preventDefault()
     if (view.mode === 'eyes') return
-    const [lo, hi] = view.mode === 'room' ? [0.4, mulMax] : [0.4, 2]
+    const [lo, hi] = view.mode === 'room' ? [0.4, mulMax] : view.mode === 'street' ? [0.3, 1.4] : [0.4, 2]
     view.mul[view.mode] = THREE.MathUtils.clamp(view.mul[view.mode] * (e.deltaY > 0 ? 1.1 : 0.9), lo, hi)
   }, { passive: false })
 
@@ -270,7 +277,7 @@ export function createGame(container, opts = {}) {
 
   function setOpacity(group, k) {
     group.traverse(o => {
-      if (!o.isMesh && !o.isPoints) return
+      if (!o.isMesh && !o.isPoints && !o.isSprite) return
       const mats = Array.isArray(o.material) ? o.material : [o.material]
       mats.forEach(m => {
         if (m.userData.base === undefined) m.userData.base = m.opacity
@@ -389,16 +396,23 @@ export function createGame(container, opts = {}) {
         eyeCam.position.y - Math.sin(view.pitch),
         eyeCam.position.z + fz * Math.cos(view.pitch)
       )
+    } else if (view.override) {
+      camera.position.copy(view.override.pos)
+      camera.lookAt(view.override.target)
     } else {
       if (view.mode === 'close') {
         goalTarget.set(me.pos.x, me.pos.y + FLOAT + 0.4, me.pos.z)
+      } else if (view.mode === 'street') {
+        goalTarget.set(0, 4.6, 3.0)
       } else {
         // zooming out slides the framing from this room to the middle of the whole house
         const blend = smooth(1, mulMax, view.mul.room)
         goalTarget.lerpVectors(myRoom.center, houseCenter, blend)
       }
       camTarget.lerp(goalTarget, k)
-      const goalDist = view.mode === 'close' ? CLOSE_DIST * view.mul.close : roomDist * view.mul.room
+      const goalDist = view.mode === 'close' ? CLOSE_DIST * view.mul.close
+        : view.mode === 'street' ? houseDist * 1.05 * view.mul.street
+        : roomDist * view.mul.room
       view.dist += (goalDist - view.dist) * k
       camera.position.set(
         camTarget.x + Math.sin(view.az) * Math.cos(view.el) * view.dist,
@@ -414,18 +428,19 @@ export function createGame(container, opts = {}) {
       const exterior = { back: true, front: true, left: r.col === 0, right: r.col === 1 }
       Object.entries(r.walls).forEach(([name, g]) => {
         let goal = 1
-        if (!eyes && exterior[name]) {
+        if (!closedIn() && exterior[name]) {
           const n = OUT[name]
           const outside = n.x * (cp.x - r.ox) + n.z * cp.z - OFFSET[name] // >0: camera is beyond that wall
           goal = 1 - smooth(-0.5, 1.5, outside)
         }
         fadeTo(`${r.id}.${name}`, g, goal, dt)
       })
-      if (r.row === 0) fadeTo(`${r.id}.ceil`, r.ceiling, !eyes && cp.y > r.oy + 4.2 ? 0 : 1, dt)
+      if (r.row === 0) fadeTo(`${r.id}.ceil`, r.ceiling, !closedIn() && cp.y > r.oy + 4.2 ? 0 : 1, dt)
     })
-    const roofGoal = !eyes && cp.y > house.roofBase + 0.2 ? 0 : 1
+    const roofGoal = !closedIn() && cp.y > house.roofBase + 0.2 ? 0 : 1
     roofFade += (roofGoal - roofFade) * Math.min(1, dt * 10)
     if (Math.abs(roofFade - roofGoal) < 0.002) roofFade = roofGoal
+    fadeTo('street', house.streetProps, view.mode === 'street' ? 1 : 0, dt)
     if (roofApplied !== roofFade) { roofApplied = roofFade; setOpacity(house.roof, roofFade) }
 
     if (markerLife > 0) {
@@ -445,7 +460,11 @@ export function createGame(container, opts = {}) {
     takeStairs,
     setAzimuth,
     rotateBy(rad) { setAzimuth(view.azGoal + rad) },
-    resetAzimuth() { setAzimuth(0); view.elGoal = view.mode === 'close' ? CLOSE_EL : DEFAULT_EL },
+    resetAzimuth() {
+      const street = view.mode === 'street'
+      setAzimuth(street ? STREET_AZ : 0)
+      view.elGoal = street ? STREET_EL : view.mode === 'close' ? CLOSE_EL : DEFAULT_EL
+    },
     /** put your own pictures in the frames: setFrameImage(0, '/me-and-you.jpg'); see frameCount */
     setFrameImage(i, url) { house.frames[i]?.setImage(url) },
     frameCount: house.frames.length,
@@ -465,6 +484,7 @@ export function createGame(container, opts = {}) {
       pause() { wanderAt = 1e9 },
       info() { return { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, pixelRatio: pr } },
       elevation(v) { view.elGoal = v; view.el = v },
+      cam(px, py, pz, tx, ty, tz) { view.override = { pos: new THREE.Vector3(px, py, pz), target: new THREE.Vector3(tx, ty, tz) } },
     },
     dispose() {
       cancelAnimationFrame(raf)

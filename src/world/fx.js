@@ -77,3 +77,17 @@ export function lampFx(parent, shadePos, floorPos, color, { size = 2.2, poolR = 
   if (floorPos) pool(parent, floorPos, color, poolR)
   if (coneH) cone(parent, shadePos, color, coneH, coneR)
 }
+
+/** light washing down a wall from a hidden cove strip near the ceiling (bright at the top, fading down) */
+export function wash(parent, pos, w, h, color, opacity = 0.3, rotY = 0) {
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshBasicMaterial({ map: beamTexture(), color, opacity, side: THREE.DoubleSide, ...additive })
+  )
+  m.position.set(...pos)
+  m.rotation.y = rotY
+  m.userData.keep = true
+  m.renderOrder = 2
+  parent.add(m)
+  return m
+}

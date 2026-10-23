@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { D, H, T, W, std, box, cyl, sphere } from './kit.js'
 import { bake } from './bake.js'
-import { glow, pool } from './fx.js'
+import { glow, pool, cone, wash } from './fx.js'
 import { buildStudy } from './rooms/study.js'
 import { buildBedroom, STAIR_HOLE } from './rooms/bedroom.js'
 import { buildKitchen } from './rooms/kitchen.js'
@@ -16,16 +16,18 @@ const PLOT = { x: COL + 1.4, zBack: -(D / 2 + T + 1.4), zFront: D / 2 + T + 5.2 
 
 function signTexture(text) {
   const c = document.createElement('canvas')
-  c.width = 512; c.height = 128
+  c.width = 768; c.height = 220
   const g = c.getContext('2d')
-  g.fillStyle = '#d9b27a'; g.fillRect(0, 0, 512, 128)
-  g.strokeStyle = '#8a6a4a'; g.lineWidth = 8; g.strokeRect(4, 4, 504, 120)
-  g.fillStyle = '#4a3322'
-  g.font = '700 54px Georgia, serif'
+  g.fillStyle = '#7a5a3c'; g.fillRect(0, 0, 768, 220)
+  for (let y = 0; y < 220; y += 18) { g.fillStyle = y % 36 ? 'rgba(255,230,190,0.06)' : 'rgba(0,0,0,0.08)'; g.fillRect(0, y, 768, 9) }
+  g.strokeStyle = '#e9d3a8'; g.lineWidth = 10; g.strokeRect(10, 10, 748, 200)
+  g.fillStyle = '#fff1d0'
+  g.font = '700 96px Georgia, serif'
   g.textAlign = 'center'; g.textBaseline = 'middle'
-  g.fillText(text, 256, 68, 470)
+  g.fillText(text, 384, 112, 680)
   const t = new THREE.CanvasTexture(c)
   t.colorSpace = THREE.SRGBColorSpace
+  t.anisotropy = 4
   return t
 }
 
@@ -96,10 +98,36 @@ export function buildHouse() {
 
   // ---------- fenced garden ----------
   const garden = new THREE.Group()
+  const street = new THREE.Group() // road, lamps, trees, the sign's lamp: only shown from the street view
   const zc = (PLOT.zBack + PLOT.zFront) / 2
   box(garden, [PLOT.x * 2 + 0.6, 0.5, PLOT.zFront - PLOT.zBack + 0.6], [0, -1.0, zc], '#35564f')
   // path of stepping stones from the gate to the house
-  ;[4.8, 5.9, 7.0, 8.1].forEach((z, i) => cyl(garden, 0.5, 0.08, [i % 2 ? 0.25 : -0.25, -0.54, z], '#c9c2b2', {}, 14))
+  // stepping stones from the gate to the front door (the door is on the living room, world x = 2.3)
+  ;[[0.2, 8.4], [0.7, 7.4], [1.3, 6.4], [1.9, 5.5], [2.3, 4.9]].forEach(([x, z]) => cyl(garden, 0.5, 0.08, [x, -0.54, z], '#c9c2b2', {}, 14))
+  glow(street, [2.3, 3.3, 4.2], '#ffb860', 2.6, 0.5)
+  pool(street, [2.3, -0.5, 5.2], '#ffb860', 2.2, 0.28)
+
+  // the street: sidewalk, road with a dashed line, lamps and a couple of boxy trees
+  box(street, [70, 0.25, 2.4], [0, -0.75, PLOT.zFront + 1.6], '#8a8fa8')
+  box(street, [70, 0.3, 5.2], [0, -0.8, PLOT.zFront + 5.4], '#2a2d45')
+  for (let x = -30; x <= 30; x += 3) box(street, [1.4, 0.02, 0.18], [x, -0.5, PLOT.zFront + 5.4], '#f2e8c0')
+  ;[-9.5, 9.5].forEach(x => {
+    cyl(street, 0.08, 3.4, [x, -0.5, PLOT.zFront + 1.9], '#2f3138', {}, 8)
+    box(street, [0.9, 0.08, 0.08], [x + (x < 0 ? 0.45 : -0.45), 2.85, PLOT.zFront + 1.9], '#2f3138')
+    const lx = x + (x < 0 ? 0.85 : -0.85)
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.18, 0.4), new THREE.MeshBasicMaterial({ color: '#ffe2a8', toneMapped: false }))
+    head.position.set(lx, 2.78, PLOT.zFront + 1.9)
+    head.userData.keep = true
+    street.add(head)
+    glow(street, [lx, 2.75, PLOT.zFront + 1.9], '#ffb860', 2.4, 0.6)
+    cone(street, [lx, 2.7, PLOT.zFront + 1.9], '#ffb860', 3.0, 1.6, 0.16)
+    pool(street, [lx, -0.5, PLOT.zFront + 1.9], '#ffb860', 3.0, 0.3)
+  })
+  ;[-13.5, 13.5].forEach(x => {
+    box(street, [0.4, 1.8, 0.4], [x, -0.5, PLOT.zFront + 1.9], '#6a4a38')
+    box(street, [2.0, 1.7, 2.0], [x, 1.2, PLOT.zFront + 1.9], '#2f6a54')
+    box(street, [1.3, 1.0, 1.3], [x, 2.7, PLOT.zFront + 1.9], '#3b7a62')
+  })
 
   const fence = '#f2eadb'
   const post = (x, z, h = 0.6) => box(garden, [0.13, h, 0.13], [x, -0.5, z], fence)
@@ -133,23 +161,34 @@ export function buildHouse() {
     sphere(garden, 0.8, [x, -0.1, z], '#2f6a54')
     sphere(garden, 0.55, [x + 0.6, -0.25, z + 0.3], '#3b7a62')
   })
-  group.add(garden)
+  group.add(garden, street)
 
-  // name sign (kept separate so it can be re-texted: house.setName('X & Y'))
-  const signMat = new THREE.MeshStandardMaterial({ map: signTexture('our house'), roughness: 0.8, emissive: '#6b5230', emissiveIntensity: 0.4 })
-  const sign = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.8, 0.1), signMat)
-  sign.position.set(-4.4, -0.5 + 1.1, PLOT.zFront - 0.3)
+  // name sign on two posts, lit by its own street lamp (kept separate so it can be re-texted: setName('X & Y'))
+  const SX = -5.0, SZ = PLOT.zFront - 0.6
+  const signMat = new THREE.MeshStandardMaterial({ map: signTexture('Sera & DeM'), roughness: 0.8, emissive: '#7a5a3c', emissiveIntensity: 0.55 })
+  signMat.emissiveMap = signMat.map
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(3.8, 1.1, 0.14), signMat)
+  sign.position.set(SX, -0.5 + 1.25, SZ)
   sign.userData.keep = true
   sign.castShadow = true
   group.add(sign)
-  ;[-5.6, -3.2].forEach(x => {
-    const p = box(group, [0.14, 1.0, 0.14], [x, -0.5, PLOT.zFront - 0.3], '#8a6a4a')
-    p.userData.keep = false
-  })
-  glow(group, [-4.4, 0.9, PLOT.zFront + 0.4], '#ffb860', 2.6, 0.3)
+  ;[SX - 1.6, SX + 1.6].forEach(x => box(group, [0.16, 1.2, 0.16], [x, -0.5, SZ], '#6b4a30'))
+  // lamp post with an arm reaching over the board and a cone of light falling on it
+  const PX = SX - 2.9
+  cyl(street, 0.07, 3.0, [PX, -0.5, SZ], '#2f3138', {}, 8)
+  box(street, [2.9, 0.08, 0.08], [SX - 1.45, 2.45, SZ], '#2f3138')
+  const lampHead = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.2, 0.45), new THREE.MeshBasicMaterial({ color: '#ffe2a8', toneMapped: false }))
+  lampHead.position.set(SX, 2.38, SZ)
+  lampHead.userData.keep = true
+  street.add(lampHead)
+  glow(street, [SX, 2.3, SZ], '#ffbe70', 2.8, 0.7)
+  cone(street, [SX, 2.3, SZ + 0.1], '#ffbe70', 2.6, 1.9, 0.22)
+  wash(street, [SX, 1.25, SZ + 0.09], 3.7, 1.05, '#ffcf8a', 0.26)
+  pool(street, [SX, -0.5, SZ + 0.9], '#ffbe70', 2.6, 0.3)
   const setName = text => {
     signMat.map.dispose()
     signMat.map = signTexture(text)
+    signMat.emissiveMap = signMat.map
     signMat.needsUpdate = true
   }
 
@@ -176,6 +215,7 @@ export function buildHouse() {
   })
   bake(roof, { clone: true })
   bake(garden)
+  bake(street, { clone: true })
 
   const living = rooms.find(r => r.id === 'living')
   const stairs = {
@@ -188,7 +228,7 @@ export function buildHouse() {
   }
 
   return {
-    group, lights, rooms, colliders, frames, roof, roofBase, stairs, setName,
+    group, lights, rooms, colliders, frames, roof, roofBase, stairs, setName, streetProps: street,
     bounds: { halfW: PLOT.x + 0.6, yMin: -1.25, yMax: roofBase + rh },
   }
 }

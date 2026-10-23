@@ -3,6 +3,7 @@ import {
   W, D, H, T, HX, HZ, std, box, wall, plankTexture, eveningSky,
   labelTexture, makeFrame, rectFloor, rectsAround,
 } from './kit.js'
+import { wash } from './fx.js'
 
 const TRIM = '#f3eee4'
 const EDGE = '#efe7d6'
@@ -17,6 +18,7 @@ export function makeShell(spec) {
   const {
     name, wall: wallColor = '#ece6dc', floorColor = '#b98a5a', doorL = null, doorR = null,
     win = [-2.2, 0.6], holeFloor = null, holeCeil = null, frameKinds = [0, 3, 2], skyKind = 0,
+    wainscot = '#c9bfae', curtain = '#b8c4b0', cove = '#ffd9a0', facade = { windows: [-3.2, 3.2], door: null },
   } = spec
 
   const root = new THREE.Group()
@@ -108,6 +110,66 @@ export function makeShell(spec) {
   )
   sky.position.set(wxm, 2.95, -HZ - T - 0.3)
   walls.back.add(sky)
+
+  // ---------- decoration that makes the plain box feel designed ----------
+  // wainscot panelling + a chair rail, on every wall except across doorways
+  const wain = (g, axis, fixed, len, off = 0) => {
+    if (axis === 'x') {
+      box(g, [len, 1.1, 0.05], [off, 0, fixed], wainscot)
+      box(g, [len, 0.08, 0.09], [off, 1.1, fixed + (fixed < 0 ? 0.02 : -0.02)], TRIM)
+    } else {
+      box(g, [0.05, 1.1, len], [fixed, 0, off], wainscot)
+      box(g, [0.09, 0.08, len], [fixed + (fixed < 0 ? 0.02 : -0.02), 1.1, off], TRIM)
+    }
+  }
+  wain(walls.back, 'x', -HZ + 0.025, W)
+  wain(walls.front, 'x', HZ - 0.025, W)
+  const sidePanel = (g, x, door) => {
+    if (!door) return wain(g, 'z', x, D)
+    const a = door[0] + HZ, b = HZ - door[1]
+    if (a > 0.05) wain(g, 'z', x, a, -HZ + a / 2)
+    if (b > 0.05) wain(g, 'z', x, b, HZ - b / 2)
+  }
+  sidePanel(walls.left, -HX + 0.025, doorL)
+  sidePanel(walls.right, HX - 0.025, doorR)
+
+  // crown moulding
+  box(walls.back, [W, 0.14, 0.12], [0, H - 0.14, -HZ + 0.06], TRIM)
+  box(walls.front, [W, 0.14, 0.12], [0, H - 0.14, HZ - 0.06], TRIM)
+  box(walls.left, [0.12, 0.14, D], [-HX + 0.06, H - 0.14, 0], TRIM)
+  box(walls.right, [0.12, 0.14, D], [HX - 0.06, H - 0.14, 0], TRIM)
+
+  // hidden cove light: a glowing strip under the crown that washes colour down the walls
+  const strip = std('#fff3d8', { emissive: cove, emissiveIntensity: 2.2 })
+  box(walls.back, [W - 0.4, 0.05, 0.05], [0, H - 0.2, -HZ + 0.15], strip)
+  box(walls.left, [0.05, 0.05, D - 0.4], [-HX + 0.15, H - 0.2, 0], strip)
+  box(walls.right, [0.05, 0.05, D - 0.4], [HX - 0.15, H - 0.2, 0], strip)
+  wash(walls.back, [0, H - 0.95, -HZ + 0.06], W - 0.6, 1.5, cove, 0.3)
+  wash(walls.left, [-HX + 0.06, H - 0.95, 0], D - 0.6, 1.5, cove, 0.24, Math.PI / 2)
+  wash(walls.right, [HX - 0.06, H - 0.95, 0], D - 0.6, 1.5, cove, 0.24, Math.PI / 2)
+
+  // boxy curtains + rod either side of the window
+  ;[WX0 - 0.5, WX1 + 0.5].forEach(x => {
+    box(walls.back, [0.8, 2.6, 0.16], [x, 1.75, -HZ + 0.16], curtain)
+    box(walls.back, [0.12, 2.6, 0.18], [x + (x < wxm ? 0.2 : -0.2), 1.75, -HZ + 0.16], '#ffffff', { transparent: true, opacity: 0.12 })
+  })
+  box(walls.back, [WX1 - WX0 + 2.0, 0.07, 0.07], [wxm, 4.4, -HZ + 0.2], '#3a3c46')
+
+  // outside of the front wall: lit windows and (for one room) the front door, seen from the street
+  const fz = HZ + T + 0.03
+  ;(facade.windows || []).forEach(x => {
+    box(walls.front, [1.5, 1.5, 0.08], [x, 1.7, fz], TRIM)
+    box(walls.front, [1.28, 1.28, 0.06], [x, 1.81, fz + 0.02], std('#ffe0a8', { emissive: '#ffc070', emissiveIntensity: 1.6 }))
+    box(walls.front, [0.06, 1.28, 0.08], [x, 1.81, fz + 0.04], TRIM)
+    box(walls.front, [1.28, 0.06, 0.08], [x, 2.4, fz + 0.04], TRIM)
+  })
+  if (facade.door != null) {
+    const dx = facade.door
+    box(walls.front, [1.8, 3.3, 0.1], [dx, 0, fz], TRIM)
+    box(walls.front, [1.5, 3.1, 0.08], [dx, 0.05, fz + 0.04], '#3f6f78')
+    box(walls.front, [0.14, 0.14, 0.1], [dx + 0.45, 1.5, fz + 0.09], '#e8c070')
+    box(walls.front, [1.9, 0.12, 0.7], [dx, -0.03, fz + 0.3], '#cfc8b8')
+  }
 
   // frames on the inside of the open front wall (visible from inside / eyes view)
   frames.push(
