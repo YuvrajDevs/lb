@@ -2,9 +2,10 @@ import * as THREE from 'three'
 import { buildHouse, FH, COL } from './house.js'
 import { createCube, FLOAT } from './cube.js'
 import { HX, HZ } from './kit.js'
-import { resolveDefaults } from './furnish.js'
+import { resolveDefaults, footOf, infoOf } from './furnish.js'
 import { createEditor } from './editor.js'
 import { AREA_LIST } from '../game/areas.js'
+import { CELL } from '../game/grid.js'
 
 const HALF = 0.42 // cube collision half-extent
 const SPEED = 3.6
@@ -236,9 +237,41 @@ export function createGame(container, opts = {}) {
   }, { passive: false })
 
   // ---- movement ----
-  function blocked(x, z, level) {
-    return colliders[level].some(c => x > c.minX - HALF && x < c.maxX + HALF && z > c.minZ - HALF && z < c.maxZ + HALF)
+  // furniture the player has placed blocks walking too (rugs, lights, and things on tables do not)
+  const furnitureBlocks = [[], []]
+  function rebuildBlocks() {
+    furnitureBlocks[0] = []; furnitureBlocks[1] = []
+    rooms.forEach(r => {
+      (layout[r.id] || []).forEach(e => {
+        if (e.on || e.wall) return
+        const info = infoOf(e.id)
+        if (info.kind !== 'floor') return
+        const fp = footOf(e)
+        furnitureBlocks[r.level].push({ minX: r.ox - 5.4 + e.i * CELL, maxX: r.ox - 5.4 + (e.i + fp.cw) * CELL, minZ: -3.6 + e.j * CELL, maxZ: -3.6 + (e.j + fp.cd) * CELL })
+      })
+    })
+    ;(layout.garden || []).forEach(e => {
+      if (e.on || e.wall || infoOf(e.id).kind !== 'floor') return
+      const fp = footOf(e)
+      furnitureBlocks[0].push({ minX: -12.4 + e.i * CELL, maxX: -12.4 + (e.i + fp.cw) * CELL, minZ: 4.4 + e.j * CELL, maxZ: 4.4 + (e.j + fp.cd) * CELL })
+    })
   }
+  const hits = (list, x, z) => list.some(c => x > c.minX - HALF && x < c.maxX + HALF && z > c.minZ - HALF && z < c.maxZ + HALF)
+  function blocked(x, z, level) {
+    return hits(colliders[level], x, z) || hits(furnitureBlocks[level], x, z)
+  }
+  /** if furniture was just placed on top of someone, step them to the nearest free spot */
+  function unstick(a) {
+    const lvl = levelOf(a.pos.y)
+    if (!blocked(a.pos.x, a.pos.z, lvl)) return
+    for (let r = 0.2; r < 4; r += 0.2) {
+      for (let k = 0; k < 16; k++) {
+        const x = a.pos.x + Math.cos((k / 16) * 6.283) * r, z = a.pos.z + Math.sin((k / 16) * 6.283) * r
+        if (!blocked(x, z, lvl)) { a.pos.x = x; a.pos.z = z; return }
+      }
+    }
+  }
+  rebuildBlocks()
   function walk(a, dir, dt, speed, turnToward = true) {
     const lvl = levelOf(a.pos.y)
     let moved = false
@@ -280,7 +313,7 @@ export function createGame(container, opts = {}) {
     house,
     getCamera: () => active,
     getLayout: id => layout[id],
-    commit: (id, list, label) => { layout[id] = list; opts.onLayoutChange?.(id, list, label) },
+    commit: (id, list, label) => { layout[id] = list; rebuildBlocks(); opts.onLayoutChange?.(id, list, label) },
     onState: s => opts.onEditor?.(s),
     onBlocked: r => opts.onBlocked?.(r),
     requestShadow: () => { shadowFrames = 3 },
@@ -395,14 +428,27 @@ export function createGame(container, opts = {}) {
     }
 
     // --- partner wanders between the rooms on its storey ---
-    if (partner.path.length) {
+    if (partner.climb) {
+      updateClimb(partner, dt)
+      dir.set(0, 0, 0)
+    } else if (partner.path.length) {
       toTarget.subVectors(partner.path[0], partner.pos)
       toTarget.y = 0
       if (toTarget.length() < 0.18) partner.path.shift()
       else dir.copy(toTarget).normalize()
     } else {
       dir.set(0, 0, 0)
-      if (t > wanderAt) {
+      if (partner.stairGoal) {
+        // arrived at the foot (or the top) of the stairs: take them
+        const gz = partner.stairGoal === 'up' ? S.footZ : S.landingZ
+        if (Math.hypot(partner.pos.x - S.x, partner.pos.z - gz) < 1.0) partner.climb = { dir: partner.stairGoal, s: 0 }
+        partner.stairGoal = null
+      } else if (t > wanderAt && Math.random() < 0.3 && !partner.climb) {
+        const goingUp = levelOf(partner.pos.y) === 0
+        partner.stairGoal = goingUp ? 'up' : 'down'
+        partner.path = routeTo(partner, new THREE.Vector3(S.x, partner.pos.y, goingUp ? S.footZ : S.landingZ))
+        wanderAt = t + 8 + Math.random() * 6
+      } else if (t > wanderAt) {
         const lvl = levelOf(partner.pos.y)
         const pool = rooms.filter(r => r.level === lvl)
         const r = pool[Math.floor(Math.random() * pool.length)]
@@ -411,9 +457,9 @@ export function createGame(container, opts = {}) {
         wanderAt = t + 6 + Math.random() * 8
       }
     }
-    const pMoved = dir.lengthSq() > 0 && walk(partner, dir, dt, SPEED * 0.7)
-    if (partner.path.length && dir.lengthSq() > 0 && !pMoved) partner.path = []
-    partner.moving = pMoved
+    const pMoved = !partner.climb && dir.lengthSq() > 0 && walk(partner, dir, dt, SPEED * 0.7)
+    if (partner.path.length && dir.lengthSq() > 0 && !pMoved && !partner.climb) { partner.path = []; partner.stairGoal = null }
+    if (!partner.climb) partner.moving = pMoved
 
     ;[me, partner].forEach(a => {
       a.cube.group.position.copy(a.pos)
@@ -563,6 +609,9 @@ export function createGame(container, opts = {}) {
         layout[id] = next[id]
         house.furnish(id, next[id], { bakeIt: !(editor.active && editor.areaId === id) })
       })
+      rebuildBlocks()
+      unstick(me)
+      unstick(partner)
       editor.refresh()
       shadowFrames = 3
     },
@@ -604,6 +653,13 @@ export function createGame(container, opts = {}) {
         partner.pos.set(r.ox + lx, r.oy, lz); partner.yaw = yaw; partner.path = []; wanderAt = 1e9
       },
       pause() { wanderAt = 1e9 },
+      forceStairs() {
+        wanderAt = 0
+        partner.stairGoal = levelOf(partner.pos.y) === 0 ? 'up' : 'down'
+        partner.path = routeTo(partner, new THREE.Vector3(S.x, partner.pos.y, partner.stairGoal === 'up' ? S.footZ : S.landingZ))
+        wanderAt = 1e9
+      },
+      partnerWhere() { return { x: +partner.pos.x.toFixed(2), y: +partner.pos.y.toFixed(2), z: +partner.pos.z.toFixed(2), climbing: !!partner.climb } },
       where() { return { x: +me.pos.x.toFixed(2), y: +me.pos.y.toFixed(2), z: +me.pos.z.toFixed(2), room: roomAt(me).name, door: +doorOpen.toFixed(2) } },
       blockedAt(level, x, z) { return blocked(x, z, level) ? colliders[level].filter(c => x > c.minX - HALF && x < c.maxX + HALF && z > c.minZ - HALF && z < c.maxZ + HALF) : false },
       // flood-fill the walkable floor of both storeys + garden and report what is connected
