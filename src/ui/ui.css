@@ -87,8 +87,8 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--edge); color: var(--muted); cursor: pointer; font-size: 13px; }
 .chip:hover { color: var(--text); }
 .chip.on { background: var(--amber); border-color: var(--amber); color: #3a2418; font-weight: 700; }
-.soft { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin: 8px 0; display: flex; gap: 6px; align-items: flex-start; }
-.soft .icon { margin-top: 2px; }
+.soft { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin: 8px 0; }
+.soft .icon { vertical-align: -2px; margin-right: 6px; }
 .empty, .empty-state { color: var(--muted); }
 .empty-state { display: grid; place-items: center; text-align: center; gap: 4px; padding: 60px 10px; }
 .empty-state h3 { margin: 6px 0 0; color: var(--text); }
@@ -258,7 +258,9 @@ input[type='text'], input:not([type]), .field input, .invite input {
   .dock { bottom: 10px; max-width: calc(100% - 16px); }
   .dock-btn { width: 52px; }
   .hint { display: none; }
-  .stairs { bottom: 84px; }
+  .stairs { bottom: 134px; }
   .pill small { display: none; }
+  .top-right .views { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 16px); overflow-x: auto; }
+  .top-right .views button { padding: 6px 9px; font-size: 11.5px; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
