@@ -2,20 +2,33 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 
 const SIZE = 0.9
+export const FLOAT = 0.95 // gap between floor and the cube's underside: about seat height of the chair
 const bodyGeo = new RoundedBoxGeometry(SIZE, SIZE, SIZE, 5, 0.14)
 const eyeGeo = new THREE.CircleGeometry(0.1, 28)
-const eyeMat = new THREE.MeshBasicMaterial({ color: '#ffffff' })
+const eyeMat = new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false })
 
-/** A blocky little person. Origin is at its feet; it faces local +z. */
+function blobTexture() {
+  const c = document.createElement('canvas')
+  c.width = c.height = 128
+  const g = c.getContext('2d')
+  const gr = g.createRadialGradient(64, 64, 4, 64, 64, 62)
+  gr.addColorStop(0, 'rgba(30,15,30,0.55)')
+  gr.addColorStop(1, 'rgba(30,15,30,0)')
+  g.fillStyle = gr
+  g.fillRect(0, 0, 128, 128)
+  return new THREE.CanvasTexture(c)
+}
+const blobMat = new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false })
+
+/** A blocky little person that floats. Origin is on the floor under it; it faces local +z. */
 export function createCube(color) {
   const group = new THREE.Group()
-  const pivot = new THREE.Group() // squash & stretch happens here, anchored at the feet
-  group.add(pivot)
+  const floatNode = new THREE.Group()
+  const pivot = new THREE.Group() // lean + squash happen here, anchored at the cube's underside
+  group.add(floatNode)
+  floatNode.add(pivot)
 
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.55 })
-  const glow = 0.12 // keeps the cube readable in the dark room
-  mat.emissive = new THREE.Color(color).multiplyScalar(glow)
-  const body = new THREE.Mesh(bodyGeo, mat)
+  const body = new THREE.Mesh(bodyGeo, new THREE.MeshStandardMaterial({ color, roughness: 0.55, emissive: new THREE.Color(color).multiplyScalar(0.3) }))
   body.position.y = SIZE / 2
   body.castShadow = true
   body.receiveShadow = true
@@ -28,25 +41,28 @@ export function createCube(color) {
     return e
   })
 
+  // soft contact shadow on the floor under the cube
+  const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.7), blobMat)
+  blob.rotation.x = -Math.PI / 2
+  blob.position.y = 0.025
+  group.add(blob)
+
   let blinkAt = 2 + Math.random() * 3
   let phase = Math.random() * 6
+  let lean = 0
 
   return {
     group,
     setVisible(v) { group.visible = v },
-    setColor(c) { mat.color.set(c); mat.emissive.set(c).multiplyScalar(glow) },
     update(t, dt, moving) {
-      phase += dt * (moving ? 11 : 2.2)
-      if (moving) {
-        const hop = Math.abs(Math.sin(phase))
-        group.position.y = hop * 0.18
-        pivot.scale.set(1 + (1 - hop) * 0.06, 1 - (1 - hop) * 0.08, 1 + (1 - hop) * 0.06)
-      } else {
-        group.position.y = 0
-        const b = Math.sin(phase) * 0.012
-        pivot.scale.set(1 - b, 1 + b * 1.5, 1 - b)
-      }
-      // blink
+      phase += dt * (moving ? 4.2 : 1.6)
+      const bob = Math.sin(phase) * (moving ? 0.05 : 0.07)
+      floatNode.position.y = FLOAT + bob
+      lean += ((moving ? 0.14 : 0) - lean) * Math.min(1, dt * 8)
+      pivot.rotation.x = lean
+      const s = 1 - bob * 0.5
+      blob.scale.setScalar(s)
+
       const k = t - blinkAt
       const closed = k > 0 && k < 0.12
       eyes.forEach(e => (e.scale.y = closed ? 0.1 : 1))
