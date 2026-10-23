@@ -67,6 +67,10 @@ export function buildHouse(opts = {}) {
     sh.root.add(placed)
     const light = new THREE.PointLight('#ffd9a0', 14, 10, 2)
     sh.root.add(light)
+    // a soft warm fill from the open front, so furniture facing the room is not left in cool shade
+    const fill = new THREE.PointLight('#ffdcb0', 9, 9, 2)
+    fill.position.set(0, 2.6, 3.0)
+    sh.root.add(fill)
     return {
       id: s.id, name: s.name, col: s.col, row: s.row, level, ox, oy, sh, placed, light, furnished: null,
       walls: sh.walls, ceiling: sh.ceiling, door: sh.door, doorX: sh.doorX,
