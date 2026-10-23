@@ -127,7 +127,7 @@ function App() {
   void ITEM_BY_ID
 
   return (
-    <div className="stage">
+    <div className={`stage ${editing ? 'editing' : ''}`}>
       <div ref={mount} className="world" />
       {eyes && <div className="eye-vignette" />}
 

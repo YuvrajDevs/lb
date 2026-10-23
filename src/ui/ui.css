@@ -335,5 +335,10 @@ input[type='text'], input:not([type]), .field input, .invite input {
   .ed-items { grid-template-columns: repeat(4, 1fr); }
   .ed-card b { font-size: 10px; }
   .ed-bar { bottom: 8px; gap: 5px; padding: 5px 7px; }
-  .ed-msg { bottom: 304px; }
+  .ed-msg { bottom: 318px; }
+  .ed-drawer { height: 250px; }
+  .ed-drawer .chips.tight { flex-wrap: nowrap; overflow-x: auto; flex: none; padding-bottom: 2px; scrollbar-width: none; }
+  .ed-drawer .chips.tight .chip { flex: none; }
+  .ed-drawer .wide-btn { padding: 7px; font-size: 12px; }
+  .stage.editing .top-left, .stage.editing .top-right { display: none; }
 }
