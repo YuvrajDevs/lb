@@ -59,6 +59,19 @@ The dock at the bottom opens every screen: **Shop, Wardrobe, Items, World, Daily
 
 Where the numbers live: `src/game/catalog.js` (items and prices), `src/game/economy.js` (earning, daily reward, slot prices), `src/game/store.js` (local save, standing in for the server). `src/world/items/*` holds the 3D model of every item, and `src/world/preview.js` renders the shop pictures.
 
+## The home editor (placing furniture)
+
+Press **Edit home** in the dock. The room you are in opens up with the rest of the house hidden, a tab strip to jump between **Study, Bedroom, Kitchen, Living room and Garden**, and a drawer of everything you own.
+
+- **Place:** drag an item from the drawer onto the room (or click it, then click the room). A green outline with "fits here" means it will go; red says why not ("Blocked by the doorway", "Something is already there").
+- **Move / turn / pick up:** drag a placed item, press **R** to turn it, **Delete** to pick it up, arrow keys to nudge, or use the little toolbar that floats over the selected item. **Ctrl+Z / Ctrl+Y** undo and redo.
+- **Grid:** every room is an invisible grid of 0.1-unit cells (**108 x 72** per room, the garden is 248 x 45). Items snap to **0.1 / 0.3 / 0.6** steps (the 0.1 / 0.3 / 0.6 switch), and **Grid** shows the lines plus the no-build zones (doorways, stairs, stairwell, kitchen counter and fridge, TV unit, the garden path and sign).
+- **Layers:** floor furniture blocks other furniture; rugs lie flat and only block other rugs; ceiling lights only block other ceiling lights; pictures and curtains snap to walls (and cannot cover a window); small lamps and plants can stand on tables and move with them.
+- **Walls & floor:** pick any paint or flooring you own for that room. **Garden:** pick your fence and name sign, and place garden lights.
+- **Ownership:** you can only place what you own, and each copy once ("1 to place" / "All placed"). **Reset** puts the standard furnishing back using only what you still have free. Everything is saved.
+
+Code: `src/game/grid.js` (grid maths, tested), `src/game/areas.js` (rooms and no-build zones), `src/game/defaults.js` (standard furnishing), `src/world/editor.js` (dragging, ghost, selection), `src/world/furnish.js` (builds the 3D objects), `src/ui/Editor.jsx` (the screen).
+
 ## Roadmap
 
 The game design (worlds, partnerships, couples, the Boxets economy) and the phased build plan are in [`docs/DESIGN.md`](docs/DESIGN.md).
