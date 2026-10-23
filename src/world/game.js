@@ -27,11 +27,15 @@ const levelOf = y => (y > FH * 0.5 ? 1 : 0)
 
 export function createGame(container, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  const maxPR = Math.min(window.devicePixelRatio, 2)
+  let pr = maxPR
+  renderer.setPixelRatio(pr)
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFShadowMap
+  renderer.shadowMap.autoUpdate = false // the moon only lights static geometry: render its shadows once
+  let shadowFrames = 3
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.0
+  renderer.toneMappingExposure = 1.15
   container.appendChild(renderer.domElement)
 
   const scene = new THREE.Scene()
@@ -253,6 +257,8 @@ export function createGame(container, opts = {}) {
   // ---- loop ----
   let last = performance.now()
   let elapsed = 0
+  let avgMs = 16
+  let frameCount = 0
   let raf = 0
   let wanderAt = 3
   const dir = new THREE.Vector3()
@@ -287,8 +293,14 @@ export function createGame(container, opts = {}) {
     raf = requestAnimationFrame(frame)
     const nowMs = performance.now()
     const dt = Math.min((nowMs - last) / 1000, 0.05)
+    avgMs += ((nowMs - last) - avgMs) * 0.05
     last = nowMs
     elapsed += dt
+    if (++frameCount % 45 === 0) {
+      // adaptive resolution: back off when frames get slow, creep back up when there is headroom
+      if (avgMs > 24 && pr > 1) { pr = Math.max(1, pr - 0.25); renderer.setPixelRatio(pr); renderer.setSize(container.clientWidth, container.clientHeight) }
+      else if (avgMs < 13 && pr < maxPR) { pr = Math.min(maxPR, pr + 0.25); renderer.setPixelRatio(pr); renderer.setSize(container.clientWidth, container.clientHeight) }
+    }
     const t = elapsed
     const eyes = view.mode === 'eyes'
 
@@ -423,6 +435,7 @@ export function createGame(container, opts = {}) {
     }
 
     report()
+    if (shadowFrames > 0) { renderer.shadowMap.needsUpdate = true; shadowFrames-- }
     renderer.render(scene, active)
   }
   frame()
@@ -436,6 +449,8 @@ export function createGame(container, opts = {}) {
     /** put your own pictures in the frames: setFrameImage(0, '/me-and-you.jpg'); see frameCount */
     setFrameImage(i, url) { house.frames[i]?.setImage(url) },
     frameCount: house.frames.length,
+    /** name on the garden sign, e.g. setName('Alex & Sam') */
+    setName: house.setName,
     roomNames: rooms.map(r => r.name),
     // screenshot helpers (used with ?debug)
     debug: {
@@ -448,6 +463,7 @@ export function createGame(container, opts = {}) {
         partner.pos.set(r.ox + lx, r.oy, lz); partner.yaw = yaw; partner.path = []; wanderAt = 1e9
       },
       pause() { wanderAt = 1e9 },
+      info() { return { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, pixelRatio: pr } },
       elevation(v) { view.elGoal = v; view.el = v },
     },
     dispose() {

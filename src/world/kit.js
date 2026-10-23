@@ -8,8 +8,15 @@ export const HX = W / 2
 export const HZ = D / 2
 export const T = 0.3 // wall thickness
 
-export const std = (color, extra = {}) =>
-  new THREE.MeshStandardMaterial({ color, roughness: 0.88, metalness: 0, ...extra })
+const matCache = new Map()
+export const std = (color, extra = {}) => {
+  const plain = Object.values(extra).every(v => typeof v !== 'object')
+  const key = plain ? `${color}|${JSON.stringify(extra)}` : null
+  if (key && matCache.has(key)) return matCache.get(key)
+  const m = new THREE.MeshStandardMaterial({ color, roughness: 0.88, metalness: 0, ...extra })
+  if (key) matCache.set(key, m)
+  return m
+}
 
 export const pick = (a, b, c) => (a.isMaterial ? a : std(a, b || c))
 
@@ -50,7 +57,11 @@ export function wall(w, h, thick, holes, face, edge) {
     s.holes.push(p)
   })
   const geo = new THREE.ExtrudeGeometry(s, { depth: thick, bevelEnabled: false })
-  const m = new THREE.Mesh(geo, [std(face), std(edge)])
+  // own materials: walls fade independently, so they must not be shared
+  const m = new THREE.Mesh(geo, [
+    new THREE.MeshStandardMaterial({ color: face, roughness: 0.9 }),
+    new THREE.MeshStandardMaterial({ color: edge, roughness: 0.9 }),
+  ])
   m.castShadow = true
   m.receiveShadow = true
   return m
@@ -90,10 +101,15 @@ export function woodTexture(base, { dark = 0.07, vertical = true, size = 64 } = 
   return finish(c, { pixel: true, repeat: true })
 }
 
+const woodCache = new Map()
 export function woodMat(base, rx, ry, opts) {
+  const key = `${base}|${rx}|${ry}|${JSON.stringify(opts || {})}`
+  if (woodCache.has(key)) return woodCache.get(key)
   const t = woodTexture(base, opts)
   t.repeat.set(rx, ry)
-  return new THREE.MeshStandardMaterial({ map: t, roughness: 0.85 })
+  const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.85 })
+  woodCache.set(key, m)
+  return m
 }
 
 export function tatamiTexture() {
@@ -134,34 +150,42 @@ export function gingham(c1, c2) {
   return t
 }
 
+const skyCache = new Map()
 export function eveningSky(kind = 0) {
-  const [c, g] = canvas(704, 512)
+  if (skyCache.has(kind)) return skyCache.get(kind)
+  const [c, g] = canvas(512, 384)
   const gr = g.createLinearGradient(0, 0, 0, c.height)
-  if (kind === 1) { gr.addColorStop(0, '#2f3278'); gr.addColorStop(0.5, '#a0558f'); gr.addColorStop(0.85, '#ff8a6a'); gr.addColorStop(1, '#ffc27a') }
-  else { gr.addColorStop(0, '#3b3f86'); gr.addColorStop(0.45, '#b4608f'); gr.addColorStop(0.8, '#ff9a62'); gr.addColorStop(1, '#ffd08a') }
+  gr.addColorStop(0, '#070b24'); gr.addColorStop(0.6, '#16215a'); gr.addColorStop(1, '#2d3b86')
   g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height)
-  const sun = g.createRadialGradient(240, 400, 4, 240, 400, 240)
-  sun.addColorStop(0, 'rgba(255,240,190,1)'); sun.addColorStop(0.2, 'rgba(255,205,130,0.8)'); sun.addColorStop(1, 'rgba(255,170,100,0)')
-  g.fillStyle = sun; g.fillRect(0, 0, c.width, c.height)
-  g.fillStyle = 'rgba(255,170,190,0.55)'
-  ;[[150, 140, 1.1], [430, 100, 0.9], [610, 200, 1], [330, 230, 0.7]].forEach(([x, y, k]) => {
-    [[0, 0, 56], [52, 10, 44], [-52, 12, 40], [24, -16, 38]].forEach(([dx, dy, r]) => {
-      g.beginPath(); g.ellipse(x + dx * k, y + dy * k, r * k * 1.5, r * k * 0.55, 0, 0, 7); g.fill()
-    })
-  })
-  // neighbourhood silhouettes with lit windows
-  g.fillStyle = '#2c2346'
-  const bx = [-20, 90, 200, 320, 430, 560, 650]
+  // stars
+  let r = 7 + kind * 13
+  const rnd = () => ((r = (r * 9301 + 49297) % 233280) / 233280)
+  for (let i = 0; i < 70; i++) {
+    g.fillStyle = `rgba(255,248,225,${0.35 + rnd() * 0.6})`
+    const sz = rnd() > 0.9 ? 2.4 : 1.4
+    g.fillRect(rnd() * c.width, rnd() * c.height * 0.7, sz, sz)
+  }
+  // moon with halo
+  const mx = kind ? 120 : 380, my = 90
+  const halo = g.createRadialGradient(mx, my, 6, mx, my, 110)
+  halo.addColorStop(0, 'rgba(210,225,255,0.55)'); halo.addColorStop(1, 'rgba(210,225,255,0)')
+  g.fillStyle = halo; g.fillRect(0, 0, c.width, c.height)
+  g.fillStyle = '#f4f1e4'; g.beginPath(); g.arc(mx, my, 26, 0, 7); g.fill()
+  g.fillStyle = 'rgba(160,170,200,0.35)'; g.beginPath(); g.arc(mx - 8, my - 6, 6, 0, 7); g.fill(); g.beginPath(); g.arc(mx + 9, my + 8, 4, 0, 7); g.fill()
+  // skyline with a few lit windows
+  g.fillStyle = '#0c1130'
+  const bx = [-20, 70, 160, 250, 340, 430]
   bx.forEach((x, i) => {
-    const w = 110 + (i % 3) * 20, h = 90 + ((i * 53) % 70)
+    const w = 80 + (i % 3) * 14, h = 70 + ((i * 53) % 60)
     g.fillRect(x, c.height - h, w, h)
-    g.beginPath(); g.moveTo(x - 6, c.height - h); g.lineTo(x + w / 2, c.height - h - 40); g.lineTo(x + w + 6, c.height - h); g.fill()
   })
   g.fillStyle = '#ffd27a'
   bx.forEach((x, i) => {
-    for (let k = 0; k < 3; k++) if ((i + k) % 2 === 0) g.fillRect(x + 20 + k * 30, c.height - 70 + (k % 2) * 14, 12, 14)
+    for (let k = 0; k < 3; k++) if ((i * 3 + k) % 4 === 1) g.fillRect(x + 14 + k * 24, c.height - 52 + (k % 2) * 12, 9, 11)
   })
-  return finish(c)
+  const t = finish(c)
+  skyCache.set(kind, t)
+  return t
 }
 
 export function labelTexture(text) {
@@ -233,6 +257,7 @@ export function makeFrame(parent, w, h, pos, rotY, kind) {
     new THREE.MeshStandardMaterial({ map: artTexture(kind, w / h), color: '#b8b0a4', roughness: 0.8 })
   )
   pic.position.z = 0.034
+  pic.userData.keep = true
   g.add(pic)
   parent.add(g)
   return {
@@ -268,7 +293,7 @@ export function bookRow(parent, axis, from, to, y, fixed, seed = 1, maxH = 0.65)
 
 // ---------- extra textures / geometry for the multi-room house ----------
 export function plankTexture(base = '#c89a5e') {
-  const PPU = 100
+  const PPU = 64
   const [c, g] = canvas(W * PPU, D * PPU)
   const hsl = {}
   new THREE.Color(base).getHSL(hsl, THREE.SRGBColorSpace)
@@ -277,16 +302,16 @@ export function plankTexture(base = '#c89a5e') {
     const y0 = (r * c.height) / rows
     let x = -Math.random() * 250
     while (x < c.width) {
-      const len = 260 + Math.random() * 380
+      const len = 170 + Math.random() * 240
       const l = hsl.l + (Math.random() - 0.5) * 0.08
       g.fillStyle = `hsl(${hsl.h * 360},${hsl.s * 100}%,${clamp01(l) * 100}%)`
       g.fillRect(x, y0, len, c.height / rows)
-      g.fillStyle = 'rgba(60,35,15,0.5)'
-      g.fillRect(x, y0, 3, c.height / rows)
+      g.fillStyle = 'rgba(40,25,15,0.45)'
+      g.fillRect(x, y0, 2, c.height / rows)
       x += len
     }
-    g.fillStyle = 'rgba(60,35,15,0.55)'
-    g.fillRect(0, y0, c.width, 3)
+    g.fillStyle = 'rgba(40,25,15,0.5)'
+    g.fillRect(0, y0, c.width, 2)
   }
   return finish(c, { aniso: 8 })
 }

@@ -17,8 +17,8 @@ body {
   color: var(--ink);
   font-family: ui-rounded, 'Nunito', system-ui, sans-serif;
   background:
-    radial-gradient(ellipse 90% 60% at 50% 105%, #e98a62 0%, rgba(233, 138, 98, 0) 70%),
-    linear-gradient(180deg, #1f1b42 0%, #4a3366 55%, #8a4f6e 100%);
+    radial-gradient(ellipse 80% 55% at 50% 110%, #2c2a63 0%, rgba(44, 42, 99, 0) 70%),
+    linear-gradient(180deg, #070a1f 0%, #101640 60%, #1b1f55 100%);
 }
 
 .stage { position: relative; width: 100%; height: 100%; }

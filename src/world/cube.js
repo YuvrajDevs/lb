@@ -30,7 +30,7 @@ export function createCube(color) {
 
   const body = new THREE.Mesh(bodyGeo, new THREE.MeshStandardMaterial({ color, roughness: 0.55, emissive: new THREE.Color(color).multiplyScalar(0.3) }))
   body.position.y = SIZE / 2
-  body.castShadow = true
+  body.castShadow = false // shadows are baked once; the cube has its own soft contact shadow below
   body.receiveShadow = true
   pivot.add(body)
 
