@@ -71,6 +71,8 @@ export function createGame(container, opts = {}) {
   const houseCenter = new THREE.Vector3(0, (house.bounds.yMin + house.bounds.yMax) / 2, 0)
   const houseHalfH = (house.bounds.yMax - house.bounds.yMin) / 2
 
+  let composer = null // the glow / grade pipeline, created below (resize() runs before it exists)
+
   // ---- cameras ----
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 200)
   const eyeCam = new THREE.PerspectiveCamera(76, 1, 0.05, 100)
@@ -97,8 +99,8 @@ export function createGame(container, opts = {}) {
     camera.updateProjectionMatrix()
     eyeCam.updateProjectionMatrix()
     renderer.setSize(w, h)
-    composer.setPixelRatio(pr)
-    composer.setSize(w, h)
+    composer?.setPixelRatio(pr)
+    composer?.setSize(w, h)
   }
   resize()
   const ro = new ResizeObserver(resize)
@@ -121,9 +123,11 @@ export function createGame(container, opts = {}) {
       }`,
   }
   let bloomOn = true
-  const composer = new EffectComposer(renderer)
+  composer = new EffectComposer(renderer)
+  composer.setPixelRatio(pr)
+  composer.setSize(container.clientWidth, container.clientHeight)
   const renderPass = new RenderPass(scene, camera)
-  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.7, 0.92)
+  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.34, 0.55, 1.15)
   composer.addPass(renderPass)
   composer.addPass(bloom)
   composer.addPass(new ShaderPass(GRADE))
