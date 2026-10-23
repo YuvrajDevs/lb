@@ -1,6 +1,6 @@
 # cc
 
-A tiny home for two, as a Three.js diorama: a cosy Japanese-style study room on a warm evening. You and your partner are floating cubes living in it.
+A tiny home for two, as a Three.js doll house: four cosy Japanese-style rooms on a warm evening, with you and your partner as floating cubes living in them.
 
 Built with Vite, React and plain [Three.js](https://threejs.org).
 
@@ -9,23 +9,37 @@ npm install
 npm run dev
 ```
 
+## The house
+
+Two storeys, two rooms each:
+
+| | left | right |
+|---|---|---|
+| **top** | study | bedroom |
+| **bottom** | kitchen | living room |
+
+Doorways join the rooms side by side. A steep staircase in the living room leads up to the bedroom: stand at its foot (or at the top landing) and press **Space**.
+
 ## Views
 
-The default view looks straight into the room and fills the screen.
-
-- **Compass (top right):** drag the dial to spin the room 360°, click it to go back to the front view, or use the ‹ › buttons. Dragging the scene or holding Q/E also spins it (vertical drag tilts). Walls facing the camera fade out so you can always see in.
-- **room / close-up / my eyes:** whole diorama, a close view that follows your cube, or first person (W/S walk, A/D turn, drag to look). In eyes view the room is closed in with walls, ceiling and picture frames.
-- **Move:** WASD / arrow keys, or click the floor. **Zoom:** scroll.
+- **house:** the whole doll house, roof and garden included.
+- **room:** fills the screen with the room you are in. Scroll to zoom out smoothly to the whole house, or in.
+- **close-up:** follows your cube. **my eyes:** first person (W/S walk, A/D turn, drag to look); the room closes in with walls, ceiling and frames.
+- **Compass (top right):** drag the dial to spin 360°, click it for the front view, ‹ › turn 45°. Dragging the scene or Q/E also spins (vertical drag tilts). Walls facing the camera fade away so you can always see in.
+- **Move:** WASD / arrows, or click the floor (clicking in the next room walks you through the doorway).
 
 ## Layout
 
-- `src/world/room.js`: the room (furniture, window, lamps, lights, collision boxes)
-- `src/world/cube.js`: the floating cube (rounded body, white circle eyes, bob and blink)
-- `src/world/game.js`: renderer, cameras, input, movement, wall fading
-- `src/App.jsx`, `src/Compass.jsx`: the little bit of UI
+- `src/world/house.js`: assembles the four rooms, roof, garden, sun and collision boxes
+- `src/world/shell.js`: the empty room (walls, doorways, trim, window, ceiling, frames)
+- `src/world/rooms/*.js`: the furniture and lamps for each room
+- `src/world/kit.js`: shared helpers and procedural textures
+- `src/world/cube.js`: the floating cube
+- `src/world/game.js`: renderer, cameras, input, movement, stairs, wall fading
+- `src/App.jsx`, `src/Compass.jsx`: the small UI
 
 ## Picture frames
 
-Five frames hang on the back wall and the inner face of the front wall (visible in eyes view). They hold pastel placeholder art for now. Swap in photos with `game.setFrameImage(index, url)`.
+Every room has three frames on the inner face of its open front wall (seen from "my eyes"), plus a few posters. They hold pastel placeholder art for now. Swap in photos with `game.setFrameImage(index, url)` (`game.frameCount` frames in total).
 
-The partner is a local bot that wanders around. Real two-person rooms need a realtime backend that syncs positions.
+The partner is a local bot that wanders between rooms. Real two-person play needs a realtime backend that syncs positions.

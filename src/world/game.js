@@ -1,6 +1,7 @@
 import * as THREE from 'three'
-import { buildRoom, H } from './room.js'
+import { buildHouse, FH, COL } from './house.js'
 import { createCube, FLOAT } from './cube.js'
+import { HX, HZ } from './kit.js'
 
 const HALF = 0.42 // cube collision half-extent
 const SPEED = 3.6
@@ -9,15 +10,20 @@ const DEFAULT_EL = 0.05
 const CLOSE_EL = 0.2
 const CLOSE_DIST = 6.5
 const FOV = 35
-const WALL_PLANES = { // outward normal + plane offset from origin (filled in below)
+const DOOR_Z = 1.9 // every doorway between side-by-side rooms sits here
+const CLIMB_TIME = 3.2
+
+const OUT = { // outward wall normals
   back: new THREE.Vector3(0, 0, -1),
   left: new THREE.Vector3(-1, 0, 0),
   front: new THREE.Vector3(0, 0, 1),
   right: new THREE.Vector3(1, 0, 0),
 }
+const OFFSET = { back: HZ, left: HX, front: HZ, right: HX }
 
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a))
 const smooth = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t) }
+const levelOf = y => (y > FH * 0.5 ? 1 : 0)
 
 export function createGame(container, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' })
@@ -29,33 +35,33 @@ export function createGame(container, opts = {}) {
   container.appendChild(renderer.domElement)
 
   const scene = new THREE.Scene()
-  const room = buildRoom()
-  scene.add(room.group, room.lights)
-  const { halfX, halfZ } = room
-
-  // distance from the wall plane to the origin (interior face)
-  const planeOffset = { back: halfZ, left: halfX, front: halfZ, right: halfX }
+  const house = buildHouse()
+  scene.add(house.group, house.lights)
+  const { rooms, colliders, stairs: S } = house
+  const houseCenter = new THREE.Vector3(0, (house.bounds.yMin + house.bounds.yMax) / 2, 0)
+  const houseHalfH = (house.bounds.yMax - house.bounds.yMin) / 2
 
   // ---- cameras ----
-  const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 120)
-  const eyeCam = new THREE.PerspectiveCamera(76, 1, 0.05, 80)
+  const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 200)
+  const eyeCam = new THREE.PerspectiveCamera(76, 1, 0.05, 100)
   let active = camera
-  const camTarget = new THREE.Vector3(0, 2.2, 0)
+  const camTarget = new THREE.Vector3().copy(rooms[0].center)
   const view = {
     mode: 'room', az: 0, azGoal: 0, el: DEFAULT_EL, elGoal: DEFAULT_EL,
     dist: 16, pitch: 0, mul: { room: 1, close: 1 },
   }
-  let fitDist = 16
+  let roomDist = 16
+  let houseDist = 30
+  let mulMax = 1.9
   let lastReported = ''
 
   function resize() {
     const w = container.clientWidth, h = container.clientHeight
     const aspect = w / h
     const t = Math.tan((FOV * Math.PI) / 360)
-    // fit the whole open front of the box on screen, like a framed diorama
-    const needH = 2.95 / 0.9 / t
-    const needW = (halfX + 0.5) / 0.95 / (t * aspect)
-    fitDist = Math.max(needH, needW) + halfZ + 0.3
+    roomDist = Math.max(2.95 / 0.9 / t, (HX + 0.5) / 0.95 / (t * aspect)) + HZ + 0.3
+    houseDist = Math.max(houseHalfH / 0.88 / t, house.bounds.halfW / 0.95 / (t * aspect)) + HZ + 1.2
+    mulMax = houseDist / roomDist
     camera.aspect = aspect
     eyeCam.aspect = aspect
     camera.updateProjectionMatrix()
@@ -65,45 +71,57 @@ export function createGame(container, opts = {}) {
   resize()
   const ro = new ResizeObserver(resize)
   ro.observe(container)
-  view.dist = fitDist
+  view.dist = roomDist
 
   // ---- people ----
-  function makeActor(color, x, z) {
+  function makeActor(color, room, lx, lz) {
     const cube = createCube(color)
-    cube.group.position.set(x, 0, z)
+    const pos = new THREE.Vector3(room.ox + lx, room.oy, lz)
+    cube.group.position.copy(pos)
     scene.add(cube.group)
-    return { cube, pos: new THREE.Vector3(x, 0, z), target: null, yaw: 0, moving: false }
+    return { cube, pos, path: [], yaw: 0, moving: false, climb: null }
   }
-  const me = makeActor('#ff8fb8', 1.2, 1.6)
-  const partner = makeActor('#9ad0ff', 3.2, 0.4)
+  const byId = id => rooms.find(r => r.id === id)
+  const me = makeActor('#ff8fb8', byId('study'), 1.2, 1.6)
+  const partner = makeActor('#9ad0ff', byId('bedroom'), 1.8, 0.4)
+
+  const roomAt = a => rooms.find(r => r.col === (a.pos.x > 0 ? 1 : 0) && r.level === levelOf(a.pos.y)) || rooms[0]
 
   const marker = new THREE.Mesh(
     new THREE.RingGeometry(0.22, 0.3, 28),
     new THREE.MeshBasicMaterial({ color: '#ffd9a0', transparent: true, opacity: 0 })
   )
   marker.rotation.x = -Math.PI / 2
-  marker.position.y = 0.03
   scene.add(marker)
   let markerLife = 0
 
   // ---- view control ----
+  const stairPrompt = () => {
+    if (me.climb) return null
+    if (levelOf(me.pos.y) === 0 && Math.hypot(me.pos.x - S.x, me.pos.z - S.footZ) < 1.5) return 'up'
+    if (levelOf(me.pos.y) === 1 && Math.hypot(me.pos.x - S.x, me.pos.z - S.landingZ) < 1.5) return 'down'
+    return null
+  }
+  const shownMode = () => (view.mode === 'room' && view.mul.room > mulMax * 0.9 ? 'house' : view.mode)
+
   function report() {
-    const key = `${view.mode}|${Math.round(view.az * 57.3)}`
+    const info = { mode: shownMode(), az: view.az, room: roomAt(me).name, stairs: stairPrompt() }
+    const key = `${info.mode}|${Math.round(info.az * 57.3)}|${info.room}|${info.stairs}`
     if (key === lastReported) return
     lastReported = key
-    opts.onView?.({ mode: view.mode, az: view.az })
+    opts.onView?.(info)
   }
 
-  function setMode(mode) {
-    if (!['room', 'close', 'eyes'].includes(mode) || mode === view.mode) return
-    view.mode = mode
-    me.target = null
-    const eyes = mode === 'eyes'
+  function setView(name) {
+    const eyes = name === 'eyes'
+    if (name === 'house') { view.mode = 'room'; view.mul.room = mulMax; view.elGoal = DEFAULT_EL }
+    else if (name === 'room') { view.mode = 'room'; view.mul.room = 1; view.elGoal = DEFAULT_EL }
+    else if (name === 'close') { view.mode = 'close'; view.elGoal = CLOSE_EL }
+    else if (eyes) view.mode = 'eyes'
+    else return
+    me.path = []
     active = eyes ? eyeCam : camera
     me.cube.setVisible(!eyes)
-    room.ceiling.visible = true
-    if (mode === 'room') view.elGoal = DEFAULT_EL
-    if (mode === 'close') view.elGoal = CLOSE_EL
     report()
   }
 
@@ -115,7 +133,10 @@ export function createGame(container, opts = {}) {
 
   // ---- input ----
   const keys = new Set()
-  const onKeyDown = e => keys.add(e.key.toLowerCase())
+  const onKeyDown = e => {
+    keys.add(e.key.toLowerCase())
+    if (e.key === ' ') { e.preventDefault(); takeStairs() }
+  }
   const onKeyUp = e => keys.delete(e.key.toLowerCase())
   const onBlur = () => keys.clear()
   window.addEventListener('keydown', onKeyDown)
@@ -123,22 +144,37 @@ export function createGame(container, opts = {}) {
   window.addEventListener('blur', onBlur)
 
   const ray = new THREE.Raycaster()
-  const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
   const hit = new THREE.Vector3()
   const el = renderer.domElement
   let drag = null
 
+  // straight-line route inside a room, or through the doorway between side-by-side rooms
+  function routeTo(a, dest) {
+    const from = roomAt(a)
+    const toCol = dest.x > 0 ? 1 : 0
+    if (toCol === from.col) return [dest]
+    const dir = toCol > from.col ? 1 : -1
+    return [
+      new THREE.Vector3(-dir * 1.6, a.pos.y, DOOR_Z),
+      new THREE.Vector3(dir * 1.6, a.pos.y, DOOR_Z),
+      dest,
+    ]
+  }
+
   function clickMove(e) {
+    if (me.climb) return
     const r = el.getBoundingClientRect()
     const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
     ray.setFromCamera(ndc, camera)
-    if (!ray.ray.intersectPlane(floorPlane, hit)) return
-    me.target = new THREE.Vector3(
-      THREE.MathUtils.clamp(hit.x, -halfX + HALF, halfX - HALF),
-      0,
-      THREE.MathUtils.clamp(hit.z, -halfZ + HALF, halfZ - HALF)
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -me.pos.y)
+    if (!ray.ray.intersectPlane(plane, hit)) return
+    const dest = new THREE.Vector3(
+      THREE.MathUtils.clamp(hit.x, -COL + 0.6, COL - 0.6),
+      me.pos.y,
+      THREE.MathUtils.clamp(hit.z, -HZ + HALF, HZ - HALF)
     )
-    marker.position.set(me.target.x, 0.03, me.target.z)
+    me.path = routeTo(me, dest)
+    marker.position.set(dest.x, me.pos.y + 0.03, dest.z)
     markerLife = 1
   }
 
@@ -171,40 +207,61 @@ export function createGame(container, opts = {}) {
   el.addEventListener('wheel', e => {
     e.preventDefault()
     if (view.mode === 'eyes') return
-    const [lo, hi] = view.mode === 'room' ? [0.4, 1.25] : [0.4, 2]
-    view.mul[view.mode] = THREE.MathUtils.clamp(view.mul[view.mode] * (e.deltaY > 0 ? 1.08 : 0.92), lo, hi)
+    const [lo, hi] = view.mode === 'room' ? [0.4, mulMax] : [0.4, 2]
+    view.mul[view.mode] = THREE.MathUtils.clamp(view.mul[view.mode] * (e.deltaY > 0 ? 1.1 : 0.9), lo, hi)
   }, { passive: false })
 
   // ---- movement ----
-  function blocked(x, z) {
-    if (Math.abs(x) > halfX - HALF || Math.abs(z) > halfZ - HALF) return true
-    return room.colliders.some(c => x > c.minX - HALF && x < c.maxX + HALF && z > c.minZ - HALF && z < c.maxZ + HALF)
+  function blocked(x, z, level) {
+    return colliders[level].some(c => x > c.minX - HALF && x < c.maxX + HALF && z > c.minZ - HALF && z < c.maxZ + HALF)
   }
   function walk(a, dir, dt, speed, turnToward = true) {
+    const lvl = levelOf(a.pos.y)
     let moved = false
     const dx = dir.x * speed * dt, dz = dir.z * speed * dt
-    if (!blocked(a.pos.x + dx, a.pos.z)) { a.pos.x += dx; moved = moved || dx !== 0 }
-    if (!blocked(a.pos.x, a.pos.z + dz)) { a.pos.z += dz; moved = moved || dz !== 0 }
+    if (!blocked(a.pos.x + dx, a.pos.z, lvl)) { a.pos.x += dx; moved = moved || dx !== 0 }
+    if (!blocked(a.pos.x, a.pos.z + dz, lvl)) { a.pos.z += dz; moved = moved || dz !== 0 }
     if (turnToward && dir.lengthSq() > 0) {
       a.yaw += wrap(Math.atan2(dir.x, dir.z) - a.yaw) * Math.min(1, dt * 14)
     }
     return moved
   }
 
+  // the staircase: step on the foot (downstairs) or landing (upstairs), press Space
+  const stairY = z => FH * THREE.MathUtils.clamp((S.startZ - z) / (S.startZ - S.topZ), 0, 1)
+  function takeStairs() {
+    const p = stairPrompt()
+    if (!p) return
+    me.path = []
+    me.climb = { dir: p, s: 0 }
+  }
+  function updateClimb(a, dt) {
+    const c = a.climb
+    c.s = Math.min(1, c.s + dt / CLIMB_TIME)
+    const e = c.s * c.s * (3 - 2 * c.s)
+    const up = c.dir === 'up'
+    const z0 = up ? S.footZ : S.landingZ
+    const z1 = up ? S.landingZ : S.footZ
+    a.pos.x = S.x
+    a.pos.z = z0 + (z1 - z0) * e
+    a.pos.y = stairY(a.pos.z)
+    a.yaw += wrap((up ? Math.PI : 0) - a.yaw) * Math.min(1, dt * 8)
+    a.moving = true
+    if (c.s >= 1) { a.pos.y = up ? FH : 0; a.climb = null }
+  }
+
   // ---- loop ----
   let last = performance.now()
   let elapsed = 0
   let raf = 0
-  let wanderAt = 2
+  let wanderAt = 3
   const dir = new THREE.Vector3()
   const toTarget = new THREE.Vector3()
   const goalTarget = new THREE.Vector3()
-  const wallFade = { back: 1, left: 1, front: 1, right: 1 }
-  const applied = { back: -1, left: -1, front: -1, right: -1 }
-  let ceilFade = 1
-  let ceilApplied = -1
+  const fade = {} // `${room}.${wall}` -> current opacity factor
+  const applied = {}
+  let roofFade = 1, roofApplied = -1
 
-  // fade a group by scaling each material's base opacity
   function setOpacity(group, k) {
     group.traverse(o => {
       if (!o.isMesh && !o.isPoints) return
@@ -217,6 +274,13 @@ export function createGame(container, opts = {}) {
         m.depthWrite = k > 0.98
       })
     })
+  }
+  function fadeTo(key, group, goal, dt) {
+    const cur = fade[key] ?? 1
+    let v = cur + (goal - cur) * Math.min(1, dt * 10)
+    if (Math.abs(v - goal) < 0.002) v = goal
+    fade[key] = v
+    if (applied[key] !== v) { applied[key] = v; setOpacity(group, v) }
   }
 
   function frame() {
@@ -237,77 +301,92 @@ export function createGame(container, opts = {}) {
     view.el += (view.elGoal - view.el) * Math.min(1, dt * 6)
 
     // --- my movement ---
-    dir.set(0, 0, 0)
-    const fwd = keys.has('w') || keys.has('arrowup')
-    const bck = keys.has('s') || keys.has('arrowdown')
-    const rightK = keys.has('d') || keys.has('arrowright')
-    const leftK = keys.has('a') || keys.has('arrowleft')
-    let iMoved = false
-    if (eyes) {
-      me.yaw += ((leftK ? 1 : 0) - (rightK ? 1 : 0)) * TURN * dt
-      const f = (fwd ? 1 : 0) - (bck ? 1 : 0)
-      if (f) {
-        dir.set(Math.sin(me.yaw) * f, 0, Math.cos(me.yaw) * f)
-        iMoved = walk(me, dir, dt, SPEED * 0.8, false)
-      }
+    if (me.climb) {
+      updateClimb(me, dt)
     } else {
-      const up = new THREE.Vector3(-Math.sin(view.az), 0, -Math.cos(view.az))
-      const rt = new THREE.Vector3(Math.cos(view.az), 0, -Math.sin(view.az))
-      if (fwd) dir.add(up)
-      if (bck) dir.sub(up)
-      if (rightK) dir.add(rt)
-      if (leftK) dir.sub(rt)
-      if (dir.lengthSq() > 0) {
-        me.target = null
-        dir.normalize()
-      } else if (me.target) {
-        toTarget.subVectors(me.target, me.pos)
-        toTarget.y = 0
-        if (toTarget.length() < 0.12) me.target = null
-        else dir.copy(toTarget).normalize()
+      dir.set(0, 0, 0)
+      const fwd = keys.has('w') || keys.has('arrowup')
+      const bck = keys.has('s') || keys.has('arrowdown')
+      const rightK = keys.has('d') || keys.has('arrowright')
+      const leftK = keys.has('a') || keys.has('arrowleft')
+      let iMoved = false
+      if (eyes) {
+        me.yaw += ((leftK ? 1 : 0) - (rightK ? 1 : 0)) * TURN * dt
+        const f = (fwd ? 1 : 0) - (bck ? 1 : 0)
+        if (f) {
+          dir.set(Math.sin(me.yaw) * f, 0, Math.cos(me.yaw) * f)
+          iMoved = walk(me, dir, dt, SPEED * 0.8, false)
+        }
+      } else {
+        const up = new THREE.Vector3(-Math.sin(view.az), 0, -Math.cos(view.az))
+        const rt = new THREE.Vector3(Math.cos(view.az), 0, -Math.sin(view.az))
+        if (fwd) dir.add(up)
+        if (bck) dir.sub(up)
+        if (rightK) dir.add(rt)
+        if (leftK) dir.sub(rt)
+        if (dir.lengthSq() > 0) {
+          me.path = []
+          dir.normalize()
+        } else if (me.path.length) {
+          toTarget.subVectors(me.path[0], me.pos)
+          toTarget.y = 0
+          if (toTarget.length() < 0.15) me.path.shift()
+          else dir.copy(toTarget).normalize()
+        }
+        iMoved = dir.lengthSq() > 0 && walk(me, dir, dt, SPEED)
+        if (me.path.length && dir.lengthSq() > 0 && !iMoved) me.path = []
       }
-      iMoved = dir.lengthSq() > 0 && walk(me, dir, dt, SPEED)
-      if (me.target && dir.lengthSq() > 0 && !iMoved) me.target = null
+      me.moving = iMoved
     }
-    me.moving = iMoved
 
-    // --- partner wanders ---
-    dir.set(0, 0, 0)
-    if (partner.target) {
-      toTarget.subVectors(partner.target, partner.pos)
+    // --- partner wanders between the rooms on its storey ---
+    if (partner.path.length) {
+      toTarget.subVectors(partner.path[0], partner.pos)
       toTarget.y = 0
-      if (toTarget.length() < 0.15) partner.target = null
+      if (toTarget.length() < 0.18) partner.path.shift()
       else dir.copy(toTarget).normalize()
-    } else if (t > wanderAt) {
-      partner.target = new THREE.Vector3((Math.random() * 2 - 1) * (halfX - 1), 0, (Math.random() * 2 - 1) * (halfZ - 1))
-      wanderAt = t + 5 + Math.random() * 7
+    } else {
+      dir.set(0, 0, 0)
+      if (t > wanderAt) {
+        const lvl = levelOf(partner.pos.y)
+        const pool = rooms.filter(r => r.level === lvl)
+        const r = pool[Math.floor(Math.random() * pool.length)]
+        const dest = new THREE.Vector3(r.ox + (Math.random() * 2 - 1) * (HX - 1.4), partner.pos.y, (Math.random() * 2 - 1) * (HZ - 1.2))
+        partner.path = routeTo(partner, dest)
+        wanderAt = t + 6 + Math.random() * 8
+      }
     }
     const pMoved = dir.lengthSq() > 0 && walk(partner, dir, dt, SPEED * 0.7)
-    if (partner.target && dir.lengthSq() > 0 && !pMoved) partner.target = null
+    if (partner.path.length && dir.lengthSq() > 0 && !pMoved) partner.path = []
     partner.moving = pMoved
 
     ;[me, partner].forEach(a => {
-      a.cube.group.position.x = a.pos.x
-      a.cube.group.position.z = a.pos.z
+      a.cube.group.position.copy(a.pos)
       a.cube.group.rotation.y = a.yaw
       a.cube.update(t, dt, a.moving)
     })
 
     // --- cameras ---
     const k = 1 - Math.exp(-dt * 6)
+    const myRoom = roomAt(me)
     if (eyes) {
       const fx = Math.sin(me.yaw), fz = Math.cos(me.yaw)
-      eyeCam.position.set(me.pos.x + fx * 0.3, FLOAT + 0.52, me.pos.z + fz * 0.3)
+      eyeCam.position.set(me.pos.x + fx * 0.3, me.pos.y + FLOAT + 0.52, me.pos.z + fz * 0.3)
       eyeCam.lookAt(
         eyeCam.position.x + fx * Math.cos(view.pitch),
         eyeCam.position.y - Math.sin(view.pitch),
         eyeCam.position.z + fz * Math.cos(view.pitch)
       )
     } else {
-      if (view.mode === 'close') goalTarget.set(me.pos.x, FLOAT + 0.4, me.pos.z)
-      else goalTarget.set(0, 2.25, 0)
+      if (view.mode === 'close') {
+        goalTarget.set(me.pos.x, me.pos.y + FLOAT + 0.4, me.pos.z)
+      } else {
+        // zooming out slides the framing from this room to the middle of the whole house
+        const blend = smooth(1, mulMax, view.mul.room)
+        goalTarget.lerpVectors(myRoom.center, houseCenter, blend)
+      }
       camTarget.lerp(goalTarget, k)
-      const goalDist = view.mode === 'close' ? CLOSE_DIST * view.mul.close : fitDist * view.mul.room
+      const goalDist = view.mode === 'close' ? CLOSE_DIST * view.mul.close : roomDist * view.mul.room
       view.dist += (goalDist - view.dist) * k
       camera.position.set(
         camTarget.x + Math.sin(view.az) * Math.cos(view.el) * view.dist,
@@ -317,20 +396,25 @@ export function createGame(container, opts = {}) {
       camera.lookAt(camTarget)
     }
 
-    // --- walls the camera is outside of fade away; the ceiling too when seen from above ---
+    // --- outside walls the camera is beyond fade away; roof and top ceilings too when seen from above ---
     const cp = active.position
-    Object.entries(room.walls).forEach(([name, g]) => {
-      const n = WALL_PLANES[name]
-      const outside = n.x * cp.x + n.y * cp.y + n.z * cp.z - planeOffset[name] // >0: camera is beyond the wall
-      const goal = eyes ? 1 : 1 - smooth(-0.5, 1.5, outside)
-      wallFade[name] += (goal - wallFade[name]) * Math.min(1, dt * 10)
-      if (Math.abs(wallFade[name] - goal) < 0.002) wallFade[name] = goal
-      if (applied[name] !== wallFade[name]) { applied[name] = wallFade[name]; setOpacity(g, wallFade[name]) }
+    rooms.forEach(r => {
+      const exterior = { back: true, front: true, left: r.col === 0, right: r.col === 1 }
+      Object.entries(r.walls).forEach(([name, g]) => {
+        let goal = 1
+        if (!eyes && exterior[name]) {
+          const n = OUT[name]
+          const outside = n.x * (cp.x - r.ox) + n.z * cp.z - OFFSET[name] // >0: camera is beyond that wall
+          goal = 1 - smooth(-0.5, 1.5, outside)
+        }
+        fadeTo(`${r.id}.${name}`, g, goal, dt)
+      })
+      if (r.row === 0) fadeTo(`${r.id}.ceil`, r.ceiling, !eyes && cp.y > r.oy + 4.2 ? 0 : 1, dt)
     })
-    const ceilGoal = cp.y > H - 0.6 ? 0 : 1
-    ceilFade += (ceilGoal - ceilFade) * Math.min(1, dt * 10)
-    if (Math.abs(ceilFade - ceilGoal) < 0.002) ceilFade = ceilGoal
-    if (ceilApplied !== ceilFade) { ceilApplied = ceilFade; setOpacity(room.ceiling, ceilFade) }
+    const roofGoal = !eyes && cp.y > house.roofBase + 0.2 ? 0 : 1
+    roofFade += (roofGoal - roofFade) * Math.min(1, dt * 10)
+    if (Math.abs(roofFade - roofGoal) < 0.002) roofFade = roofGoal
+    if (roofApplied !== roofFade) { roofApplied = roofFade; setOpacity(house.roof, roofFade) }
 
     if (markerLife > 0) {
       markerLife = Math.max(0, markerLife - dt * 1.6)
@@ -344,17 +428,25 @@ export function createGame(container, opts = {}) {
   frame()
 
   return {
-    setMode,
+    setView,
+    takeStairs,
     setAzimuth,
     rotateBy(rad) { setAzimuth(view.azGoal + rad) },
     resetAzimuth() { setAzimuth(0); view.elGoal = view.mode === 'close' ? CLOSE_EL : DEFAULT_EL },
-    /** put your own pictures in the frames: setFrameImage(0, '/me-and-you.jpg') */
-    setFrameImage(i, url) { room.frames[i]?.setImage(url) },
-    frameCount: room.frames.length,
+    /** put your own pictures in the frames: setFrameImage(0, '/me-and-you.jpg'); see frameCount */
+    setFrameImage(i, url) { house.frames[i]?.setImage(url) },
+    frameCount: house.frames.length,
+    roomNames: rooms.map(r => r.name),
     // screenshot helpers (used with ?debug)
     debug: {
-      place(x, z, yaw = me.yaw, pitch = 0) { me.pos.set(x, 0, z); me.yaw = yaw; view.pitch = pitch; me.target = null },
-      partnerAt(x, z, yaw = 0) { partner.pos.set(x, 0, z); partner.yaw = yaw; partner.target = null; wanderAt = 1e9 },
+      placeIn(id, lx, lz, yaw = me.yaw, pitch = 0) {
+        const r = byId(id)
+        me.pos.set(r.ox + lx, r.oy, lz); me.yaw = yaw; view.pitch = pitch; me.path = []
+      },
+      partnerIn(id, lx, lz, yaw = 0) {
+        const r = byId(id)
+        partner.pos.set(r.ox + lx, r.oy, lz); partner.yaw = yaw; partner.path = []; wanderAt = 1e9
+      },
       pause() { wanderAt = 1e9 },
       elevation(v) { view.elGoal = v; view.el = v },
     },

@@ -3,11 +3,13 @@ import { createGame } from './world/game'
 import Compass from './Compass'
 
 const VIEWS = [
+  ['house', 'house'],
   ['room', 'room'],
   ['close', 'close-up'],
   ['eyes', 'my eyes'],
 ]
 const HINTS = {
+  house: 'drag or Q/E to spin · scroll to zoom into a room · WASD or click to move',
   room: 'WASD / arrows or click the floor to move · drag or Q/E to spin · scroll to zoom',
   close: 'WASD / arrows or click the floor to move · drag or Q/E to spin · scroll to zoom',
   eyes: 'W/S walk · A/D turn · drag to look around',
@@ -16,7 +18,7 @@ const HINTS = {
 function App() {
   const mount = useRef(null)
   const game = useRef(null)
-  const [view, setView] = useState({ mode: 'room', az: 0 })
+  const [view, setView] = useState({ mode: 'room', az: 0, room: 'study', stairs: null })
 
   useEffect(() => {
     const g = createGame(mount.current, { onView: setView })
@@ -32,6 +34,7 @@ function App() {
 
       <header className="hud top-left">
         <h1>cc</h1>
+        <p>{view.room}</p>
       </header>
 
       <aside className="hud top-right">
@@ -46,13 +49,19 @@ function App() {
             <button
               key={id}
               className={view.mode === id ? 'on' : ''}
-              onClick={() => game.current?.setMode(id)}
+              onClick={() => game.current?.setView(id)}
             >
               {label}
             </button>
           ))}
         </div>
       </aside>
+
+      {view.stairs && (
+        <button className="hud stairs" onClick={() => game.current?.takeStairs()}>
+          {view.stairs === 'up' ? '▲ go upstairs' : '▼ go downstairs'} <span>space</span>
+        </button>
+      )}
 
       <p className="hud hint">{HINTS[view.mode]}</p>
     </div>
