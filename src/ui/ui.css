@@ -171,7 +171,9 @@ input[type='text'], input:not([type]), .field input, .invite input {
 .day.claimed .gift { color: var(--good); }
 .day.missed { opacity: .45; }
 .day.future { opacity: .6; }
-.notes { display: grid; gap: 4px; }
+.notes { display: grid; gap: 8px; }
+.notes p { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.notes .icon { margin-top: 2px; color: var(--amber-2); }
 
 /* ---------- settings ---------- */
 .settings { display: grid; gap: 22px; }
@@ -197,7 +199,7 @@ input[type='text'], input:not([type]), .field input, .invite input {
 .settings .dev { padding: 12px; border: 1px dashed var(--edge); border-radius: 16px; }
 
 /* ---------- world / couple ---------- */
-.world { display: grid; grid-template-columns: 1fr 280px; gap: 20px; }
+.world-grid { display: grid; grid-template-columns: 1fr 280px; gap: 20px; }
 .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
 .slot { position: relative; display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 18px; border: 1px solid var(--edge); background: var(--panel-2); }
 .slot b { display: block; font-size: 14px; }
@@ -248,7 +250,7 @@ input[type='text'], input:not([type]), .field input, .invite input {
   .shop-main { padding: 14px 16px 18px; }
   .shop-head { flex-direction: column; align-items: flex-start; }
   .grid { grid-template-columns: repeat(2, 1fr); }
-  .ward, .world { grid-template-columns: 1fr; }
+  .ward, .world-grid { grid-template-columns: 1fr; }
   .stage-card { position: static; }
   .perks { grid-template-columns: 1fr; }
   .days { gap: 4px; }

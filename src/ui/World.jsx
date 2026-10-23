@@ -47,7 +47,7 @@ export default function World({ onClose }) {
       </div>
 
       {tab === 'world' && (
-        <div className="world">
+        <div className="world-grid">
           <div className="world-main">
             <div className="slots">{slots}</div>
 
