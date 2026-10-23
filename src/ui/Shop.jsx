@@ -16,7 +16,7 @@ function Pips({ tier }) {
   )
 }
 
-export function ItemCard({ item, game, mode = 'shop', onTry }) {
+export function ItemCard({ item, mode = 'shop', onTry }) {
   const s = useStore()
   const cat = CAT_BY_ID[item.cat]
   const r = rarityOf(item.tier)
@@ -58,7 +58,7 @@ export function ItemCard({ item, game, mode = 'shop', onTry }) {
   )
 }
 
-export default function Shop({ onClose, game, onTry, initial = 'beds' }) {
+export default function Shop({ onClose, onTry, initial = 'beds' }) {
   const s = useStore()
   const [cat, setCat] = useState(initial)
   const [onlyAfford, setOnlyAfford] = useState(false)
@@ -101,7 +101,7 @@ export default function Shop({ onClose, game, onTry, initial = 'beds' }) {
             </label>
           </div>
           <div className="grid">
-            {shown.map(i => <ItemCard key={i.id} item={i} game={game} onTry={onTry} />)}
+            {shown.map(i => <ItemCard key={i.id} item={i} onTry={onTry} />)}
             {shown.length === 0 && <p className="empty">Nothing here is within reach yet. Earn a few more Boxets!</p>}
           </div>
         </div>
