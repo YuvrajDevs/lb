@@ -1,10 +1,12 @@
 import * as THREE from 'three'
 import { buildItem } from './items/index.js'
+import { WARM_YELLOW } from './items/furniture.js'
 import { pool, cone } from './fx.js'
+import { INTERACTIVE, dimLamp, prepCurtain, setCurtain } from './switches.js'
 import { ITEM_BY_ID, CAT_BY_ID } from '../game/catalog.js'
 import { CELL, TABLE_TOP, footprint, cellsFor } from '../game/grid.js'
 import { DEFAULTS } from '../game/defaults.js'
-import { areaOf } from '../game/areas.js'
+import { areaOf, HX, HZ, WINDOWS, SIDE_WIN } from '../game/areas.js'
 import { wallTexture, floorTexture } from './items/decor.js'
 
 // Turns a layout (a list of placed items on the grid) into 3D objects, and lights the room from its best lamp.
@@ -44,8 +46,8 @@ export function footOf(entry) {
 }
 
 // ---------- light colours of lamps and pendants, by tier ----------
-const LAMP_LIT = ['#ffe29a', '#ffa040', '#ff80b0', '#ffbe70', '#ffe9c0', '#ffb070', '#ff8ae0', '#9fe0ff', '#ffc060', '#b8a0ff']
-const PEND_LIT = ['#ffe29a', '#ffbe70', '#ffe9c0', '#ffd38a', '#ffbe70', '#bff7ff', '#ffd9a0', '#d8f0ff', '#ffe29a', '#b8a0ff']
+const LAMP_LIT = WARM_YELLOW
+const PEND_LIT = WARM_YELLOW
 
 /** world position (room-local metres) of the middle of an entry, floor level */
 export function centreOf(area, entry) {
@@ -53,6 +55,15 @@ export function centreOf(area, entry) {
   const ox = area.kind === 'garden' ? area.origin.x : -5.4
   const oz = area.kind === 'garden' ? area.origin.z : -3.6
   return { x: ox + (entry.i + fp.cw / 2) * CELL, z: oz + (entry.j + fp.cd / 2) * CELL }
+}
+
+/** the window on this wall that a piece centred at `u` (metres along the wall from its start) belongs to, if any */
+function windowNear(area, wall, u) {
+  if (area.kind !== 'room') return null
+  let list = []
+  if (wall === 'back' && WINDOWS[area.id]) list = [{ c: (WINDOWS[area.id].x[0] + WINDOWS[area.id].x[1]) / 2 + HX, w: WINDOWS[area.id].x[1] - WINDOWS[area.id].x[0], y0: WINDOWS[area.id].y[0], y1: WINDOWS[area.id].y[1] }]
+  else if ((area.wallFixtures?.[wall] || []).some(f => f.label === 'window')) list = SIDE_WIN.z.map(z => ({ c: z + HZ, w: SIDE_WIN.w, y0: SIDE_WIN.y[0], y1: SIDE_WIN.y[1] }))
+  return list.find(o => Math.abs(o.c - u) < o.w / 2 + 0.8) || null
 }
 
 /** one item instantiated at its grid position (room-local metres; the caller adds it to the room group) */
@@ -73,12 +84,21 @@ export function instantiate(area, entry, y0 = 0) {
   if (info.kind === 'wall') {
     // origin of the wall piece: centre of its width, the bottom at v, pushed against the wall
     const fp = footOf(entry)
-    const u = (entry.u + fp.cw / 2) * CELL
-    const v = entry.v * CELL
-    inner.position.set(-size.cx, v - size.minY, -size.cz)
-    if (entry.wall === 'back') { outer.position.set(ox + u, 0, oz + size.d / 2 + 0.03); outer.rotation.y = 0 }
-    if (entry.wall === 'left') { outer.position.set(ox + size.d / 2 + 0.03, 0, oz + u); outer.rotation.y = Math.PI / 2 }
-    if (entry.wall === 'right') { outer.position.set(-ox - size.d / 2 - 0.03, 0, oz + u); outer.rotation.y = -Math.PI / 2 }
+    let u = (entry.u + fp.cw / 2) * CELL
+    inner.position.set(-size.cx, entry.v * CELL - size.minY, -size.cz)
+    // curtains hung near a window are tailored to it: centred on it, a little wider, rod just above the top
+    const win = item.cat === 'curtains' && windowNear(area, entry.wall, u)
+    if (win) {
+      const w = win.w + 0.8, top = win.y1 + 0.25, bottom = win.y0 - 0.1
+      u = win.c
+      inner.position.set(-size.cx, -size.minY, -size.cz)
+      outer.scale.set(w / size.w, (top - bottom) / size.h, 1)
+      outer.position.y = bottom
+    }
+    const lift = outer.position.y
+    if (entry.wall === 'back') { outer.position.set(ox + u, lift, oz + size.d / 2 + 0.03); outer.rotation.y = 0 }
+    if (entry.wall === 'left') { outer.position.set(ox + size.d / 2 + 0.03, lift, oz + u); outer.rotation.y = Math.PI / 2 }
+    if (entry.wall === 'right') { outer.position.set(-ox - size.d / 2 - 0.03, lift, oz + u); outer.rotation.y = -Math.PI / 2 }
     outer.position.y += y0
     return outer
   }
@@ -98,7 +118,7 @@ export function instantiate(area, entry, y0 = 0) {
  * Builds the whole furnished group for an area. Returns { group, light } where `light` describes the
  * lamp/pendant that should light the room: { x, y, z, color, power } or null.
  */
-export function furnishArea(area, entries, { y0 = 0 } = {}) {
+export function furnishArea(area, entries, { y0 = 0, switches = {} } = {}) {
   const group = new THREE.Group()
   let best = null
   for (const e of entries) {
@@ -107,6 +127,14 @@ export function furnishArea(area, entries, { y0 = 0 } = {}) {
     group.add(obj)
 
     const cat = info.item.cat
+    const sw = switches[e.uid] || {}
+    if (INTERACTIVE[cat]) {
+      // clickable things stay separate meshes (not merged), so a click can find them and they can change
+      obj.userData.interactive = INTERACTIVE[cat]
+      obj.traverse(o => { if (o.isMesh) o.userData.keep = true })
+    }
+    if (cat === 'curtains') { prepCurtain(obj); setCurtain(obj, sw.closed ? 0 : 1) }
+    if (INTERACTIVE[cat] === 'lamp' && sw.off) { dimLamp(obj); continue } // a lamp that is off adds no light
     if (cat === 'lamps' || cat === 'pendants' || cat === 'gardenlights') {
       const t = info.item.tier
       const color = (cat === 'pendants' ? PEND_LIT : LAMP_LIT)[t - 1]
@@ -115,9 +143,14 @@ export function furnishArea(area, entries, { y0 = 0 } = {}) {
       if (area.kind !== 'garden') {
         const floorY = y0 + 0.012
         const r = cat === 'pendants' ? 1.9 + t * 0.12 : 1.1 + t * 0.12
-        pool(group, [c.x, floorY, c.z], color, r, cat === 'pendants' ? 0.3 : 0.26)
-        if (cat === 'pendants' && t >= 2) cone(group, [c.x, y0 + 3.3, c.z], color, 3.1, 1.3 + t * 0.06, 0.1)
-        const power = (cat === 'pendants' ? 40 : 30) + t * (cat === 'pendants' ? 3 : 4) + (e.on ? -6 : 0)
+        const room = { x0: -HX + 0.02, x1: HX - 0.02, z0: -HZ + 0.02, z1: HZ - 0.02 }
+        pool(group, [c.x, floorY, c.z], color, r, cat === 'pendants' ? 0.2 : 0.18, room)
+        // the beam under a pendant may not reach through a wall either
+        const wallGap = Math.min(c.x - room.x0, room.x1 - c.x, c.z - room.z0, room.z1 - c.z)
+        const coneR = Math.min(1.3 + t * 0.06, wallGap - 0.05)
+        if (cat === 'pendants' && t >= 2 && coneR > 0.4) cone(group, [c.x, y0 + 3.3, c.z], color, 3.1, coneR, 0.06)
+        // a calm, warm room light (about half of what it was): soft on the eyes
+        const power = ((cat === 'pendants' ? 40 : 30) + t * (cat === 'pendants' ? 3 : 4) + (e.on ? -6 : 0)) * 0.5
         if (!best || power > best.power) best = { x: c.x, y: worldY, z: c.z, color, power }
       }
     }

@@ -13,8 +13,8 @@ export const DEFAULTS = {
     { id: 'plants-3', at: [4.7, -3.0], rot: 0 },
     { id: 'pendants-3', at: [0.4, -0.3], rot: 0 },
     { id: 'curtains-1', wall: 'back', at: -0.8, v: 1.7 },
-    { id: 'art-2', wall: 'back', at: 2.9, v: 2.0 },
-    { id: 'art-4', wall: 'right', at: -1.8, v: 1.8 },
+    { id: 'art-2', wall: 'back', at: 2.9, v: 1.6 },
+    { id: 'art-4', wall: 'right', at: -1.8, v: 1.75 },
   ],
   bedroom: [
     { id: 'beds-4', at: [-1.8, -1.95], rot: 0 },
@@ -24,7 +24,7 @@ export const DEFAULTS = {
     { id: 'rugs-4', at: [1.0, 1.0], rot: 0 },
     { id: 'pendants-3', at: [-0.4, 0.3], rot: 0 },
     { id: 'curtains-4', wall: 'back', at: 0.4, v: 1.7 },
-    { id: 'art-5', wall: 'back', at: -1.8, v: 2.3 },
+    { id: 'art-5', wall: 'back', at: -3.4, v: 1.45 },
   ],
   kitchen: [
     { id: 'tables-3', at: [-0.6, 0.6], rot: 0 },                       // 0 round table
@@ -36,7 +36,7 @@ export const DEFAULTS = {
     { id: 'pendants-2', at: [-0.6, 0.6], rot: 0 },
     { id: 'plants-3', at: [4.7, -2.8], rot: 0 },
     { id: 'curtains-2', wall: 'back', at: -1.8, v: 1.7 },
-    { id: 'art-4', wall: 'back', at: 4.4, v: 2.3 },
+    { id: 'art-4', wall: 'back', at: 4.4, v: 1.75 },
   ],
   living: [
     { id: 'seating-5', at: [0.5, -3.0], rot: 0 },
@@ -45,10 +45,10 @@ export const DEFAULTS = {
     { id: 'lamps-4', at: [-1.7, -3.2], rot: 0 },
     { id: 'shelves-4', at: [-3.6, -3.35], rot: 0 },
     { id: 'rugs-5', at: [0.5, 1.2], rot: 0 },
-    { id: 'plants-4', at: [-3.2, 3.0], rot: 0 },
+    { id: 'plants-4', at: [-1.4, 3.0], rot: 0 },
     { id: 'pendants-4', at: [0.4, -0.3], rot: 0 },
     { id: 'curtains-3', wall: 'back', at: 0.5, v: 1.7 },
-    { id: 'art-2', wall: 'back', at: -3.6, v: 3.1 },
+    { id: 'art-2', wall: 'left', at: 0.2, v: 1.6 }, // between the TV and the doorway, at eye height (the bookcase stands on the back wall)
   ],
   garden: [
     { id: 'gardenlights-3', at: [-5.0, 6.0] },

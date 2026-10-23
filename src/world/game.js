@@ -5,13 +5,17 @@ import { HX, HZ } from './kit.js'
 import { resolveDefaults, footOf, infoOf } from './furnish.js'
 import { createEditor } from './editor.js'
 import { makeEnvironment } from './env.js'
+import { buildScenery, FOG_COLOR, FOG_NEAR, FOG_FAR } from './scenery.js'
+import { bake } from './bake.js'
+import { setCurtain } from './switches.js'
+import { findZFighting, settleCoplanar } from './zfight.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
-import { AREA_LIST } from '../game/areas.js'
-import { CELL } from '../game/grid.js'
+import { AREA_LIST, areaOf } from '../game/areas.js'
+import { CELL, TABLE_TOP, overlap, floorRect } from '../game/grid.js'
 
 const HALF = 0.42 // cube collision half-extent
 const SPEED = 3.6
@@ -20,10 +24,13 @@ const DEFAULT_EL = 0.05
 const CLOSE_EL = 0.2
 const CLOSE_DIST = 6.5
 const STREET_AZ = 0.14
-const STREET_EL = -0.02
+const STREET_EL = 0.2 // from out over the sea, looking up the cliff at the house
 const FOV = 35
 const DOOR_Z = 1.9 // every doorway between side-by-side rooms sits here
-const CLIMB_TIME = 3.2
+const STAIR_LANE = 0.5 // how far off the middle of the staircase you can still step onto it
+const STEP_UP = 0.6 // the biggest height change one step can make
+const LOOK = 0.0024 // mouse look, radians per pixel
+const EYE = 0.95 // first-person eye height above the cube's underside: about eye level with the windows
 
 const OUT = { // outward wall normals
   back: new THREE.Vector3(0, 0, -1),
@@ -41,13 +48,16 @@ export function createGame(container, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' })
   let maxPR = Math.min(window.devicePixelRatio, 2)
   let pr = maxPR
+  // adaptive resolution never drops below the screen's own pixels (on a sharp screen, not below 1.5x): that is what looked blurry
+  const MIN_PR = Math.max(1, window.devicePixelRatio >= 2 ? 1.25 : window.devicePixelRatio)
+  let minPR = Math.min(maxPR, MIN_PR)
   renderer.setPixelRatio(pr)
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFShadowMap
   renderer.shadowMap.autoUpdate = false // the moon only lights static geometry: render its shadows once
   let shadowFrames = 3
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.15
+  renderer.toneMappingExposure = 1.02
   container.appendChild(renderer.domElement)
 
   const scene = new THREE.Scene()
@@ -65,9 +75,75 @@ export function createGame(container, opts = {}) {
   }
   // the layout of every room: the player's saved one, or the standard furnishing for a new home
   const layout = opts.layout || Object.fromEntries(AREA_LIST.map(id => [id, resolveDefaults(id)]))
+  // repairs for saved homes (and, for pictures, the standard furnishing too):
+  // - furniture standing where the rules now say nothing may go (doorways, the path) is taken out, with anything on it
+  // - wall pieces over a window (windows grew) or a doorway are taken down
+  // - pictures are hung at eye level once (they used to hang far too high), or just above the furniture under them
+  AREA_LIST.forEach(id => {
+    const area = areaOf(id)
+    const list = layout[id] || []
+    const blockedFloor = e => !e.wall && !e.on && infoOf(e.id).kind === 'floor' &&
+      area.fixtures.some(f => f.blocks.includes('floor') && overlap(floorRect(e, footOf(e)), f))
+    const wallRectOf = e => { const fp = footOf(e); return { x0: e.u, x1: e.u + fp.cw, z0: e.v, z1: e.v + fp.cd } }
+    const blockedWall = e => {
+      if (!e.wall) return false
+      const sub = infoOf(e.id).sub
+      return (area.wallFixtures?.[e.wall] || []).some(f => f.blocks.includes(sub) && overlap(wallRectOf(e), { x0: f.u0, x1: f.u1, z0: f.v0, z1: f.v1 }))
+    }
+    // the top (in cells) of the tallest floor piece standing against `wall` under the cells [u0, u1)
+    const furnitureTop = (wall, u0, u1) => {
+      let top = 0
+      list.forEach(o => {
+        if (o.wall || infoOf(o.id).kind !== 'floor') return
+        const fp = footOf(o)
+        const along = wall === 'back' ? [o.i, o.i + fp.cw] : [o.j, o.j + fp.cd]
+        const gap = wall === 'back' ? o.j : wall === 'left' ? o.i : area.cols - (o.i + fp.cw)
+        if (gap > 10 || along[1] <= u0 || along[0] >= u1) return
+        top = Math.max(top, Math.ceil((infoOf(o.id).size.h + (o.on ? TABLE_TOP : 0)) / CELL))
+      })
+      return top
+    }
+    let changed = false
+    const placed = list.map(e => {
+      if (!opts.lowerArt || !e.wall || infoOf(e.id).sub !== 'art') return e
+      const r = wallRectOf(e)
+      const w = r.x1 - r.x0, h = r.z1 - r.z0
+      const eye = Math.max(13, Math.round((2.3 - (h * CELL) / 2) / CELL))
+      const lenOf = wall => (wall === 'back' ? area.cols : area.rows)
+      const fits = next => next.u >= 0 && next.u + w <= lenOf(next.wall) && next.v + h <= 46 && !blockedWall(next) &&
+        !list.some(o => o !== e && o.wall === next.wall && o.wall && infoOf(o.id).kind === 'wall' && overlap(wallRectOf(next), wallRectOf(o)))
+      // eye level where it hangs, or the nearest spot clear of tall furniture: first along the same wall, then the others
+      let next = null
+      for (const wall of [e.wall, ...['back', 'left', 'right'].filter(k => k !== e.wall)]) {
+        const from = wall === e.wall ? e.u : Math.round((lenOf(wall) - w) / 2)
+        for (let d = 0; d <= lenOf(wall) && !next; d += 3) {
+          for (const u of d ? [from - d, from + d] : [from]) {
+            const cand = { ...e, wall, u, v: eye }
+            if (furnitureTop(wall, u, u + w) < eye - 1 && fits(cand)) { next = cand; break }
+          }
+        }
+        if (next) break
+      }
+      // nowhere clear: just above the furniture beneath it
+      if (!next) next = { ...e, v: Math.max(eye, furnitureTop(e.wall, r.x0, r.x1) + 2) }
+      if (Math.abs(next.v - e.v) < 3 && next.u === e.u && next.wall === e.wall) return e
+      if (!fits(next)) return e
+      changed = true
+      return next
+    })
+    const bad = new Set(opts.layout ? placed.filter(e => blockedFloor(e) || blockedWall(e)).map(e => e.uid) : [])
+    if (!bad.size && !changed) return
+    layout[id] = placed.filter(e => !bad.has(e.uid) && !bad.has(e.on))
+    if (opts.layout) opts.onLayoutFix?.(id, layout[id])
+  })
   if (!opts.layout) opts.onLayoutInit?.(layout)
-  const house = buildHouse({ layout, style: opts.style, fence: opts.fence, sign: opts.sign })
+  const house = buildHouse({ layout, style: opts.style, fence: opts.fence, sign: opts.sign, switches: opts.switches })
   scene.add(house.group, house.lights)
+  // the cliff, the sea in front and the magical land behind
+  const scenery = buildScenery()
+  bake(scenery.statics)
+  scene.add(scenery.group)
+  scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR) // the island sits in a thick bank of fog (see scenery.js)
   const { rooms, colliders, stairs: S } = house
   const houseCenter = new THREE.Vector3(0, (house.bounds.yMin + house.bounds.yMax) / 2, 0)
   const houseHalfH = (house.bounds.yMax - house.bounds.yMin) / 2
@@ -75,8 +151,8 @@ export function createGame(container, opts = {}) {
   let composer = null // the glow / grade pipeline, created below (resize() runs before it exists)
 
   // ---- cameras ----
-  const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 200)
-  const eyeCam = new THREE.PerspectiveCamera(76, 1, 0.05, 100)
+  const camera = new THREE.PerspectiveCamera(FOV, 1, 0.5, 1200) // a near plane this far out keeps depth precise: no flicker on distant surfaces
+  const eyeCam = new THREE.PerspectiveCamera(76, 1, 0.1, 1200)
   let active = camera
   const camTarget = new THREE.Vector3().copy(rooms[0].center)
   const view = {
@@ -126,7 +202,9 @@ export function createGame(container, opts = {}) {
   let bloomOn = true
   scene.environment = makeEnvironment(renderer)
   scene.environmentIntensity = 0.3
-  composer = new EffectComposer(renderer)
+  // the glow pipeline renders off-screen, where the canvas's own antialiasing doesn't apply: give it 4x MSAA
+  // and half-float colour so edges stay crisp and the dark gradients don't band
+  composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }))
   composer.setPixelRatio(pr)
   composer.setSize(container.clientWidth, container.clientHeight)
   const renderPass = new RenderPass(scene, camera)
@@ -142,7 +220,7 @@ export function createGame(container, opts = {}) {
     const pos = new THREE.Vector3(room.ox + lx, room.oy, lz)
     cube.group.position.copy(pos)
     scene.add(cube.group)
-    return { cube, pos, path: [], yaw: 0, moving: false, climb: null }
+    return { cube, pos, path: [], yaw: 0, moving: false }
   }
   const byId = id => rooms.find(r => r.id === id)
   const me = makeActor('#ff8fb8', byId('study'), 1.2, 1.6)
@@ -160,7 +238,7 @@ export function createGame(container, opts = {}) {
 
   // ---- view control ----
   const stairPrompt = () => {
-    if (me.climb) return null
+    if (onStair(me.pos.x, me.pos.z)) return null
     if (levelOf(me.pos.y) === 0 && Math.hypot(me.pos.x - S.x, me.pos.z - S.footZ) < 1.5) return 'up'
     if (levelOf(me.pos.y) === 1 && Math.hypot(me.pos.x - S.x, me.pos.z - S.landingZ) < 1.5) return 'down'
     return null
@@ -208,7 +286,7 @@ export function createGame(container, opts = {}) {
   const onKeyDown = e => {
     if (!inputOn || typingNow()) return
     keys.add(e.key.toLowerCase())
-    if (e.key === ' ') { e.preventDefault(); takeStairs() }
+    if (e.key === ' ') e.preventDefault() // Space is held to run (see the movement below); don't scroll the page
   }
   const onKeyUp = e => keys.delete(e.key.toLowerCase())
   const onBlur = () => keys.clear()
@@ -235,7 +313,6 @@ export function createGame(container, opts = {}) {
   }
 
   function clickMove(e) {
-    if (me.climb) return
     const r = el.getBoundingClientRect()
     const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
     ray.setFromCamera(ndc, camera)
@@ -263,8 +340,9 @@ export function createGame(container, opts = {}) {
     drag.moved = true
     drag.x = e.clientX; drag.y = e.clientY
     if (view.mode === 'eyes') {
-      me.yaw += dx * 0.005
-      view.pitch = THREE.MathUtils.clamp(view.pitch + dy * 0.004, -0.8, 0.8)
+      // first person works like the other views: hold anywhere and drag to turn and look up or down
+      me.yaw -= dx * LOOK * 2 // drag right, turn right
+      view.pitch = THREE.MathUtils.clamp(view.pitch + dy * LOOK * 1.7, -1.1, 1.1)
     } else {
       view.az = wrap(view.az - dx * 0.008)
       view.azGoal = view.az
@@ -274,16 +352,113 @@ export function createGame(container, opts = {}) {
   })
   const endDrag = e => {
     if (editing()) { drag = null; return }
-    if (drag && !drag.moved && !closedIn() && e.type === 'pointerup') clickMove(e)
+    // a plain click uses a lamp or curtain if there is one under the pointer; otherwise it walks there
+    if (drag && !drag.moved && e.type === 'pointerup' && !interactAt(e) && !closedIn()) clickMove(e)
     drag = null
   }
+
+  // ---- things you can click: lamps switch off and on, curtains open and close ----
+  let switches = { ...(opts.switches || {}) }
+  house.setSwitches(switches)
+  const curtainAnims = new Map() // obj -> goal openness
+  const tmpV = new THREE.Vector3()
+  const usable = () => [...rooms.map(r => r.placed), house.gardenPlaced]
+  /** what interactive thing (if any) is under the pointer: the first solid surface hit decides */
+  function pick(e) {
+    const r = el.getBoundingClientRect()
+    ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), active)
+    ray.camera = active
+    for (const h of ray.intersectObjects(usable(), true)) {
+      if (!h.object.visible) continue
+      let o = h.object
+      while (o && !o.userData.interactive && !o.userData.uid) o = o.parent
+      // a glow or light pool only counts when it belongs to something clickable (a lamp's halo); otherwise look past it
+      const airy = h.object.isSprite || h.object.material?.blending === THREE.AdditiveBlending
+      if (airy && !o?.userData.interactive) continue
+      // only the bright middle of a lamp's halo counts, so its soft edge doesn't steal clicks meant for things nearby
+      if (h.object.isSprite && h.point.distanceTo(h.object.getWorldPosition(tmpV)) > h.object.scale.x * 0.16) continue
+      if (airy && !h.object.isSprite) continue
+      return o?.userData.interactive ? o : null
+    }
+    return null
+  }
+  const areaOfObj = o => {
+    for (let a = o; a; a = a.parent) {
+      if (a === house.gardenPlaced) return 'garden'
+      const r = rooms.find(rr => rr.placed === a)
+      if (r) return r.id
+    }
+    return null
+  }
+  function interactAt(e) {
+    const o = pick(e)
+    if (!o) return false
+    const uid = o.userData.uid
+    const cur = switches[uid] || {}
+    if (o.userData.interactive === 'curtain') {
+      const closed = !cur.closed
+      switches = { ...switches, [uid]: { ...cur, closed } }
+      curtainAnims.set(o, closed ? 0 : 1)
+      opts.onSfx?.('place')
+    } else {
+      switches = { ...switches, [uid]: { ...cur, off: !cur.off } }
+      const id = areaOfObj(o)
+      house.setSwitches(switches)
+      if (id) house.furnish(id, layout[id], { bakeIt: true })
+      shadowFrames = 3
+      opts.onSfx?.('click')
+    }
+    house.setSwitches(switches)
+    opts.onSwitch?.(uid, switches[uid])
+    return true
+  }
+  // the pointer turns into a hand over things you can use
+  let hoverAt = 0
+  el.addEventListener('pointermove', e => {
+    if (editing() || drag?.moved || e.pointerType !== 'mouse') return
+    const now = performance.now()
+    if (now - hoverAt < 90) return
+    hoverAt = now
+    el.style.cursor = pick(e) ? 'pointer' : ''
+  })
   el.addEventListener('pointerup', endDrag)
   el.addEventListener('pointercancel', endDrag)
+  // zooming: keep scrolling in past the closest view and you drop into your cube's eyes; scroll out to come back
+  let pushIn = 0
   el.addEventListener('wheel', e => {
     e.preventDefault()
-    if (view.mode === 'eyes') return
+    if (Math.abs(e.deltaY) < 1) return
+    const zoomIn = e.deltaY < 0
+    if (view.mode === 'eyes') {
+      if (!zoomIn) { view.mul.close = 0.4; setView('close') }
+      return
+    }
     const [lo, hi] = view.mode === 'room' ? [0.4, mulMax] : view.mode === 'street' ? [0.3, 1.4] : view.mode === 'edit' ? [0.5, 1.6] : [0.4, 2]
-    view.mul[view.mode] = THREE.MathUtils.clamp(view.mul[view.mode] * (e.deltaY > 0 ? 1.1 : 0.9), lo, hi)
+    const at = view.mul[view.mode]
+    // at either end of a view's zoom, a couple more notches hand over to the next view:
+    // out: close-up -> room -> whole house (the room view zoomed right out) -> street; in: the same way back, then your eyes
+    const atEnd = zoomIn ? at <= lo + 1e-3 : at >= hi - 1e-3
+    if (atEnd && view.mode !== 'edit') {
+      if (zoomIn !== (pushIn > 0)) pushIn = 0
+      pushIn += zoomIn ? 1 : -1
+      if (Math.abs(pushIn) < 3) return
+      pushIn = 0
+      if (zoomIn) {
+        if (view.mode === 'street') { setView('house') }
+        else if (view.mode === 'room') { setView('close'); view.mul.close = 2 }
+        else if (view.mode === 'close') {
+          me.yaw = view.az + Math.PI // look the way the camera was looking
+          view.pitch = 0.05
+          setView('eyes')
+        }
+      } else {
+        if (view.mode === 'close') { setView('room'); view.mul.room = 0.6 }
+        else if (view.mode === 'room') setView('street')
+      }
+      return
+    }
+    pushIn = 0
+    view.mul[view.mode] = THREE.MathUtils.clamp(at * (zoomIn ? 0.9 : 1.1), lo, hi)
   }, { passive: false })
 
   // ---- movement ----
@@ -306,14 +481,28 @@ export function createGame(container, opts = {}) {
       furnitureBlocks[0].push({ minX: -12.4 + e.i * CELL, maxX: -12.4 + (e.i + fp.cw) * CELL, minZ: 4.4 + e.j * CELL, maxZ: 4.4 + (e.j + fp.cd) * CELL })
     })
   }
-  const hits = (list, x, z) => list.some(c => x > c.minX - HALF && x < c.maxX + HALF && z > c.minZ - HALF && z < c.maxZ + HALF)
+  const hits = (list, x, z, skipStair = false) => list.some(c => !(skipStair && c.stair) && x > c.minX - HALF && x < c.maxX + HALF && z > c.minZ - HALF && z < c.maxZ + HALF)
+  // standing in line with the staircase: its side colliders step aside so you can walk onto it from either end
+  const inStairColumn = x => Math.abs(x - S.x) < STAIR_LANE
+  const onStair = (x, z) => inStairColumn(x) && z >= S.topZ && z <= S.startZ
   function blocked(x, z, level) {
-    return hits(colliders[level], x, z) || hits(furnitureBlocks[level], x, z)
+    return hits(colliders[level], x, z, inStairColumn(x)) || hits(furnitureBlocks[level], x, z)
+  }
+  /** the height someone at (x, z) would stand at, coming from height y; null if they can't step there */
+  function standY(x, z, y) {
+    if (onStair(x, z)) {
+      const sy = stairY(z)
+      return Math.abs(sy - y) < STEP_UP ? sy : null
+    }
+    const lvl = levelOf(y)
+    const floor = lvl * FH
+    if (Math.abs(floor - y) > STEP_UP) return null // no stepping off the side halfway up
+    return blocked(x, z, lvl) ? null : floor
   }
   /** if furniture was just placed on top of someone, step them to the nearest free spot */
   function unstick(a) {
     const lvl = levelOf(a.pos.y)
-    if (!blocked(a.pos.x, a.pos.z, lvl)) return
+    if (onStair(a.pos.x, a.pos.z) || !blocked(a.pos.x, a.pos.z, lvl)) return
     for (let r = 0.2; r < 4; r += 0.2) {
       for (let k = 0; k < 16; k++) {
         const x = a.pos.x + Math.cos((k / 16) * 6.283) * r, z = a.pos.z + Math.sin((k / 16) * 6.283) * r
@@ -323,46 +512,35 @@ export function createGame(container, opts = {}) {
   }
   rebuildBlocks()
   function walk(a, dir, dt, speed, turnToward = true) {
-    const lvl = levelOf(a.pos.y)
     let moved = false
+    if (onStair(a.pos.x, a.pos.z)) speed *= 0.6 // the steps are steep: climb at a calmer pace
     const dx = dir.x * speed * dt, dz = dir.z * speed * dt
-    if (!blocked(a.pos.x + dx, a.pos.z, lvl)) { a.pos.x += dx; moved = moved || dx !== 0 }
-    if (!blocked(a.pos.x, a.pos.z + dz, lvl)) { a.pos.z += dz; moved = moved || dz !== 0 }
+    let y = dx && standY(a.pos.x + dx, a.pos.z, a.pos.y)
+    if (dx && y !== null) { a.pos.x += dx; a.pos.y = y; moved = true }
+    y = dz && standY(a.pos.x, a.pos.z + dz, a.pos.y)
+    if (dz && y !== null) { a.pos.z += dz; a.pos.y = y; moved = true }
     if (turnToward && dir.lengthSq() > 0) {
       a.yaw += wrap(Math.atan2(dir.x, dir.z) - a.yaw) * Math.min(1, dt * 14)
     }
     return moved
   }
 
-  // the staircase: step on the foot (downstairs) or landing (upstairs), press Space
+  // the staircase is a ramp you walk up and down; Space (or the button) just walks you there and over it
   const stairY = z => FH * THREE.MathUtils.clamp((S.startZ - z) / (S.startZ - S.topZ), 0, 1)
   function takeStairs() {
     const p = stairPrompt()
     if (!p) return
-    me.path = []
-    me.climb = { dir: p, s: 0 }
+    me.path = stairRoute(me, p)
   }
-  /** a way to the stairs that goes round to the front of them first, so it never cuts through the staircase */
+  /** a way over the stairs that lines up in front of them first, so it never cuts through the staircase */
   function stairRoute(a, dir) {
-    const z = dir === 'up' ? S.footZ : S.landingZ
+    const from = dir === 'up' ? S.footZ : S.landingZ
+    const to = dir === 'up' ? S.landingZ : S.footZ
     return [
-      ...routeTo(a, new THREE.Vector3(S.x - 1.5, a.pos.y, z)),
-      new THREE.Vector3(S.x, a.pos.y, z),
+      ...routeTo(a, new THREE.Vector3(S.x - 1.5, a.pos.y, from)),
+      new THREE.Vector3(S.x, a.pos.y, from),
+      new THREE.Vector3(S.x, a.pos.y, to),
     ]
-  }
-  function updateClimb(a, dt) {
-    const c = a.climb
-    c.s = Math.min(1, c.s + dt / CLIMB_TIME)
-    const e = c.s * c.s * (3 - 2 * c.s)
-    const up = c.dir === 'up'
-    const z0 = up ? S.footZ : S.landingZ
-    const z1 = up ? S.landingZ : S.footZ
-    a.pos.x = S.x
-    a.pos.z = z0 + (z1 - z0) * e
-    a.pos.y = stairY(a.pos.z)
-    a.yaw += wrap((up ? Math.PI : 0) - a.yaw) * Math.min(1, dt * 8)
-    a.moving = true
-    if (c.s >= 1) { a.pos.y = up ? FH : 0; a.climb = null }
   }
 
   // ---- the room editor ----
@@ -382,7 +560,12 @@ export function createGame(container, opts = {}) {
   // ---- loop ----
   let last = performance.now()
   let elapsed = 0
-  let avgMs = 16
+  let avgMs = 1 // frame time relative to the budget
+  let fpsCap = 60
+  let lastInput = performance.now()
+  const touched = () => { lastInput = performance.now() }
+  ;['pointerdown', 'pointermove', 'wheel'].forEach(n => renderer.domElement.addEventListener(n, touched, { passive: true }))
+  window.addEventListener('keydown', touched)
   let frameCount = 0
   let raf = 0
   let wanderAt = 3
@@ -393,6 +576,9 @@ export function createGame(container, opts = {}) {
   const applied = {}
   let roofFade = 1, roofApplied = -1
   let doorOpen = 0
+  let calmMotion = false
+  let sceneryT = 0
+  let gateOpen = 0
 
   function setOpacity(group, k) {
     group.traverse(o => {
@@ -409,7 +595,7 @@ export function createGame(container, opts = {}) {
   }
   function fadeTo(key, group, goal, dt) {
     const cur = fade[key] ?? 1
-    let v = cur + (goal - cur) * Math.min(1, dt * 10)
+    let v = frameCount < 3 ? goal : cur + (goal - cur) * Math.min(1, dt * 10) // start already faded: no ghost wall on load
     if (Math.abs(v - goal) < 0.002) v = goal
     fade[key] = v
     if (applied[key] !== v) { applied[key] = v; setOpacity(group, v) }
@@ -418,14 +604,21 @@ export function createGame(container, opts = {}) {
   function frame() {
     raf = requestAnimationFrame(frame)
     const nowMs = performance.now()
+    // frame budget: never faster than the cap (a 120 Hz screen would otherwise draw everything twice as often),
+    // half speed once nobody has touched anything for a few seconds, and barely at all in a background window
+    const calm = nowMs - lastInput > 4000 && !keys.size && !me.path.length
+    const targetMs = document.hidden ? 1000 / 4 : !document.hasFocus() ? 1000 / 20 : calm ? 1000 / 30 : 1000 / fpsCap
+    if (nowMs - last < targetMs - 2) return
     const dt = Math.min((nowMs - last) / 1000, 0.05)
-    avgMs += ((nowMs - last) - avgMs) * 0.05
+    const slowness = (nowMs - last) / targetMs // 1 = on budget
+    avgMs += (slowness - avgMs) * 0.05
     last = nowMs
     elapsed += dt
+    if (frameCount % 120 === 0) settleCoplanar(scene) // new furniture, lamps switched: settle their materials too
     if (++frameCount % 45 === 0) {
-      // adaptive resolution: back off when frames get slow, creep back up when there is headroom
-      if (avgMs > 24 && pr > 1) { pr = Math.max(1, pr - 0.25); renderer.setPixelRatio(pr); renderer.setSize(container.clientWidth, container.clientHeight); composer.setPixelRatio(pr); composer.setSize(container.clientWidth, container.clientHeight) }
-      else if (avgMs < 13 && pr < maxPR) { pr = Math.min(maxPR, pr + 0.25); renderer.setPixelRatio(pr); renderer.setSize(container.clientWidth, container.clientHeight); composer.setPixelRatio(pr); composer.setSize(container.clientWidth, container.clientHeight) }
+      // adaptive resolution: back off when frames can't keep to the budget, creep back up when there is headroom
+      if (avgMs > 1.45 && pr > minPR) { pr = Math.max(minPR, pr - 0.25); renderer.setPixelRatio(pr); renderer.setSize(container.clientWidth, container.clientHeight); composer.setPixelRatio(pr); composer.setSize(container.clientWidth, container.clientHeight) }
+      else if (avgMs < 1.08 && pr < maxPR) { pr = Math.min(maxPR, pr + 0.25); renderer.setPixelRatio(pr); renderer.setSize(container.clientWidth, container.clientHeight); composer.setPixelRatio(pr); composer.setSize(container.clientWidth, container.clientHeight) }
     }
     const t = elapsed
     const eyes = view.mode === 'eyes'
@@ -435,76 +628,56 @@ export function createGame(container, opts = {}) {
       if (keys.has('q')) { view.azGoal = wrap(view.azGoal + dt * 1.6); view.az = view.azGoal }
       if (keys.has('e')) { view.azGoal = wrap(view.azGoal - dt * 1.6); view.az = view.azGoal }
     }
-    view.az = wrap(view.az + wrap(view.azGoal - view.az) * Math.min(1, dt * 8))
-    view.el += (view.elGoal - view.el) * Math.min(1, dt * 6)
+    // reduce motion: the camera jumps to where it is going instead of swooping, and the scenery drifts slowly
+    const ease = rate => (calmMotion ? 1 : Math.min(1, dt * rate))
+    view.az = wrap(view.az + wrap(view.azGoal - view.az) * ease(8))
+    view.el += (view.elGoal - view.el) * ease(6)
 
     // --- my movement ---
-    if (me.climb) {
-      updateClimb(me, dt)
+    dir.set(0, 0, 0)
+    const fwd = keys.has('w') || keys.has('arrowup')
+    const bck = keys.has('s') || keys.has('arrowdown')
+    const rightK = keys.has('d') || keys.has('arrowright')
+    const leftK = keys.has('a') || keys.has('arrowleft')
+    if (eyes) {
+      // first person: W/S walk, A/D step sideways, the arrow keys (or the mouse) turn
+      me.yaw += ((keys.has('arrowleft') ? 1 : 0) - (keys.has('arrowright') ? 1 : 0)) * TURN * dt
+      const f = (fwd ? 1 : 0) - (bck ? 1 : 0)
+      const side = (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0)
+      dir.set(Math.sin(me.yaw) * f - Math.cos(me.yaw) * side, 0, Math.cos(me.yaw) * f + Math.sin(me.yaw) * side)
     } else {
-      dir.set(0, 0, 0)
-      const fwd = keys.has('w') || keys.has('arrowup')
-      const bck = keys.has('s') || keys.has('arrowdown')
-      const rightK = keys.has('d') || keys.has('arrowright')
-      const leftK = keys.has('a') || keys.has('arrowleft')
-      let iMoved = false
-      if (eyes) {
-        me.yaw += ((leftK ? 1 : 0) - (rightK ? 1 : 0)) * TURN * dt
-        const f = (fwd ? 1 : 0) - (bck ? 1 : 0)
-        if (f) {
-          dir.set(Math.sin(me.yaw) * f, 0, Math.cos(me.yaw) * f)
-          iMoved = walk(me, dir, dt, SPEED * 0.8, false)
-          // walking straight into the foot (or the top landing) of the stairs takes them
-          const p = stairPrompt()
-          if (p && f > 0) {
-            const gx = S.x - me.pos.x
-            const gz = (p === 'up' ? S.footZ : S.landingZ) - me.pos.z
-            const toward = (p === 'up' ? -1 : 1) * Math.cos(me.yaw) // facing -z to go up, +z to go down
-            if (Math.hypot(gx, gz) < 0.9 && toward > 0.5) takeStairs()
-          }
-        }
-      } else {
-        const up = new THREE.Vector3(-Math.sin(view.az), 0, -Math.cos(view.az))
-        const rt = new THREE.Vector3(Math.cos(view.az), 0, -Math.sin(view.az))
-        if (fwd) dir.add(up)
-        if (bck) dir.sub(up)
-        if (rightK) dir.add(rt)
-        if (leftK) dir.sub(rt)
-        if (dir.lengthSq() > 0) {
-          me.path = []
-          dir.normalize()
-        } else if (me.path.length) {
-          toTarget.subVectors(me.path[0], me.pos)
-          toTarget.y = 0
-          if (toTarget.length() < 0.15) me.path.shift()
-          else dir.copy(toTarget).normalize()
-        }
-        iMoved = dir.lengthSq() > 0 && walk(me, dir, dt, SPEED)
-        if (me.path.length && dir.lengthSq() > 0 && !iMoved) me.path = []
-      }
-      me.moving = iMoved
+      const up = new THREE.Vector3(-Math.sin(view.az), 0, -Math.cos(view.az))
+      const rt = new THREE.Vector3(Math.cos(view.az), 0, -Math.sin(view.az))
+      if (fwd) dir.add(up)
+      if (bck) dir.sub(up)
+      if (rightK) dir.add(rt)
+      if (leftK) dir.sub(rt)
     }
+    const steering = dir.lengthSq() > 0
+    if (steering) {
+      me.path = []
+      dir.normalize()
+    } else if (me.path.length) {
+      toTarget.subVectors(me.path[0], me.pos)
+      toTarget.y = 0
+      if (toTarget.length() < 0.15) me.path.shift()
+      else dir.copy(toTarget).normalize()
+    }
+    const run = keys.has(' ') ? 1.8 : 1 // hold Space to run
+    const iMoved = dir.lengthSq() > 0 && walk(me, dir, dt, (eyes ? SPEED * 0.8 : SPEED) * run, !eyes || !steering)
+    if (me.path.length && dir.lengthSq() > 0 && !iMoved) me.path = []
+    me.moving = iMoved
 
     // --- partner wanders between the rooms on its storey ---
-    if (partner.climb) {
-      updateClimb(partner, dt)
-      dir.set(0, 0, 0)
-    } else if (partner.path.length) {
+    if (partner.path.length) {
       toTarget.subVectors(partner.path[0], partner.pos)
       toTarget.y = 0
       if (toTarget.length() < 0.18) partner.path.shift()
       else dir.copy(toTarget).normalize()
     } else {
       dir.set(0, 0, 0)
-      if (partner.stairGoal) {
-        // arrived at the foot (or the top) of the stairs: take them
-        const gz = partner.stairGoal === 'up' ? S.footZ : S.landingZ
-        if (Math.hypot(partner.pos.x - S.x, partner.pos.z - gz) < 1.0) partner.climb = { dir: partner.stairGoal, s: 0 }
-        partner.stairGoal = null
-      } else if (t > wanderAt && Math.random() < 0.3 && !partner.climb) {
-        const goingUp = levelOf(partner.pos.y) === 0
-        partner.stairGoal = goingUp ? 'up' : 'down'
-        partner.path = stairRoute(partner, goingUp ? 'up' : 'down')
+      if (t > wanderAt && Math.random() < 0.3) {
+        partner.path = stairRoute(partner, levelOf(partner.pos.y) === 0 ? 'up' : 'down')
         wanderAt = t + 8 + Math.random() * 6
       } else if (t > wanderAt) {
         const lvl = levelOf(partner.pos.y)
@@ -515,9 +688,9 @@ export function createGame(container, opts = {}) {
         wanderAt = t + 6 + Math.random() * 8
       }
     }
-    const pMoved = !partner.climb && dir.lengthSq() > 0 && walk(partner, dir, dt, SPEED * 0.7)
-    if (partner.path.length && dir.lengthSq() > 0 && !pMoved && !partner.climb) { partner.path = []; partner.stairGoal = null }
-    if (!partner.climb) partner.moving = pMoved
+    const pMoved = dir.lengthSq() > 0 && walk(partner, dir, dt, SPEED * 0.7)
+    if (partner.path.length && dir.lengthSq() > 0 && !pMoved) partner.path = []
+    partner.moving = pMoved
 
     ;[me, partner].forEach(a => {
       a.cube.group.position.copy(a.pos)
@@ -526,11 +699,11 @@ export function createGame(container, opts = {}) {
     })
 
     // --- cameras ---
-    const k = 1 - Math.exp(-dt * 6)
+    const k = calmMotion ? 1 : 1 - Math.exp(-dt * 6)
     const myRoom = roomAt(me)
     if (eyes) {
       const fx = Math.sin(me.yaw), fz = Math.cos(me.yaw)
-      eyeCam.position.set(me.pos.x + fx * 0.3, me.pos.y + FLOAT + 0.52, me.pos.z + fz * 0.3)
+      eyeCam.position.set(me.pos.x + fx * 0.3, me.pos.y + FLOAT + EYE, me.pos.z + fz * 0.3)
       eyeCam.lookAt(
         eyeCam.position.x + fx * Math.cos(view.pitch),
         eyeCam.position.y - Math.sin(view.pitch),
@@ -596,16 +769,28 @@ export function createGame(container, opts = {}) {
       if (r.row === 0 || editedHere) fadeTo(`${r.id}.ceil`, r.ceiling, !closedIn() && (cp.y > r.oy + 4.2 || editedHere) ? 0 : 1, dt)
     })
     const roofGoal = !closedIn() && cp.y > house.roofBase + 0.2 ? 0 : 1
-    roofFade += (roofGoal - roofFade) * Math.min(1, dt * 10)
+    roofFade += (roofGoal - roofFade) * (frameCount < 3 ? 1 : Math.min(1, dt * 10))
     if (Math.abs(roofFade - roofGoal) < 0.002) roofFade = roofGoal
-    // the street appears when seen from the street view, or when you step out of the front door in first person
-    const outside = me.pos.z > HZ + 0.6 && levelOf(me.pos.y) === 0
-    fadeTo('street', house.streetProps, view.mode === 'street' || (eyes && outside) ? 1 : 0, dt)
+    sceneryT += calmMotion ? dt * 0.25 : dt
+    scenery.update(sceneryT, pr, container.clientHeight)
     // front door swings open when you walk up to it
     const dd = Math.hypot(me.pos.x - house.door.x, me.pos.z - (HZ + 1.0))
     doorOpen += ((dd < 2.6 && levelOf(me.pos.y) === 0 ? 1 : 0) - doorOpen) * Math.min(1, dt * 5)
     house.door.pivot.rotation.y = -1.75 * doorOpen
+    // the garden gate swings outward the same way when you come near it, from either side
+    const gd = Math.hypot(me.pos.x, me.pos.z - house.gate.z)
+    gateOpen += ((gd < 2.4 && levelOf(me.pos.y) === 0 ? 1 : 0) - gateOpen) * Math.min(1, dt * 5)
+    house.gate.leaves.forEach(l => { l.pivot.rotation.y = l.side * 1.6 * gateOpen })
     if (roofApplied !== roofFade) { roofApplied = roofFade; setOpacity(house.roof, roofFade) }
+
+    // curtains glide open or shut
+    curtainAnims.forEach((goal, obj) => {
+      const c = obj.userData.curtain
+      if (!c) { curtainAnims.delete(obj); return }
+      const o = c.o + (goal - c.o) * Math.min(1, dt * 6)
+      setCurtain(obj, Math.abs(o - goal) < 0.002 ? goal : o)
+      if (c.o === goal) curtainAnims.delete(obj)
+    })
 
     if (markerLife > 0) {
       markerLife = Math.max(0, markerLife - dt * 1.6)
@@ -620,6 +805,14 @@ export function createGame(container, opts = {}) {
     if (shadowFrames > 0) { renderer.shadowMap.needsUpdate = true; shadowFrames-- }
     if (bloomOn) { renderPass.camera = active; composer.render() } else renderer.render(scene, active)
   }
+  // textures seen at a slant (floors, roads, signs) stay sharp instead of smearing
+  const aniso = renderer.capabilities.getMaxAnisotropy()
+  scene.traverse(o => {
+    const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []
+    mats.forEach(m => ['map', 'emissiveMap', 'roughnessMap'].forEach(k => { if (m[k] && m[k].anisotropy < aniso) { m[k].anisotropy = aniso; m[k].needsUpdate = true } }))
+  })
+
+  settleCoplanar(scene)
   frame()
 
   return {
@@ -680,11 +873,19 @@ export function createGame(container, opts = {}) {
     setFence(tier) { house.setFence(tier); shadowFrames = 3 },
     setSign(tier) { house.setSign(tier) },
     /** 'low' | 'medium' | 'high': caps the render sharpness */
+    /** the Reduce motion setting */
+    setReduceMotion(b) { calmMotion = !!b },
     setQuality(q) {
       const cap = { low: 1, medium: 1.5, high: 2 }[q] || 2
       maxPR = Math.min(window.devicePixelRatio, cap)
-      pr = Math.min(pr, maxPR)
+      minPR = Math.min(MIN_PR, maxPR)
+      pr = q === 'high' ? maxPR : Math.min(pr, maxPR)
       bloomOn = q !== 'low' // the glow is the most expensive part: the battery-saver setting drops it
+      fpsCap = q === 'low' ? 30 : 60
+      // edge smoothing for the glow pipeline: 4x is lovely but heavy, 2x is plenty at 1.5x sharpness
+      const samples = { low: 0, medium: 2, high: 4 }[q] ?? 2
+      ;[composer.renderTarget1, composer.renderTarget2].forEach(rt => { if (rt.samples !== samples) { rt.samples = samples; rt.dispose() } })
+      avgMs = 1
       renderer.setPixelRatio(pr)
       renderer.setSize(container.clientWidth, container.clientHeight)
       composer.setPixelRatio(pr)
@@ -708,6 +909,13 @@ export function createGame(container, opts = {}) {
     roomNames: rooms.map(r => r.name),
     // screenshot helpers (used with ?debug)
     debug: {
+      scene, house, three: THREE, camera: () => active, canvas: renderer.domElement,
+      /** list every spot where two surfaces would flicker against each other (see zfight.js) */
+      zfight(o) { return findZFighting(scene, o) },
+      pickAt(clientX, clientY) { const o = pick({ clientX, clientY }); return o ? { id: o.userData.itemId, kind: o.userData.interactive } : null },
+      useAt(clientX, clientY) { return interactAt({ clientX, clientY }) },
+      /** run frames by hand (a hidden browser tab barely runs them) */
+      tick(n = 1) { for (let i = 0; i < n; i++) { last -= 100; frame() } },
       placeIn(id, lx, lz, yaw = me.yaw, pitch = 0) {
         const r = byId(id)
         me.pos.set(r.ox + lx, r.oy, lz); me.yaw = yaw; view.pitch = pitch; me.path = []
@@ -719,11 +927,10 @@ export function createGame(container, opts = {}) {
       pause() { wanderAt = 1e9 },
       forceStairs() {
         wanderAt = 0
-        partner.stairGoal = levelOf(partner.pos.y) === 0 ? 'up' : 'down'
-        partner.path = stairRoute(partner, partner.stairGoal)
+        partner.path = stairRoute(partner, levelOf(partner.pos.y) === 0 ? 'up' : 'down')
         wanderAt = 1e9
       },
-      partnerWhere() { return { x: +partner.pos.x.toFixed(2), y: +partner.pos.y.toFixed(2), z: +partner.pos.z.toFixed(2), climbing: !!partner.climb } },
+      partnerWhere() { return { x: +partner.pos.x.toFixed(2), y: +partner.pos.y.toFixed(2), z: +partner.pos.z.toFixed(2), climbing: onStair(partner.pos.x, partner.pos.z) } },
       where() { return { x: +me.pos.x.toFixed(2), y: +me.pos.y.toFixed(2), z: +me.pos.z.toFixed(2), room: roomAt(me).name, door: +doorOpen.toFixed(2) } },
       blockedAt(level, x, z) { return blocked(x, z, level) ? colliders[level].filter(c => x > c.minX - HALF && x < c.maxX + HALF && z > c.minZ - HALF && z < c.maxZ + HALF) : false },
       // flood-fill the walkable floor of both storeys + garden and report what is connected
@@ -778,6 +985,7 @@ export function createGame(container, opts = {}) {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
+      window.removeEventListener('keydown', touched)
       composer.dispose()
       renderer.dispose()
       container.innerHTML = ''

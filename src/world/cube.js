@@ -38,7 +38,7 @@ export function createCube(color) {
 
   const eyes = [-1, 1].map(s => {
     const e = new THREE.Mesh(eyeGeo, eyeMat)
-    e.position.set(s * 0.19, 0.07, SIZE / 2 + 0.002)
+    e.position.set(s * 0.19, 0.07, SIZE / 2 + 0.012) // clear of the face, or the two flicker from afar
     body.add(e)
     return e
   })

@@ -47,6 +47,8 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 
 .hint { left: 20px; bottom: 22px; transform: none; font-size: 11px; color: var(--muted); opacity: .8; }
 .stairs { bottom: 96px; }
+.look-tip { left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #fff; background: rgba(0, 0, 0, 0.55); padding: 8px 14px; border-radius: 10px; pointer-events: none; animation: tipOut 4s ease forwards; }
+@keyframes tipOut { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 
 .toasts { position: absolute; z-index: 40; top: 18px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
 .toast { display: flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px; font-size: 13px; background: var(--panel-solid); border: 1px solid var(--edge); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); animation: toastIn .25s ease; }
@@ -478,3 +480,18 @@ body, button, input { font-family: 'Oswald', system-ui, sans-serif; }
 .big-num { font-weight: 600; }
 .day .gift { border-radius: 10px; }
 .meter, .meter i { border-radius: 4px; }
+@media (pointer: coarse) { .look-tip { display: none; } }
+/* phone held upright: the move pad sits above the camera buttons, and the "turn sideways" note sits under the header, not on it */
+@media (max-width: 760px) and (orientation: portrait) {
+  .rotate-note { top: 130px; }
+}
+
+/* the camera picker: an eye under the compass that opens a short list of views */
+.view-pick { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-top: 10px; }
+.eye-btn { width: 40px; height: 40px; color: #fff; background: rgba(0, 0, 0, 0.8); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 10px 36px rgba(0, 0, 0, 0.5); }
+.eye-btn.on { background: #ffb347; color: #1a1006; border-color: #ffb347; }
+.views.menu { display: flex; flex-direction: column; gap: 4px; padding: 6px; min-width: 132px; }
+.views.menu button { text-align: left; }
+@media (max-width: 760px) and (orientation: portrait) {
+  .top-right .views.menu { position: static; transform: none; max-width: none; overflow: visible; }
+}

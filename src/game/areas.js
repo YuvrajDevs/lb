@@ -12,9 +12,23 @@ const uBack = x => cx(x)
 const uSide = z => cz(z)
 
 const DOOR_Z = [0.9, 2.9]
+// the real window in each room's back wall: x range and height range (metres). Low and wide, so a cube standing
+// in the room looks straight out at the land behind the house. The kitchen's sits above the counter and taps.
+// the windows on the open front wall and on the outer side walls: real openings, low and big
+export const FRONT_WIN = { w: 1.9, y: [1.25, 3.85] }
+export const SIDE_WIN = { w: 1.7, z: [-1.4, 1.6], y: [1.25, 3.85] }
+export const BALCONY_DOOR = { w: 1.4, y: [0.02, 3.0] } // an open doorway you can walk through
+const sideWindowWalls = () => SIDE_WIN.z.map(z => wallBox(uSide(z - SIDE_WIN.w / 2 - 0.5), uSide(z + SIDE_WIN.w / 2 + 0.5), Math.round(SIDE_WIN.y[0] / CELL), Math.round(SIDE_WIN.y[1] / CELL), ['art'], 'window'))
+export const WINDOWS = {
+  study: { x: [-2.6, 1.0], y: [1.25, 4.25] },
+  bedroom: { x: [-0.9, 2.1], y: [1.25, 4.25] },
+  kitchen: { x: [-3.7, 0.1], y: [1.75, 4.25] }, // above the counter and its tap
+  living: { x: [-1.4, 2.4], y: [1.25, 4.25] },
+}
 const doorFloor = side => (side === 'left' ? box(-HX, DOOR_Z[0], -HX + 1.2, DOOR_Z[1], ['floor'], 'doorway') : box(HX - 1.2, DOOR_Z[0], HX, DOOR_Z[1], ['floor'], 'doorway'))
 const doorWall = () => wallBox(uSide(DOOR_Z[0]), uSide(DOOR_Z[1]), 0, 34, ['art', 'curtain'], 'door')
-const windowWall = (x0, x1) => wallBox(uBack(x0), uBack(x1), 21, 41, ['art'], 'window')
+// (art keeps half a metre clear either side of a window, where its curtains hang)
+const windowWall = id => wallBox(uBack(WINDOWS[id].x[0] - 0.5), uBack(WINDOWS[id].x[1] + 0.5), Math.round(WINDOWS[id].y[0] / CELL), Math.round(WINDOWS[id].y[1] / CELL), ['art'], 'window')
 
 function room(id, label, o) {
   return {
@@ -26,31 +40,35 @@ function room(id, label, o) {
 
 export const AREAS = {
   study: room('study', 'Study', {
-    window: [-2.2, 0.6],
+    window: WINDOWS.study.x,
     fixtures: [doorFloor('right')],
-    back: [windowWall(-2.2, 0.6)],
+    back: [windowWall('study')],
     right: [doorWall()],
+    left: sideWindowWalls(),
   }),
   bedroom: room('bedroom', 'Bedroom', {
-    window: [-1.0, 1.8],
+    window: WINDOWS.bedroom.x,
     fixtures: [doorFloor('left'), box(3.7, -1.2, HX, 1.6, ['floor', 'flat'], 'stairwell')],
-    back: [windowWall(-1.0, 1.8)],
+    back: [windowWall('bedroom')],
     left: [doorWall()],
+    right: sideWindowWalls(),
   }),
   kitchen: room('kitchen', 'Kitchen', {
-    window: [-3.2, -0.4],
+    window: WINDOWS.kitchen.x,
     fixtures: [doorFloor('right'), box(-HX, -HZ, 1.15, -HZ + 1.15, ['floor', 'flat'], 'counter'), box(1.5, -HZ, 2.9, -HZ + 1.05, ['floor', 'flat'], 'fridge')],
-    back: [windowWall(-3.2, -0.4), wallBox(0, uBack(1.15), 0, 20, ['art', 'curtain'], 'counter'), wallBox(uBack(1.5), uBack(2.9), 0, 35, ['art', 'curtain'], 'fridge')],
+    back: [windowWall('kitchen'), wallBox(0, uBack(1.15), 0, 14, ['art', 'curtain'], 'counter'), wallBox(uBack(1.5), uBack(2.9), 0, 35, ['art', 'curtain'], 'fridge')],
     right: [doorWall()],
+    left: sideWindowWalls(),
   }),
   living: room('living', 'Living room', {
-    window: [-1.0, 2.0],
+    window: WINDOWS.living.x,
     fixtures: [
       doorFloor('left'), box(3.7, -1.1, HX, 3.3, ['floor', 'flat'], 'stairs'),
       box(-HX, -2.95, -HX + 0.9, -0.45, ['floor'], 'TV stand'),
+      box(-4.5, 1.8, -2.3, HZ, ['floor', 'flat'], 'front door'), // keep the way in and out clear
       box(3.9, -1.0, HX, 1.4, ['ceiling'], 'stairwell'), // the stairwell opens the ceiling too
     ],
-    back: [windowWall(-1.0, 2.0)],
+    back: [windowWall('living')],
     left: [doorWall(), wallBox(uSide(-2.95), uSide(-0.45), 0, 25, ['art', 'curtain'], 'TV')],
     right: [wallBox(uSide(-1.0), uSide(2.45), 0, WALL_ROWS, ['art', 'curtain'], 'stairs')],
   }),
@@ -64,7 +82,7 @@ export const GARDEN = {
   fixtures: (() => {
     const g = (x0, z0, x1, z1, label) => ({ x0: Math.round((x0 + 12.4) / CELL), z0: Math.round((z0 - 4.4) / CELL), x1: Math.round((x1 + 12.4) / CELL), z1: Math.round((z1 - 4.4) / CELL), blocks: ['floor'], label })
     return [
-      g(-0.8, 4.4, 3.6, 8.9, 'garden path'),
+      g(-1.6, 4.4, 3.6, 8.9, 'garden path'), // from the front door to the gate
       g(-7.2, 7.9, -2.8, 8.9, 'name sign'),
       g(-8.3, 8.0, -7.6, 8.9, 'sign lamp'),
       g(-11.3, 4.4, -9.5, 6.2, 'bush'),

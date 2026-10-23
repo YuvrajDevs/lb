@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { WARM_YELLOW } from './furniture.js'
 import { std, box, cyl, sphere, canvas, finish, gingham, artTexture } from '../kit.js'
 import { glow, pool } from '../fx.js'
 
@@ -189,7 +190,7 @@ export function signs(t, g, text = 'Sera & DeM') {
 }
 
 export function gardenlights(t, g) {
-  const lit = at(['#9fffd0', '#ffe29a', '#ffbe70', '#ffbe70', '#ffe29a', '#ff8a3c', '#fff0c8', '#ffe2a8', '#9fe0ff', '#c8ff8a'], t)
+  const lit = at(WARM_YELLOW, t)
   const iron = '#2f3138'
   if (t === 1) { cyl(g, 0.03, 0.4, [0, 0, 0], iron, {}, 6); sphere(g, 0.1, [0, 0.5, 0], '#d8fff0', em(lit, 2.2)); glow(g, [0, 0.5, 0], lit, 1.2, 0.7); pool(g, [0, 0, 0], lit, 1.0, 0.3) }
   else if (t === 2) { cyl(g, 0.16, 0.34, [0, 0, 0], '#eef2ee', { transparent: true, opacity: 0.8 }, 12); sphere(g, 0.1, [0, 0.16, 0], '#fff3c8', em(lit, 2.4)); glow(g, [0, 0.3, 0], lit, 1.6, 0.7); pool(g, [0, 0, 0], lit, 1.2, 0.3) }

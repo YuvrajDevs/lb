@@ -7,7 +7,7 @@ import { ITEM_BY_ID } from './game/catalog'
 import { store } from './game/store'
 import { windowEarning } from './game/economy'
 import { useStore } from './ui/useStore'
-import { Boxet } from './ui/icons'
+import { Boxet, Icon } from './ui/icons'
 import Compass from './Compass'
 import Dock from './ui/Dock'
 import Toasts from './ui/Toasts'
@@ -28,11 +28,11 @@ const VIEWS = [
   ['street', 'street'],
 ]
 const HINTS = {
-  house: 'drag or Q/E to spin · scroll to zoom into a room',
-  room: 'WASD or click the floor to move · drag or Q/E to spin · scroll to zoom',
-  close: 'WASD or click the floor to move · drag or Q/E to spin · scroll to zoom',
-  eyes: 'W/S walk · A/D turn · drag to look around',
-  street: 'drag or Q/E to walk around the house · scroll to zoom',
+  house: 'drag or Q/E to spin · scroll in for a room, out for the street · click lamps and curtains',
+  room: 'WASD or click the floor to move · scroll in to get close, out for the whole house · click lamps and curtains',
+  close: 'WASD or click the floor to move · scroll in to see through your eyes, out for the room',
+  eyes: 'W/S walk · A/D step aside · drag to look · click lamps and curtains · scroll out to leave',
+  street: 'drag or Q/E to walk around the house · scroll in to come back to the house',
 }
 const debug = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug')
 
@@ -47,6 +47,8 @@ function App() {
   const [ed, setEd] = useState(null) // the room editor's live state
   const [rotateNote, setRotateNote] = useState(true)
   const [ready, setReady] = useState(false) // the 3D world exists
+  const [viewMenu, setViewMenu] = useState(false) // the camera picker under the compass
+  const viewPick = useRef(null)
 
   useEffect(() => {
     let alive = true
@@ -64,11 +66,16 @@ function App() {
       sign: saved.equipped.sign ? ITEM_BY_ID[saved.equipped.sign].tier : 0,
       onLayoutInit: store.initLayout,
       onLayoutChange: (id, list) => store.setArea(id, list),
+      onLayoutFix: store.fixArea,
+      switches: saved.switches,
+      lowerArt: !saved.settings.artLowered, // a one-off: hang the pictures at eye height
+      onSwitch: store.setSwitch,
       onEditor: setEd,
       onBlocked: reason => store.notify(reason, 'warn'),
       onSfx: sfx,
       })
       game.current = g
+      if (!saved.settings.artLowered) store.setSetting('artLowered', true)
       setReady(true)
       if (debug) { window.__cc = g; window.__store = store }
     }
@@ -83,6 +90,7 @@ function App() {
   useEffect(() => { game.current?.setHat(hat) }, [hat, ready])
   useEffect(() => { game.current?.setName(s.profile.house) }, [s.profile.house, ready])
   useEffect(() => { game.current?.setQuality(s.settings.quality) }, [s.settings.quality, ready])
+  useEffect(() => { game.current?.setReduceMotion(s.settings.reduceMotion) }, [s.settings.reduceMotion, ready])
   const editing = !!ed?.active
   useEffect(() => { game.current?.setInputEnabled(!open && !editing) }, [open, editing, ready])
   useEffect(() => { game.current?.setIdle(!!open && !editing) }, [open, editing, ready])
@@ -94,6 +102,14 @@ function App() {
   const signTier = s.equipped.sign ? ITEM_BY_ID[s.equipped.sign].tier : 0
   useEffect(() => { game.current?.setFence(fenceTier) }, [fenceTier, ready])
   useEffect(() => { game.current?.setSign(signTier) }, [signTier, ready])
+
+  // the camera picker closes when you click anywhere else
+  useEffect(() => {
+    if (!viewMenu) return
+    const away = e => { if (!viewPick.current?.contains(e.target)) setViewMenu(false) }
+    window.addEventListener('pointerdown', away)
+    return () => window.removeEventListener('pointerdown', away)
+  }, [viewMenu])
 
   // sound
   useEffect(() => { startOnFirstGesture() }, [])
@@ -136,15 +152,15 @@ function App() {
   const online = s.world.members.filter(m => m.online).length
   const rate = windowEarning({ onlineActive: online, withPartner: s.couple.state === 'active' })
   const eyes = view.mode === 'eyes'
-  void ITEM_BY_ID
 
   return (
     <div className={`stage ${editing ? 'editing' : ''}`}>
       <div ref={mount} className="world" />
       {eyes && <div className="eye-vignette" />}
+      {eyes && !open && <p className="hud look-tip">hold and drag to look · scroll out to leave</p>}
 
       <header className="hud top-left">
-        <h1>cc</h1>
+        <h1>LoveBloxed</h1>
         <p>{view.room}</p>
         <button className="pill" onClick={() => setOpen('shop')} aria-label={`${s.boxets} Boxets. Open the shop`}>
           <Boxet size={18} /> <b>{s.boxets.toLocaleString()}</b>
@@ -159,16 +175,25 @@ function App() {
           onReset={() => game.current?.resetAzimuth()}
           onNudge={d => game.current?.rotateBy(d)}
         />
-        {!editing && <div className="panel views">
-          {VIEWS.map(([id, label]) => (
-            <button key={id} className={view.mode === id ? 'on' : ''} onClick={() => game.current?.setView(id)}>{label}</button>
-          ))}
-        </div>}
+        {!editing && (
+          <div className="view-pick" ref={viewPick}>
+            <button className={`icon-btn eye-btn ${viewMenu ? 'on' : ''}`} aria-label="Choose the camera" aria-expanded={viewMenu} onClick={() => setViewMenu(v => !v)}>
+              <Icon name="eye" size={18} />
+            </button>
+            {viewMenu && (
+              <div className="panel views menu" role="menu">
+                {VIEWS.map(([id, label]) => (
+                  <button key={id} role="menuitemradio" aria-checked={view.mode === id} className={view.mode === id ? 'on' : ''} onClick={() => { game.current?.setView(id); setViewMenu(false) }}>{label}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </aside>
 
       {view.stairs && !open && !editing && (
         <button className="hud stairs" onClick={() => game.current?.takeStairs()}>
-          {view.stairs === 'up' ? '▲ go upstairs' : '▼ go downstairs'} <span>space</span>
+          {view.stairs === 'up' ? '▲ go upstairs' : '▼ go downstairs'}
         </button>
       )}
 
@@ -184,7 +209,7 @@ function App() {
       {open === 'daily' && <DailyReward onClose={close} />}
       {open === 'settings' && <Settings onClose={close} debug={debug} />}
 
-      {rotateNote && (
+      {rotateNote && !open && !editing && (
         <div className="rotate-note" role="note">
           <span>📱 Turn your phone sideways for the best view</span>
           <button aria-label="Dismiss" onClick={() => setRotateNote(false)}>×</button>

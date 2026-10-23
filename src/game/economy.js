@@ -25,6 +25,8 @@ export function dailyReward(day) {
 /** cosmetic given on milestone days (claimable on that day only) */
 export const MILESTONES = { 7: 'a free cube hat', 30: 'a golden frame', 100: 'a glowing sign', 365: 'a legendary skin' }
 export const milestoneOf = day => MILESTONES[day] || null
+/** the shop item each milestone actually gives you */
+export const MILESTONE_ITEMS = { 7: 'hats-1', 30: 'art-9', 100: 'signs-6', 365: 'skins-10' }
 
 /** the next price to open another house slot, or null at the cap */
 export function nextSlotPrice(slots) {
@@ -37,4 +39,5 @@ export function daysBetween(a, b) {
   return Math.round((t(b) - t(a)) / 86400000)
 }
 export const dayNumber = (joined, today) => daysBetween(joined, today) + 1
-export const toDateStr = d => d.toISOString().slice(0, 10)
+// the player's own calendar day (local time), so the daily gift turns over at their midnight, not at UTC midnight
+export const toDateStr = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`

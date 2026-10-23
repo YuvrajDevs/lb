@@ -3,7 +3,11 @@ import { std, box, cyl, sphere, BOOKS } from '../kit.js'
 import { glow } from '../fx.js'
 
 // Every builder: (tier 1..10, parent group). Origin = centre of the floor footprint, y = 0 is the floor, faces +z.
-const em = (c, i = 1.8) => ({ emissive: c, emissiveIntensity: i })
+// glowing parts shine at a calm level: warm and soft, never glaring
+// the light of lamps, pendants and garden lights: shades of warm yellow
+export const WARM_YELLOW = ['#ffd46b', '#ffcc5c', '#ffd77a', '#ffc957', '#ffdb85', '#ffcf66', '#ffd36e', '#ffc85a', '#ffd981', '#ffce62']
+
+const em = (c, i = 1.8) => ({ emissive: c, emissiveIntensity: i * 0.55 })
 const at = (arr, t) => arr[t - 1]
 const GOLD = '#d4a838'
 const METAL = { metalness: 0.6, roughness: 0.3 }
@@ -89,8 +93,12 @@ export function table(t, g) {
   }
   if (t === 1) box(g, [w - 0.3, 0.06, 0.4], [0, 0.3, 0], leg)
   if (t === 4) {
-    box(g, [0.5, 0.06, 0.38], [-0.3, 1.05, 0], '#cfd3d9')
-    box(g, [0.45, 0.5, 0.03], [-0.3, 1.1, -0.15], '#2c2f38')
+    // a small laptop: thin base, lid tipped back, a softly lit screen
+    box(g, [0.5, 0.03, 0.34], [-0.3, 1.05, 0.04], '#cfd3d9')
+    const lid = box(g, [0.5, 0.33, 0.02], [-0.3, 1.07, -0.13], '#2c2f38')
+    lid.rotation.x = -0.22
+    const scr = box(g, [0.45, 0.28, 0.006], [-0.3, 1.095, -0.118], '#9cc4ff', em('#9cc4ff', 0.6))
+    scr.rotation.x = -0.22
   }
   if (t === 6) {
     box(g, [0.9, 0.5, 0.05], [0, 1.35, -0.25], '#14151c')
@@ -216,7 +224,7 @@ export function seating(t, g) {
 // ---------- lighting ----------
 export function lamp(t, g) {
   const shade = at(['#fff0c8', '#e8561e', '#ff9ec8', '#fff0c8', '#f4f4ff', '#ff7a7a', '#ff5fd0', '#bfe4ff', '#e8a63c', '#7f6aff'], t)
-  const lit = at(['#ffe29a', '#ffa040', '#ff80b0', '#ffbe70', '#ffe9c0', '#ffb070', '#ff8ae0', '#9fe0ff', '#ffc060', '#b8a0ff'], t)
+  const lit = at(WARM_YELLOW, t) // every lamp glows a warm yellow
   const shadeMat = em(lit, 1.8)
   const metal = '#2f3138'
   if (t === 1) {
@@ -283,7 +291,7 @@ export function lamp(t, g) {
 }
 
 export function pendant(t, g) {
-  const lit = at(['#ffe29a', '#ffbe70', '#ffe9c0', '#ffd38a', '#ffbe70', '#bff7ff', '#ffd9a0', '#d8f0ff', '#ffe29a', '#b8a0ff'], t)
+  const lit = at(WARM_YELLOW, t)
   const top = 3.2
   const cord = (len, x = 0, z = 0) => cyl(g, 0.012, len, [x, top - len, z], '#2f3138', {}, 6)
   const bulb = (x, y, z, r = 0.12) => {

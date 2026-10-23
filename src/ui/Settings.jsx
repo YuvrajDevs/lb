@@ -1,20 +1,22 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { store } from '../game/store'
 import { useStore } from './useStore'
 import { Icon } from './icons'
 import Modal from './Modal'
 
 const QUALITY = [
-  ['low', 'Low', 'Battery saver. Sharpness 1×.'],
-  ['medium', 'Medium', 'Balanced. Up to 1.5×.'],
-  ['high', 'High', 'Crispest. Up to 2×.'],
+  ['low', 'Low', 'Battery saver: 1× sharpness, no glow, 30 fps.'],
+  ['medium', 'Medium', 'Balanced (recommended): up to 1.5×, 60 fps, slows down when nothing moves.'],
+  ['high', 'High', 'Crispest: up to 2×, extra smoothing. Runs warm on laptops.'],
 ]
 const KEYS = [
   ['W A S D / arrows', 'Move your cube'],
   ['Click the floor', 'Walk there'],
   ['Q / E', 'Spin the view'],
-  ['Scroll', 'Zoom in and out'],
-  ['Space', 'Take the stairs'],
+  ['Scroll', 'Zoom: eyes · close-up · room · house · street'],
+  ['Click a lamp or curtain', 'Switch it off and on · open and shut'],
+  ['Hold Space', 'Run'],
+  ['Drag (my eyes)', 'Look around · scroll out to leave'],
   ['Esc', 'Close any window'],
 ]
 
@@ -32,6 +34,10 @@ export default function Settings({ onClose, debug }) {
   const s = useStore()
   const [name, setName] = useState(s.profile.name)
   const [house, setHouse] = useState(s.profile.house)
+  // names save when you leave the field, and also when the window closes with the field still focused (Esc)
+  const latest = useRef({ name, house })
+  latest.current = { name, house }
+  useEffect(() => () => { store.setName(latest.current.name); store.setHouseName(latest.current.house) }, [])
   const set = (k, v) => store.setSetting(k, v)
 
   return (
@@ -58,7 +64,7 @@ export default function Settings({ onClose, debug }) {
             ))}
           </div>
           <p className="soft">{QUALITY.find(q => q[0] === s.settings.quality)[2]} The game also lowers sharpness by itself if it starts to stutter.</p>
-          <Toggle label="Reduce motion" hint="Calmer camera moves" value={s.settings.reduceMotion} onChange={v => set('reduceMotion', v)} />
+          <Toggle label="Reduce motion" hint="The camera cuts instead of swooping; the scenery drifts slower" value={s.settings.reduceMotion} onChange={v => set('reduceMotion', v)} />
           <Toggle label="Show control hints" value={s.settings.hints} onChange={v => set('hints', v)} />
         </section>
 
@@ -70,8 +76,8 @@ export default function Settings({ onClose, debug }) {
 
         <section>
           <h3><Icon name="chat" size={16} /> Chat and privacy</h3>
-          <Toggle label="Show chat" hint="Hide it any time. Only people in your world can write to you." value={s.settings.chat} onChange={v => set('chat', v)} />
-          <p className="soft">You can report or block anyone from their message.</p>
+          <Toggle label="Show chat" hint="Arrives with online play. Only people in your world will be able to write to you." value={s.settings.chat} onChange={v => set('chat', v)} disabled />
+          <p className="soft">You will be able to report or block anyone from their message.</p>
         </section>
 
         <section>

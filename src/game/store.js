@@ -1,12 +1,14 @@
 import { ITEM_BY_ID, CAT_BY_ID } from './catalog.js'
-import { dailyReward, milestoneOf, dayNumber, toDateStr, nextSlotPrice, WORLD_BASE_SLOTS } from './economy.js'
+import { dailyReward, milestoneOf, dayNumber, toDateStr, nextSlotPrice, WORLD_BASE_SLOTS, MILESTONE_ITEMS } from './economy.js'
 import { starterOwned } from './defaults.js'
 import { sfx } from './audio.js'
 
 // A tiny local store (localStorage) that stands in for the server until accounts exist.
 // All money rules live in economy.js; every action here is one the server will own later.
 
-const KEY = 'cc:v3'
+// ?debug&save=name keeps a separate save, so testing never touches the real one
+const testSave = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug') && new URLSearchParams(location.search).get('save')
+const KEY = testSave ? `cc:v3:test:${testSave}` : 'cc:v3'
 const listeners = new Set()
 let undoStack = []
 let redoStack = []
@@ -22,10 +24,11 @@ function fresh() {
     equipped: { skin: null, hat: null, fence: null, sign: null },
     layout: null, // { areaId: [placed items] }, filled in when the world first builds the standard furnishing
     style: {}, // { roomId: { paint, floor } }
+    switches: {}, // { placedUid: { off } for lamps, { closed } for curtains }
     joined: t,
     claimedDays: [], // day numbers already claimed
     today: t, // overridable with the dev "next day" button
-    settings: { quality: 'high', music: true, sfx: true, chat: true, names: true, hints: true, reduceMotion: false },
+    settings: { quality: 'medium', perfV: 2, music: true, sfx: true, chat: true, names: true, hints: true, reduceMotion: false },
     world: {
       name: "Sera & DeM's block",
       slots: WORLD_BASE_SLOTS,
@@ -47,7 +50,15 @@ let state = load()
 function load() {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return { ...fresh(), ...JSON.parse(raw), toasts: [] }
+    if (raw) {
+      const saved = { ...fresh(), ...JSON.parse(raw), toasts: [] }
+      // older saves defaulted to the heaviest setting, which ran laptops hot: move them to balanced once
+      if (!saved.settings.perfV) saved.settings = { ...saved.settings, quality: 'medium', perfV: 2 }
+      // the date was saved on the first visit and never moved on, so new days never arrived: catch up to today
+      // (a date ahead of today stays, so the dev "next day" button keeps working)
+      if (!saved.today || saved.today < today()) saved.today = today()
+      return saved
+    }
   } catch { /* private mode */ }
   return fresh()
 }
@@ -105,6 +116,8 @@ export const store = {
   available: id => (state.owned[id] || 0) - store.placedCount(id),
   /** called once, when the world first builds the standard furnishing */
   initLayout(layout) { if (!state.layout) set({ layout }) },
+  /** replace an area's layout without an undo step (repairs, not player edits) */
+  fixArea(areaId, list) { set({ layout: { ...state.layout, [areaId]: list } }) },
   setArea(areaId, list) {
     undoStack.push(state.layout)
     if (undoStack.length > 40) undoStack.shift()
@@ -139,6 +152,8 @@ export const store = {
     })
     store.setArea(areaId, out)
   },
+  /** a lamp switched or curtains drawn: not an edit, so no undo step */
+  setSwitch(uid, value) { set({ switches: { ...state.switches, [uid]: value } }) },
   applyStyle(areaId, kind, tier) {
     set({ style: { ...state.style, [areaId]: { ...(state.style[areaId] || {}), [kind]: tier || null } } })
   },
@@ -160,7 +175,10 @@ export const store = {
     if (state.claimedDays.includes(day)) return null
     const amount = dailyReward(day)
     const ms = milestoneOf(day)
-    set({ boxets: state.boxets + amount, claimedDays: [...state.claimedDays, day] })
+    // milestone days also give the cosmetic they promise
+    const gift = ms && MILESTONE_ITEMS[day]
+    const owned = gift && !(ITEM_BY_ID[gift].kind === 'unique' && state.owned[gift]) ? { ...state.owned, [gift]: (state.owned[gift] || 0) + 1 } : state.owned
+    set({ boxets: state.boxets + amount, claimedDays: [...state.claimedDays, day], owned })
     sfx('claim')
     toast(`+${amount} Boxets${ms ? ` and ${ms}!` : ''}`, 'good')
     return { amount, ms }

@@ -130,7 +130,7 @@ export function Inventory({ onClose }) {
             <button className={`chip ${cat === 'all' ? 'on' : ''}`} onClick={() => setCat('all')}>All</button>
             {cats.map(c => <button key={c.id} className={`chip ${cat === c.id ? 'on' : ''}`} onClick={() => setCat(c.id)}>{c.label}</button>)}
           </div>
-          <p className="soft"><Icon name="info" size={14} /> Placing furniture inside your rooms is coming soon. Cube skins and hats can be equipped in the Wardrobe.</p>
+          <p className="soft"><Icon name="info" size={14} /> Place furniture with Edit home. Cube skins and hats are worn from the Wardrobe.</p>
           <div className="grid">{list.map(i => <ItemCard key={i.id} item={i} mode="inventory" />)}</div>
         </>
       )}

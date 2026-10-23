@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { HX, box } from '../kit.js'
 import { makeShell } from '../shell.js'
+import { WINDOWS } from '../../game/areas.js'
 import { tvTexture } from '../kit.js'
 import { glow } from '../fx.js'
 import { STAIR_HOLE } from './bedroom.js'
@@ -11,9 +12,9 @@ const OAK = '#c9a070'
 // Built in: the staircase to the bedroom and the TV unit. Everything else is placed from the inventory.
 export function buildLiving(riseTo) {
   const sh = makeShell({
-    name: 'living room', wall: '#d6dde8', wainscot: '#9fb0c8', cove: '#9aa8ff',
-    floorColor: '#b88f62', doorL: [0.9, 2.9], win: [-1.0, 2.0],
-    holeCeil: STAIR_HOLE, skyKind: 1, frameKinds: [3, 0, 4],
+    name: 'living room', wall: '#d6dde8', wainscot: '#9fb0c8', cove: '#ffd27a',
+    floorColor: '#b88f62', doorL: [0.9, 2.9], win: WINDOWS.living.x, winY: WINDOWS.living.y,
+    holeCeil: STAIR_HOLE, frameKinds: [3, 0, 4],
     ext: { storey: 'ground', color: '#eadfc6', batten: null, windows: [3.4], doorFront: -3.4, extRight: true },
   })
   const { root, solid } = sh
@@ -26,7 +27,8 @@ export function buildLiving(riseTo) {
   const L = Math.hypot(riseTo, STAIR.zStart - STAIR.zTop)
   const rail = box(root, [0.07, 0.07, L], [3.85, riseTo / 2 + 1.0, (STAIR.zStart + STAIR.zTop) / 2], '#8a6a4a')
   rail.rotation.x = Math.atan2(riseTo, STAIR.zStart - STAIR.zTop)
-  solid(3.8, HX, STAIR.zTop, STAIR.zStart + 0.15)
+  // the staircase is walked as a ramp (see game.js); this only stops people walking into its side
+  sh.colliders.push({ minX: 3.8, maxX: HX, minZ: STAIR.zTop, maxZ: STAIR.zStart + 0.15, stair: true })
 
   // TV on a low cabinet (left wall) with a blue backlight
   box(root, [0.8, 0.65, 2.4], [-HX + 0.4, 0, -1.7], OAK)

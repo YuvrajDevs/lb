@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { D, H, T, W, HZ, std, box, cyl, sphere } from './kit.js'
+import { D, H, T, W, HX, HZ, std, box, cyl, sphere } from './kit.js'
 import { bake } from './bake.js'
 import { glow, pool, cone, wash } from './fx.js'
 import { buildStudy } from './rooms/study.js'
@@ -9,14 +9,16 @@ import { buildLiving, STAIR } from './rooms/living.js'
 import { buildItem } from './items/index.js'
 import { signs as buildSign } from './items/decor.js'
 import { ITEM_BY_ID } from '../game/catalog.js'
-import { GARDEN } from '../game/areas.js'
+import { GARDEN, WINDOWS } from '../game/areas.js'
 import { furnishArea, paintTexture, floorTex } from './furnish.js'
+import { CLIFF_Z, streamX } from './scenery.js'
 
 export { H }
 export const SLAB = 0.72
 export const FH = H + SLAB // height of one storey
 export const COL = W + 2 * T // spacing between neighbouring rooms
 
+const BUSHES = [[-10.4, 5.2, 0.8], [10.4, 5.6, 0.8], [-12.2, -1.0, 0.5], [12.2, 0.4, 0.5]] // x, z, radius
 const PLOT = { x: COL + 1.4, zBack: -(D / 2 + T + 1.4), zFront: D / 2 + T + 5.2 } // the fenced garden
 
 function signTexture(text) {
@@ -61,18 +63,18 @@ export function buildHouse(opts = {}) {
     group.add(sh.root)
     shells.push(sh)
     const level = 1 - s.row
-    sh.colliders.forEach(c => colliders[level].push({ minX: c.minX + ox, maxX: c.maxX + ox, minZ: c.minZ, maxZ: c.maxZ }))
+    sh.colliders.forEach(c => colliders[level].push({ minX: c.minX + ox, maxX: c.maxX + ox, minZ: c.minZ, maxZ: c.maxZ, stair: c.stair }))
     sh.frames.forEach(f => frames.push(f))
     const placed = new THREE.Group() // everything the player has put in this room
     sh.root.add(placed)
     const light = new THREE.PointLight('#ffd9a0', 14, 10, 2)
     sh.root.add(light)
     // a soft warm fill from the open front, so furniture facing the room is not left in cool shade
-    const fill = new THREE.PointLight('#ffdcb0', 9, 9, 2)
-    fill.position.set(0, 2.6, 3.0)
+    const fill = new THREE.PointLight('#ffd58a', 5.5, 9, 2)
+    fill.position.set(0, 3.0, 1.4) // well inside the room: close to the front wall it left a bright spot on it
     sh.root.add(fill)
     return {
-      id: s.id, name: s.name, col: s.col, row: s.row, level, ox, oy, sh, placed, light, furnished: null,
+      id: s.id, name: s.name, col: s.col, row: s.row, level, ox, oy, sh, placed, light, fill, furnished: null,
       walls: sh.walls, ceiling: sh.ceiling, door: sh.door, doorX: sh.doorX,
       center: new THREE.Vector3(ox, oy + 2.25, 0),
     }
@@ -103,7 +105,7 @@ export function buildHouse(opts = {}) {
       const row = box(roof, [slopeLen / 14 + 0.05, 0.05, depth + 0.1], [x + sd * 0.4, y + 0.02, 0], i % 2 ? '#a8645a' : '#8a4f48')
       row.rotation.z = -sd * slope
       row.position.x = x - sd * (slopeLen / 28) * Math.cos(slope)
-      row.position.y = y + (slopeLen / 28) * Math.sin(slope) + 0.03
+      row.position.y = y + (slopeLen / 28) * Math.sin(slope) + 0.03 + (i % 2) * 0.015 // alternate rows a little proud: overlaps never share a plane
     })
   }
   [-1, 1].forEach(sd => {
@@ -118,7 +120,7 @@ export function buildHouse(opts = {}) {
   roof.add(ring)
   const atticWin = new THREE.Mesh(
     new THREE.CircleGeometry(0.7, 28),
-    new THREE.MeshStandardMaterial({ color: '#ffe2a8', emissive: '#ffb860', emissiveIntensity: 1.8 })
+    new THREE.MeshStandardMaterial({ color: '#ffe2a8', emissive: '#ffcc66', emissiveIntensity: 1.8 })
   )
   atticWin.position.set(0, roofBase + 1.5, depth / 2 + 0.015)
   roof.add(atticWin)
@@ -126,7 +128,7 @@ export function buildHouse(opts = {}) {
   box(roof, [1.5, 0.1, 0.05], [0, roofBase + 1.45, depth / 2 + 0.03], '#f3eee4')
   box(roof, [1.1, 2.6, 1.1], [7.2, roofBase + 0.9, -1.2], '#b0705a')
   box(roof, [1.3, 0.2, 1.3], [7.2, roofBase + 3.5, -1.2], '#7a4a40')
-  glow(roof, [0, roofBase + 1.5, depth / 2 + 0.3], '#ffb860', 3.4, 0.55)
+  glow(roof, [0, roofBase + 1.5, depth / 2 + 0.3], '#ffcc66', 3.4, 0.55)
   group.add(roof)
 
   // ---------- fenced garden ----------
@@ -140,13 +142,33 @@ export function buildHouse(opts = {}) {
   // path of stepping stones from the gate to the house
   // stepping stones from the gate to the front door (the door is on the living room, world x = 2.3)
   ;[[0.2, 8.4], [0.7, 7.4], [1.3, 6.4], [1.9, 5.5], [2.3, 4.9]].forEach(([x, z]) => cyl(garden, 0.5, 0.08, [x, -0.54, z], '#c9c2b2', {}, 14))
-  glow(street, [2.3, 3.3, 4.2], '#ffb860', 2.6, 0.5)
-  pool(street, [2.3, -0.5, 5.2], '#ffb860', 2.2, 0.28)
+  glow(street, [2.3, 3.3, 4.2], '#ffcc66', 2.6, 0.5)
+  pool(street, [2.3, -0.5, 5.2], '#ffcc66', 2.2, 0.28)
 
-  // the street: sidewalk, road with a dashed line, lamps and a couple of boxy trees
-  box(street, [70, 0.25, 2.4], [0, -0.75, PLOT.zFront + 1.6], '#8a8fa8')
-  box(street, [70, 0.3, 5.2], [0, -0.8, PLOT.zFront + 5.4], '#2a2d45')
-  for (let x = -30; x <= 30; x += 3) box(street, [1.4, 0.02, 0.18], [x, -0.5, PLOT.zFront + 5.4], '#f2e8c0')
+  // the cliff walk: a wet, glossy stone path that mirrors the lamps, and a low railing at the edge of the drop to the sea
+  const wet = new THREE.MeshPhysicalMaterial({ color: '#3a3558', roughness: 0.16, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.08 })
+  // the glowing stream crosses the walk on its way to the waterfall: the paving stops either side and a wide
+  // wooden deck carries the walk over the water, running all the way from the land to the cliff edge so the
+  // stream slips out of sight beneath it and reappears as the waterfall
+  const dz0 = PLOT.zFront - 0.6, dz1 = CLIFF_Z - 0.75 // the deck's land end and cliff end
+  const sxs = []
+  for (let z = dz0; z <= dz1 + 0.01; z += 0.5) sxs.push(streamX(z))
+  const gap = [Math.min(...sxs) - 2.4, Math.max(...sxs) + 2.4]
+  ;[[-110, gap[0]], [gap[1], 110]].forEach(([a, b]) => {
+    box(street, [b - a, 0.25, 2.6], [(a + b) / 2, -0.73, PLOT.zFront + 1.7], wet)
+    for (let x = Math.ceil(a / 1.5) * 1.5; x < b - 0.2; x += 1.5) if (x > a + 0.2) box(street, [0.04, 0.02, 2.6], [x, -0.48, PLOT.zFront + 1.7], '#2a2642') // paving joints
+  })
+  const deckL = gap[1] - gap[0] + 0.4, deckX = (gap[0] + gap[1]) / 2, deckD = dz1 - dz0, deckZ = (dz0 + dz1) / 2
+  box(street, [deckL, 0.16, deckD], [deckX, -0.42, deckZ], '#8a6a4a')
+  for (let x = gap[0] + 0.2; x <= gap[1]; x += 0.45) box(street, [0.05, 0.02, deckD], [x, -0.26, deckZ], '#6b4f36') // plank lines
+  ;[dz0 + 0.08, dz1 - 0.08].forEach(z => { // posts stand just inside the deck's edge, not flush with it
+    box(street, [deckL, 0.08, 0.08], [deckX, 0.35, z], '#6b4f36')
+    for (let k = 0; k <= 4; k++) box(street, [0.1, 0.87, 0.1], [gap[0] + ((gap[1] - gap[0]) * k) / 4, -0.44, z], '#6b4f36')
+  })
+  const edgeZ = CLIFF_Z - 0.7
+  for (let x = -110; x <= 110; x += 2) box(street, [0.14, 0.95, 0.14], [x, -0.55, edgeZ], '#d8d0e8')
+  box(street, [220, 0.1, 0.1], [0, 0.4, edgeZ], '#f2eadb')
+  box(street, [220, 0.06, 0.06], [0, 0.0, edgeZ], '#f2eadb')
   ;[-9.5, 9.5].forEach(x => {
     cyl(street, 0.08, 3.4, [x, -0.5, PLOT.zFront + 1.9], '#2f3138', {}, 8)
     box(street, [0.9, 0.08, 0.08], [x + (x < 0 ? 0.45 : -0.45), 2.85, PLOT.zFront + 1.9], '#2f3138')
@@ -155,9 +177,9 @@ export function buildHouse(opts = {}) {
     head.position.set(lx, 2.78, PLOT.zFront + 1.9)
     head.userData.keep = true
     street.add(head)
-    glow(street, [lx, 2.75, PLOT.zFront + 1.9], '#ffb860', 2.4, 0.6)
-    cone(street, [lx, 2.7, PLOT.zFront + 1.9], '#ffb860', 3.0, 1.6, 0.16)
-    pool(street, [lx, -0.5, PLOT.zFront + 1.9], '#ffb860', 3.0, 0.3)
+    glow(street, [lx, 2.75, PLOT.zFront + 1.9], '#ffcc66', 2.4, 0.6)
+    cone(street, [lx, 2.7, PLOT.zFront + 1.9], '#ffcc66', 3.0, 1.6, 0.16)
+    pool(street, [lx, -0.48, PLOT.zFront + 1.9], '#ffcc66', 3.0, 0.3) // on top of the path, not inside it
   })
   ;[-13.5, 13.5].forEach(x => {
     box(street, [0.4, 1.8, 0.4], [x, -0.5, PLOT.zFront + 1.9], '#6a4a38')
@@ -182,6 +204,22 @@ export function buildHouse(opts = {}) {
   run(PLOT.x, PLOT.zBack, PLOT.x, PLOT.zFront)
   run(-PLOT.x, PLOT.zFront, -gate, PLOT.zFront)
   run(gate, PLOT.zFront, PLOT.x, PLOT.zFront)
+  // the garden gate: two little picket leaves that swing outward when someone walks up to them (see game.js)
+  const gateGroup = new THREE.Group()
+  group.add(gateGroup)
+  const gateLeaves = [-1, 1].map(side => {
+    const pivot = new THREE.Group()
+    pivot.position.set(side * gate, -0.5, PLOT.zFront)
+    const leaf = new THREE.Group()
+    const mat = std('#f2eadb')
+    const add = (w, h, d, x, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, 0); m.castShadow = true; m.userData.keep = true; leaf.add(m) }
+    add(gate - 0.08, 0.07, 0.05, -side * gate / 2, 0.2)
+    add(gate - 0.08, 0.07, 0.05, -side * gate / 2, 0.5)
+    for (let i = 0; i < 4; i++) add(0.1, 0.62, 0.05, -side * (0.15 + i * (gate - 0.3) / 3), 0.31)
+    pivot.add(leaf)
+    gateGroup.add(pivot)
+    return { pivot, side }
+  })
   // lanterns on the corners and either side of the gate
   ;[[-PLOT.x, PLOT.zBack], [PLOT.x, PLOT.zBack], [-PLOT.x, PLOT.zFront], [PLOT.x, PLOT.zFront], [-gate, PLOT.zFront], [gate, PLOT.zFront]].forEach(([x, z]) => {
     box(garden, [0.2, 0.3, 0.2], [x, -0.5 + 0.6, z], fence)
@@ -189,13 +227,14 @@ export function buildHouse(opts = {}) {
     lamp.position.set(x, -0.5 + 1.05, z)
     lamp.userData.keep = true
     garden.add(lamp)
-    glow(garden, [x, -0.5 + 1.05, z], '#ffb860', 1.5, 0.6)
-    pool(garden, [x, -0.5, z], '#ffb860', 2.0, 0.22)
+    glow(garden, [x, -0.5 + 1.05, z], '#ffcc66', 1.5, 0.6)
+    pool(garden, [x, -0.5, z], '#ffcc66', 2.0, 0.22)
   })
   // bushes
-  ;[[-10.4, 5.2], [10.4, 5.6], [-11.8, -1.0], [11.9, 0.4]].forEach(([x, z]) => {
-    sphere(garden, 0.8, [x, -0.1, z], '#2f6a54')
-    sphere(garden, 0.55, [x + 0.6, -0.25, z + 0.3], '#3b7a62')
+  // (the two beside the house are smaller and sit in the gap to the fence, so they never poke through a wall)
+  BUSHES.forEach(([x, z, r]) => {
+    sphere(garden, r, [x, -0.5 + r * 0.5, z], '#2f6a54')
+    sphere(garden, r * 0.7, [x + (Math.abs(x) > 12 ? 0 : 0.6), -0.5 + r * 0.3, z + 0.5], '#3b7a62')
   })
   group.add(garden, defaultFence, itemFence, gardenPlaced, street)
 
@@ -221,10 +260,10 @@ export function buildHouse(opts = {}) {
   lampHead.position.set(SX, 2.38, SZ)
   lampHead.userData.keep = true
   street.add(lampHead)
-  glow(street, [SX, 2.3, SZ], '#ffbe70', 2.8, 0.7)
-  cone(street, [SX, 2.3, SZ + 0.1], '#ffbe70', 2.6, 1.9, 0.22)
+  glow(street, [SX, 2.3, SZ], '#ffd27a', 2.8, 0.7)
+  cone(street, [SX, 2.3, SZ + 0.1], '#ffd27a', 2.6, 1.9, 0.22)
   wash(street, [SX, 1.25, SZ + 0.09], 3.7, 1.05, '#ffcf8a', 0.26)
-  pool(street, [SX, -0.5, SZ + 0.9], '#ffbe70', 2.6, 0.3)
+  pool(street, [SX, -0.5, SZ + 0.9], '#ffd27a', 2.6, 0.3)
   const setName = text => {
     signText = text
     itemSign?.setText(text)
@@ -240,17 +279,25 @@ export function buildHouse(opts = {}) {
   gc.push({ minX: -PLOT.x - fw, maxX: PLOT.x + fw, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw })
   gc.push({ minX: -PLOT.x - fw, maxX: -PLOT.x + fw, minZ: PLOT.zBack, maxZ: PLOT.zFront })
   gc.push({ minX: PLOT.x - fw, maxX: PLOT.x + fw, minZ: PLOT.zBack, maxZ: PLOT.zFront })
-  gc.push({ minX: -PLOT.x, maxX: PLOT.x, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw })
+  gc.push({ minX: -PLOT.x, maxX: -gate, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw }) // front fence, with the gate gap
+  gc.push({ minX: gate, maxX: PLOT.x, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw })
+  // out of the gate: the cliff walk, closed off by the railing at the edge and by the fog at the ends
+  const WALK = PLOT.x // the walk outside is only as wide as the garden fence
+  gc.push({ minX: -WALK, maxX: WALK, minZ: CLIFF_Z - 0.7 - fw, maxZ: CLIFF_Z + 2 })
+  gc.push({ minX: -WALK - 2, maxX: -WALK, minZ: PLOT.zFront - 2, maxZ: CLIFF_Z })
+  gc.push({ minX: WALK, maxX: WALK + 2, minZ: PLOT.zFront - 2, maxZ: CLIFF_Z })
+  ;[-9.5, 9.5].forEach(x => gc.push({ minX: x - 0.15, maxX: x + 0.15, minZ: PLOT.zFront + 1.75, maxZ: PLOT.zFront + 2.05 })) // lamp posts
+  ;[-13.5, 13.5].forEach(x => gc.push({ minX: x - 1.0, maxX: x + 1.0, minZ: PLOT.zFront + 0.9, maxZ: PLOT.zFront + 2.9 })) // trees
   gc.push({ minX: SX - 1.95, maxX: SX + 1.95, minZ: SZ - 0.25, maxZ: SZ + 0.25 })
   gc.push({ minX: PX - 0.2, maxX: PX + 0.2, minZ: SZ - 0.2, maxZ: SZ + 0.2 })
-  ;[[-10.4, 5.2], [10.4, 5.6], [-11.8, -1.0], [11.9, 0.4]].forEach(([x, z]) => gc.push({ minX: x - 0.9, maxX: x + 0.9, minZ: z - 0.9, maxZ: z + 0.9 }))
+  BUSHES.forEach(([x, z, r]) => gc.push({ minX: x - r - 0.1, maxX: x + r + 0.1, minZ: z - r - 0.1, maxZ: z + r + 0.6 }))
 
-  // ---------- global lights: dim blue night + moon ----------
+  // ---------- global lights: an evening sky (rose above, violet below) and the low sun over the sea ----------
   const lights = new THREE.Group()
-  lights.add(new THREE.HemisphereLight('#8497e6', '#3c3668', 0.9))
-  const moon = new THREE.DirectionalLight('#9ab8ff', 2.2)
+  lights.add(new THREE.HemisphereLight('#5a6cb8', '#22203e', 0.75)) // night: blue sky light, dark ground
+  const moon = new THREE.DirectionalLight('#9fb4ff', 1.3) // moonlight: the scene's one shadow-casting key light
   moon.target.position.set(0, 5.5, 0)
-  moon.position.set(-4.5, 5.5 + 9.2, -20)
+  moon.position.set(4.5, 5.5 + 9, 22) // from the moon over the sea, so the front of the house is silvered
   moon.castShadow = true
   moon.shadow.mapSize.set(2048, 2048) // rendered once (see game.js), so the size is cheap
   const sc = moon.shadow.camera
@@ -259,7 +306,7 @@ export function buildHouse(opts = {}) {
   moon.shadow.normalBias = 0.04
   lights.add(moon, moon.target)
   // coloured rim lights, like the neon spill in the references: they graze the glossy surfaces from both sides
-  const rimL = new THREE.DirectionalLight('#a46cff', 0.6)
+  const rimL = new THREE.DirectionalLight('#b06cff', 0.7)
   rimL.position.set(-18, 7, 8)
   const rimR = new THREE.DirectionalLight('#ff8a5a', 0.5)
   rimR.position.set(18, 5, 10)
@@ -303,23 +350,34 @@ export function buildHouse(opts = {}) {
   const roomById = id => rooms.find(r => r.id === id)
   const prepared = new Set()
   function applyLight(r, light) {
-    if (!light) { r.light.intensity = 12; r.light.position.set(0, 2.8, 0.5); r.light.color.set('#ffd9a0'); return }
+    if (!light) {
+      // every lamp is off: only dim moonlight coming in through the window
+      const w = WINDOWS[r.id].x
+      r.light.intensity = 2.4; r.light.position.set((w[0] + w[1]) / 2, 3.0, -1.6); r.light.color.set('#8fa4e8')
+      r.fill.intensity = 1.2; r.fill.color.set('#7f8fd0')
+      return
+    }
+    r.fill.intensity = 5.5; r.fill.color.set('#ffd58a')
     r.light.color.set(light.color)
-    r.light.position.set(light.x, Math.min(Math.max(light.y, 1.4), 4.2), light.z)
+    // the room light follows its lamp but keeps well clear of the walls and ceiling: right next to a wall it
+    // burns a bright hot spot onto the paint
+    const cl = (v, m) => Math.min(Math.max(v, -m), m)
+    r.light.position.set(cl(light.x, HX - 1.6), Math.min(Math.max(light.y, 2.2), 3.6), cl(light.z, HZ - 1.4))
     r.light.intensity = light.power
   }
   /** rebuild one area from its layout entries; bake=false keeps the pieces separate (while editing) */
+  let switches = opts.switches || {}
   function furnish(areaId, entries, { bakeIt = true } = {}) {
     if (areaId === 'garden') {
       gardenPlaced.clear()
-      const { group: g } = furnishArea(GARDEN, entries, { y0: -0.5 })
+      const { group: g } = furnishArea(GARDEN, entries, { y0: -0.5, switches })
       gardenPlaced.add(g)
       if (bakeIt) { gardenPlaced.updateMatrixWorld(true); bake(gardenPlaced, { clone: true }) }
       return
     }
     const r = roomById(areaId)
     r.placed.clear()
-    const { group: g, light } = furnishArea(r.areaSpec || areaSpec(areaId), entries)
+    const { group: g, light } = furnishArea(r.areaSpec || areaSpec(areaId), entries, { switches })
     r.placed.add(g)
     applyLight(r, light)
     if (bakeIt) { group.updateMatrixWorld(true); bake(g) }
@@ -367,19 +425,21 @@ export function buildHouse(opts = {}) {
   return {
     group, lights, rooms, colliders, frames, roof, roofBase, stairs, setName, streetProps: street,
     furnish, setStyle, setFence, setSign, roomById, gardenPlaced,
+    setSwitches(next) { switches = next },
     /** show only one room (for editing it) or, with null, the whole house again */
     isolate(areaId) {
       const all = !areaId
       rooms.forEach(r => { r.sh.root.visible = all || areaId === 'garden' || r.id === areaId })
       const outside = areaId === 'garden' || all
       roof.visible = outside
-      ;[garden, defaultFence, itemFence, gardenPlaced].forEach(o => { o.visible = outside })
+      ;[garden, defaultFence, itemFence, gardenPlaced, gateGroup].forEach(o => { o.visible = outside })
       defaultFence.visible = outside && !itemFence.children.length
       itemFence.visible = outside
       defaultSign.visible = outside && !itemSign
       if (itemSign) itemSign.group.visible = outside
     },
     door: { pivot: living.door, x: living.ox + living.doorX, z: HZ + 0.15 },
+    gate: { leaves: gateLeaves, z: PLOT.zFront },
     bounds: { halfW: PLOT.x + 0.6, yMin: -1.25, yMax: roofBase + rh },
   }
 }
