@@ -24,7 +24,50 @@ const FOG_GLSL = 'float fogDist(vec3 w){ vec2 q = w.xz - vec2(0.0, 2.0); q.y *= 
 // every built-in material uses this instead of camera distance (sprites have no "transformed", so go via the view matrix)
 THREE.ShaderChunk.fog_pars_vertex = '#ifdef USE_FOG\n varying float vFogDepth;\n ' + FOG_GLSL + '\n#endif'
 THREE.ShaderChunk.fog_vertex = '#ifdef USE_FOG\n vFogDepth = fogDist((inverse(viewMatrix) * mvPosition).xyz);\n#endif'
-const SUN_DIR = new THREE.Vector3(0.22, 0.22, 1).normalize() // the moon, over the sea in front of the house
+const SUN_DIR = new THREE.Vector3(0.22, 0.22, 1).normalize() // the moon (or the evening sun), over the sea in front
+
+// the look of the sky and sea at each time of day (linear colours). `glow` is [colour, strength, tightness] x2,
+// `disc` is [colour, strength, size]: the moon or the sun.
+const C = (r, g, b) => new THREE.Vector3(r, g, b)
+export const PALETTES = {
+  night: {
+    sun: [0.22, 0.22, 1], fog: [0.035, 0.035, 0.09],
+    top: C(0.006, 0.008, 0.035), mid: C(0.02, 0.025, 0.08), low: C(0.05, 0.05, 0.13),
+    cloudA: C(0.05, 0.05, 0.11), cloudB: C(0.32, 0.34, 0.45), stars: 1,
+    glowA: C(0.063, 0.072, 0.108), glowAk: 10, glowB: C(0.35, 0.375, 0.45), glowBk: 200, disc: C(2.6, 2.52, 2.34), discEdge: [0.9993, 0.9996],
+    deep: C(0.005, 0.012, 0.04), shallow: C(0.02, 0.04, 0.09), skyLo: C(0.05, 0.05, 0.13), skyHi: C(0.01, 0.015, 0.05),
+    spec: C(0.85, 0.9, 1.0), crest: C(0.45, 0.5, 0.62), foam: C(0.55, 0.6, 0.75), mist: ['#6a74b8', '#5a6aa8'],
+  },
+  evening: {
+    sun: [0.18, 0.07, 1], fog: [0.24, 0.09, 0.19],
+    top: C(0.06, 0.03, 0.16), mid: C(0.30, 0.10, 0.32), low: C(0.85, 0.36, 0.30),
+    cloudA: C(0.62, 0.24, 0.40), cloudB: C(1.0, 0.58, 0.32), stars: 0.25,
+    glowA: C(0.45, 0.225, 0.1), glowAk: 6, glowB: C(0.9, 0.65, 0.38), glowBk: 90, disc: C(3.0, 2.58, 1.86), discEdge: [0.9988, 0.9993],
+    deep: C(0.03, 0.03, 0.10), shallow: C(0.10, 0.07, 0.20), skyLo: C(0.70, 0.30, 0.32), skyHi: C(0.22, 0.08, 0.26),
+    spec: C(1.0, 0.62, 0.32), crest: C(0.8, 0.7, 0.78), foam: C(0.85, 0.7, 0.75), mist: ['#d8a0bc', '#b89ad8'],
+  },
+}
+const skyU = {
+  uTop: { value: new THREE.Vector3() }, uMid: { value: new THREE.Vector3() }, uLow: { value: new THREE.Vector3() },
+  uCloudA: { value: new THREE.Vector3() }, uCloudB: { value: new THREE.Vector3() }, uStars: { value: 1 },
+  uGlowA: { value: new THREE.Vector3() }, uGlowAk: { value: 10 }, uGlowB: { value: new THREE.Vector3() }, uGlowBk: { value: 200 },
+  uDisc: { value: new THREE.Vector3() }, uDiscEdge: { value: new THREE.Vector2() },
+}
+const seaU = {
+  uDeep: { value: new THREE.Vector3() }, uShallow: { value: new THREE.Vector3() }, uSkyLo: { value: new THREE.Vector3() }, uSkyHi: { value: new THREE.Vector3() },
+  uSpec: { value: new THREE.Vector3() }, uCrest: { value: new THREE.Vector3() }, uFoam: { value: new THREE.Vector3() },
+}
+/** switch the sky, sea, fog and mist to a time of day ('night' | 'evening') */
+export function applyPalette(name) {
+  const p = PALETTES[name] || PALETTES.night
+  SUN_DIR.set(...p.sun).normalize()
+  FOG_COLOR.setRGB(...p.fog, THREE.LinearSRGBColorSpace)
+  ;['top', 'mid', 'low', 'cloudA', 'cloudB', 'glowA', 'glowB', 'disc'].forEach(k => skyU['u' + k[0].toUpperCase() + k.slice(1)].value.copy(p[k]))
+  skyU.uStars.value = p.stars; skyU.uGlowAk.value = p.glowAk; skyU.uGlowBk.value = p.glowBk; skyU.uDiscEdge.value.set(...p.discEdge)
+  ;['deep', 'shallow', 'skyLo', 'skyHi', 'spec', 'crest', 'foam'].forEach(k => seaU['u' + k[0].toUpperCase() + k.slice(1)].value.copy(p[k]))
+  mistMats.forEach((m, i) => m.color.set(p.mist[i % 3 ? 0 : 1]))
+}
+const mistMats = []
 
 // ---------- small deterministic noise ----------
 const hash = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s) }
@@ -72,10 +115,11 @@ function makeSky() {
     side: THREE.BackSide,
     depthWrite: false,
     fog: false,
-    uniforms: { uTime: { value: 0 }, uSun: { value: SUN_DIR }, uHor: { value: FOG_COLOR } },
+    uniforms: { uTime: { value: 0 }, uSun: { value: SUN_DIR }, uHor: { value: FOG_COLOR }, ...skyU },
     vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }',
     fragmentShader: `
       uniform float uTime; uniform vec3 uSun; uniform vec3 uHor; varying vec3 vDir;
+      uniform vec3 uTop, uMid, uLow, uCloudA, uCloudB, uGlowA, uGlowB, uDisc; uniform float uStars, uGlowAk, uGlowBk; uniform vec2 uDiscEdge;
       float h21(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 45758.5453); }
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
         return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y); }
@@ -83,28 +127,25 @@ function makeSky() {
         vec3 d = normalize(vDir);
         float h = d.y;
         float s = max(dot(d, normalize(uSun)), 0.0); // towards the moon
-        // night: near-black blue overhead, deep indigo lower down, a faint glow along the horizon
-        vec3 top = vec3(0.006, 0.008, 0.035);
-        vec3 mid = vec3(0.02, 0.025, 0.08);
-        vec3 low = vec3(0.05, 0.05, 0.13);
-        vec3 c = mix(low, mid, smoothstep(0.03, 0.32, h));
-        c = mix(c, top, smoothstep(0.3, 0.85, h));
+        // three bands of sky colour (see PALETTES): overhead, the middle, and low down
+        vec3 c = mix(uLow, uMid, smoothstep(0.03, 0.32, h));
+        c = mix(c, uTop, smoothstep(0.3, 0.85, h));
         // long soft clouds, lit orange near the sun and pink away from it
         float cl = vn(vec2(atan(d.z, d.x) * 2.6 + uTime * 0.004, h * 16.0)) * vn(vec2(atan(d.z, d.x) * 7.0, h * 40.0 + 3.0));
         float band = smoothstep(0.03, 0.1, h) * smoothstep(0.4, 0.14, h);
-        vec3 cloudCol = mix(vec3(0.05, 0.05, 0.11), vec3(0.32, 0.34, 0.45), pow(s, 3.0)); // dark clouds, silver near the moon
+        vec3 cloudCol = mix(uCloudA, uCloudB, pow(s, 3.0)); // lit by the moon (or sun) on the side nearest it
         c = mix(c, cloudCol, smoothstep(0.18, 0.5, cl) * band * 0.6);
         // a sky full of small twinkling stars
         vec2 g = vec2(atan(d.z, d.x) * 140.0, d.y * 200.0);
         float r = h21(floor(g));
         float tw = 0.6 + 0.4 * sin(uTime * (1.0 + r * 3.0) + r * 40.0);
-        c += vec3(0.95, 0.95, 1.0) * step(0.982, r) * smoothstep(0.38, 0.0, length(fract(g) - 0.5)) * tw * smoothstep(0.06, 0.3, h) * (0.5 + r * 0.6);
+        c += vec3(0.95, 0.95, 1.0) * step(0.982, r) * smoothstep(0.38, 0.0, length(fract(g) - 0.5)) * tw * smoothstep(0.06, 0.3, h) * (0.5 + r * 0.6) * uStars;
         // the fog bank: solid at the horizon and below
         c = mix(uHor, c, smoothstep(0.0, 0.12, h));
-        // the moon over the sea, with a cool halo
-        c += vec3(0.35, 0.4, 0.6) * pow(s, 10.0) * 0.18;
-        c += vec3(0.7, 0.75, 0.9) * pow(s, 200.0) * 0.5;
-        c += vec3(1.0, 0.97, 0.9) * smoothstep(0.9993, 0.9996, s) * 2.6;
+        // the moon (or the sun) over the sea, with its halo
+        c += uGlowA * pow(s, uGlowAk);
+        c += uGlowB * pow(s, uGlowBk);
+        c += uDisc * smoothstep(uDiscEdge.x, uDiscEdge.y, s);
         gl_FragColor = vec4(c, 1.0);
         #include <colorspace_fragment>
       }`,
@@ -139,7 +180,7 @@ const SWELL_GLSL = `
 function makeOcean() {
   const mat = new THREE.ShaderMaterial({
     fog: false,
-    uniforms: { uTime: { value: 0 }, uSun: { value: SUN_DIR }, uCliff: { value: CLIFF_Z }, uFog: { value: FOG_COLOR }, uFogNear: { value: FOG_NEAR }, uFogFar: { value: FOG_FAR } },
+    uniforms: { uTime: { value: 0 }, uSun: { value: SUN_DIR }, uCliff: { value: CLIFF_Z }, uFog: { value: FOG_COLOR }, uFogNear: { value: FOG_NEAR }, uFogFar: { value: FOG_FAR }, ...seaU },
     // rolling swells: a few long waves travelling in toward the cliff lift the surface itself; finer ripples
     // (below) only tilt the light. The swell's height and slope come from one shared function.
     vertexShader: `uniform float uTime; varying vec3 vW;
@@ -152,6 +193,7 @@ function makeOcean() {
       }`,
     fragmentShader: `
       uniform float uTime; uniform vec3 uSun; uniform float uCliff; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar; varying vec3 vW;
+      uniform vec3 uDeep, uShallow, uSkyLo, uSkyHi, uSpec, uCrest, uFoam;
       ${FOG_GLSL}
       ${SWELL_GLSL}
       float h21(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -170,21 +212,21 @@ function makeOcean() {
         vec3 v = normalize(cameraPosition - vW);
         vec3 r = reflect(-v, n);
         float fres = pow(1.0 - max(dot(n, v), 0.0), 4.0);
-        vec3 deep = vec3(0.005, 0.012, 0.04);
-        vec3 shallow = vec3(0.02, 0.04, 0.09);
-        vec3 skyR = mix(vec3(0.05, 0.05, 0.13), vec3(0.01, 0.015, 0.05), smoothstep(0.0, 0.5, r.y));
+        vec3 deep = uDeep;
+        vec3 shallow = uShallow;
+        vec3 skyR = mix(uSkyLo, uSkyHi, smoothstep(0.0, 0.5, r.y));
         vec3 c = mix(deep, shallow, hc * 0.6);
         c = mix(c, skyR, 0.1 + fres * 0.6);
         // the moon's path of glitter on the water
         float spec = pow(max(dot(r, normalize(uSun)), 0.0), 260.0);
         float glints = pow(max(dot(r, normalize(uSun)), 0.0), 40.0) * smoothstep(0.88, 0.95, vn(p * 2.0 + uTime * 0.4));
-        c += vec3(0.85, 0.9, 1.0) * (spec * 2.0 + glints * 0.8); // the moon's silver path on the water
+        c += uSpec * (spec * 2.0 + glints * 0.8); // the moon's (or sun's) path of light on the water
         // a little white on the tops of the bigger swells
-        c += vec3(0.45, 0.5, 0.62) * smoothstep(0.45, 0.7, sw.x) * smoothstep(0.6, 0.9, vn(p * 0.9 + uTime * 0.3)) * 0.18;
+        c += uCrest * smoothstep(0.45, 0.7, sw.x) * smoothstep(0.6, 0.9, vn(p * 0.9 + uTime * 0.3)) * 0.18;
         // white foam lapping at the foot of the cliff
         float d = vW.z - uCliff;
         float foam = smoothstep(3.5, 0.0, d + vn(vec2(vW.x * 0.6, uTime * 0.5)) * 2.0) * (0.55 + 0.45 * sin(d * 3.0 - uTime * 2.0));
-        c += vec3(0.55, 0.6, 0.75) * max(foam, 0.0) * 0.45;
+        c += uFoam * max(foam, 0.0) * 0.45;
         // melt into the horizon haze
         c = mix(c, uFog, smoothstep(uFogNear, uFogFar, fogDist(vW)));
         gl_FragColor = vec4(c, 1.0);
@@ -366,6 +408,7 @@ function makeMist() {
   ;[[-62, 8], [62, 8], [-80, 10], [80, 10]].forEach(p => spots.push(p))
   spots.forEach(([x, z], i) => {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map, color: i % 3 ? '#6a74b8' : '#5a6aa8', opacity: 0.18, transparent: true, depthWrite: false, fog: false }))
+    mistMats.push(s.material)
     const size = 22 + rnd() * 16
     s.scale.set(size * 1.8, size * 0.55, 1)
     s.position.set(x, GROUND_Y + heightAt(x, z) + size * 0.12, z)
@@ -522,8 +565,9 @@ function floatingIsland(parent, x, y, z, s, mats) {
   return g
 }
 
-export function buildScenery() {
+export function buildScenery(palette = 'night') {
   seed = 7
+  mistMats.length = 0
   const group = new THREE.Group()
   const statics = new THREE.Group() // merged into a few meshes by the caller (bake)
   const glows = []
@@ -583,6 +627,8 @@ export function buildScenery() {
     floatingIsland(group, 4, 30, -80, 1.8, mats),
   ]
   const baseY = islands.map(g => g.position.y)
+
+  applyPalette(palette)
 
   return {
     group,

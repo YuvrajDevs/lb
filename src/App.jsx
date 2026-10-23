@@ -96,6 +96,7 @@ function App() {
   useEffect(() => { game.current?.setName(s.profile.house) }, [s.profile.house, ready])
   useEffect(() => { game.current?.setQuality(s.settings.quality) }, [s.settings.quality, ready])
   useEffect(() => { game.current?.setReduceMotion(s.settings.reduceMotion) }, [s.settings.reduceMotion, ready])
+  useEffect(() => { game.current?.setTimeOfDay(s.settings.time || 'night') }, [s.settings.time, ready])
   const editing = !!ed?.active
   useEffect(() => { game.current?.setInputEnabled(!open && !editing) }, [open, editing, ready])
   useEffect(() => { game.current?.setIdle(!!open && !editing) }, [open, editing, ready])

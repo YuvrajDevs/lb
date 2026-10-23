@@ -203,16 +203,20 @@ export function makeShell(spec) {
   box(walls.right, [0.12, 0.14, D], [HX - 0.06, H - 0.14, 0], TRIM)
 
   // hidden cove light: a glowing strip under the crown that washes colour down the walls
-  const strip = std('#fff3d8', { emissive: cove, emissiveIntensity: 1.2 })
-  box(walls.back, [W - 0.4, 0.05, 0.05], [0, H - 0.2, -HZ + 0.15], strip)
-  box(walls.left, [0.05, 0.05, D - 0.4], [-HX + 0.15, H - 0.2, 0], strip)
-  box(walls.right, [0.05, 0.05, D - 0.4], [HX - 0.15, H - 0.2, 0], strip)
+  // (this room's own material, kept out of the merge, so the strips can dim when the room's lamps are off)
+  const strip = new THREE.MeshStandardMaterial({ color: '#fff3d8', emissive: cove, emissiveIntensity: 1.2, roughness: 0.46 })
+  const coveParts = [
+    box(walls.back, [W - 0.4, 0.05, 0.05], [0, H - 0.2, -HZ + 0.15], strip),
+    box(walls.left, [0.05, 0.05, D - 0.4], [-HX + 0.15, H - 0.2, 0], strip),
+    box(walls.right, [0.05, 0.05, D - 0.4], [HX - 0.15, H - 0.2, 0], strip),
+  ]
+  coveParts.forEach(m => { m.userData.keep = true })
   // (the back wall's wash stops at the window, so no glowing film hangs across the glass)
-  ;[[-HX + 0.3, WX0 - 0.2], [WX1 + 0.2, HX - 0.3]].forEach(([a, b]) => { if (b - a > 0.3) wash(walls.back, [(a + b) / 2, H - 0.95, -HZ + 0.06], b - a, 1.5, cove, 0.18) })
+  ;[[-HX + 0.3, WX0 - 0.2], [WX1 + 0.2, HX - 0.3]].forEach(([a, b]) => { if (b - a > 0.3) coveParts.push(wash(walls.back, [(a + b) / 2, H - 0.95, -HZ + 0.06], b - a, 1.5, cove, 0.18)) })
   // side washes stop at side windows too
   const sideWash = (g, x, list) => {
     const cuts = [-HZ + 0.3, ...list.flatMap(o => [o.c - o.w / 2 - 0.2, o.c + o.w / 2 + 0.2]), HZ - 0.3]
-    for (let k = 0; k < cuts.length; k += 2) if (cuts[k + 1] - cuts[k] > 0.3) wash(g, [x, H - 0.95, (cuts[k] + cuts[k + 1]) / 2], cuts[k + 1] - cuts[k], 1.5, cove, 0.15, Math.PI / 2)
+    for (let k = 0; k < cuts.length; k += 2) if (cuts[k + 1] - cuts[k] > 0.3) coveParts.push(wash(g, [x, H - 0.95, (cuts[k] + cuts[k + 1]) / 2], cuts[k + 1] - cuts[k], 1.5, cove, 0.15, Math.PI / 2))
   }
   sideWash(walls.left, -HX + 0.06, leftOpen)
   sideWash(walls.right, HX - 0.06, rightOpen)
@@ -261,5 +265,11 @@ export function makeShell(spec) {
     floorMat.needsUpdate = true
   }
 
-  return { root, walls, ceiling, colliders, solid, frames, door, doorX: doorFront, win: [WX0, WX1], setPaint, setFloor }
+  /** the built-in strip lights along the tops of the walls: on with the lamps, nearly dark when they are all off */
+  const setCove = on => {
+    strip.emissiveIntensity = on ? 1.2 : 0.06
+    coveParts.forEach(m => { if (m.material !== strip) m.visible = on })
+  }
+
+  return { root, walls, ceiling, colliders, solid, frames, door, doorX: doorFront, win: [WX0, WX1], setPaint, setFloor, setCove }
 }

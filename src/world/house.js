@@ -301,7 +301,8 @@ export function buildHouse(opts = {}) {
 
   // ---------- global lights: an evening sky (rose above, violet below) and the low sun over the sea ----------
   const lights = new THREE.Group()
-  lights.add(new THREE.HemisphereLight('#5a6cb8', '#22203e', 0.75)) // night: blue sky light, dark ground
+  const hemi = new THREE.HemisphereLight('#5a6cb8', '#22203e', 0.75) // night: blue sky light, dark ground
+  lights.add(hemi)
   const moon = new THREE.DirectionalLight('#9fb4ff', 1.3) // moonlight: the scene's one shadow-casting key light
   moon.target.position.set(0, 5.5, 0)
   moon.position.set(4.5, 5.5 + 9, 22) // from the moon over the sea, so the front of the house is silvered
@@ -362,8 +363,10 @@ export function buildHouse(opts = {}) {
       const w = WINDOWS[r.id].x
       r.light.intensity = 2.4; r.light.position.set((w[0] + w[1]) / 2, 3.0, -1.6); r.light.color.set('#8fa4e8')
       r.fill.intensity = 1.2; r.fill.color.set('#7f8fd0')
+      r.sh.setCove(false)
       return
     }
+    r.sh.setCove(true)
     r.fill.intensity = 5.5; r.fill.color.set('#ffd58a')
     r.light.color.set(light.color)
     // the room light follows its lamp but keeps well clear of the walls and ceiling: right next to a wall it
@@ -433,6 +436,13 @@ export function buildHouse(opts = {}) {
 
   return {
     group, lights, rooms, colliders, frames, roof, roofBase, stairs, setName, streetProps: street,
+    /** the outdoor light for a time of day: moonlit night, or a warm evening */
+    setDaylight(time) {
+      const ev = time === 'evening'
+      hemi.color.set(ev ? '#c890c0' : '#5a6cb8'); hemi.groundColor.set(ev ? '#3a2656' : '#22203e'); hemi.intensity = ev ? 0.8 : 0.75
+      moon.color.set(ev ? '#ffa66e' : '#9fb4ff'); moon.intensity = ev ? 1.7 : 1.3
+      moon.position.set(4.5, 5.5 + (ev ? 7.5 : 9), 22)
+    },
     furnish, setStyle, setFence, setSign, roomById, gardenPlaced,
     setSwitches(next) { switches = next },
     /** show only one room (for editing it) or, with null, the whole house again */

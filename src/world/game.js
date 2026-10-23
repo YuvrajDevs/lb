@@ -5,9 +5,10 @@ import { HX, HZ } from './kit.js'
 import { resolveDefaults, footOf, infoOf } from './furnish.js'
 import { createEditor } from './editor.js'
 import { makeEnvironment } from './env.js'
-import { buildScenery, FOG_COLOR, FOG_NEAR, FOG_FAR, CLIFF_Z } from './scenery.js'
+import { buildScenery, applyPalette, FOG_COLOR, FOG_NEAR, FOG_FAR, CLIFF_Z } from './scenery.js'
 import { bake } from './bake.js'
 import { setCurtain } from './switches.js'
+import { setSeaNear } from '../game/audio.js'
 import { findZFighting, settleCoplanar } from './zfight.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
@@ -145,7 +146,11 @@ export function createGame(container, opts = {}) {
   const house = buildHouse({ layout, style: opts.style, fence: opts.fence, sign: opts.sign, switches: opts.switches })
   scene.add(house.group, house.lights)
   // the cliff, the sea in front and the magical land behind
-  const scenery = buildScenery()
+  // the time of day: 'night', 'evening', or 'auto' (evening from 5 to 8 pm on your own clock, night otherwise)
+  const resolveTime = t => (t === 'auto' ? ((h => (h >= 17 && h < 20 ? 'evening' : 'night'))(new Date().getHours())) : t || 'night')
+  let timeSetting = opts.time || 'night'
+  let timeNow = resolveTime(timeSetting)
+  const scenery = buildScenery(timeNow)
   bake(scenery.statics)
   scene.add(scenery.group)
   scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR) // the island sits in a thick bank of fog (see scenery.js)
@@ -205,7 +210,7 @@ export function createGame(container, opts = {}) {
       }`,
   }
   let bloomOn = true
-  scene.environment = makeEnvironment(renderer)
+  scene.environment = makeEnvironment(renderer, timeNow)
   scene.environmentIntensity = 0.3
   // the glow pipeline renders off-screen, where the canvas's own antialiasing doesn't apply: give it 4x MSAA
   // and half-float colour so edges stay crisp and the dark gradients don't band
@@ -491,14 +496,14 @@ export function createGame(container, opts = {}) {
       const closed = !cur.closed
       switches = { ...switches, [uid]: { ...cur, closed } }
       curtainAnims.set(o, closed ? 0 : 1)
-      opts.onSfx?.('place')
+      opts.onSfx?.('curtain')
     } else {
       switches = { ...switches, [uid]: { ...cur, off: !cur.off } }
       const id = areaOfObj(o)
       house.setSwitches(switches)
       if (id) house.furnish(id, layout[id], { bakeIt: true })
       shadowFrames = 3
-      opts.onSfx?.('click')
+      opts.onSfx?.('switch')
     }
     house.setSwitches(switches)
     opts.onSwitch?.(uid, switches[uid])
@@ -671,6 +676,7 @@ export function createGame(container, opts = {}) {
   let calmMotion = false
   let sceneryT = 0
   let gateOpen = 0
+  let doorWas = 0, gateWas = 0, stepT = 0
 
   function setOpacity(group, k) {
     group.traverse(o => {
@@ -706,7 +712,8 @@ export function createGame(container, opts = {}) {
     avgMs += (slowness - avgMs) * 0.05
     last = nowMs
     elapsed += dt
-    if (frameCount % 120 === 0) settleCoplanar(scene) // new furniture, lamps switched: settle their materials too
+    if (frameCount % 120 === 0) settleCoplanar(scene)
+    if (frameCount % 3600 === 0 && timeSetting === 'auto' && resolveTime('auto') !== timeNow) api.setTimeOfDay('auto') // new furniture, lamps switched: settle their materials too
     if (++frameCount % 45 === 0) {
       // adaptive resolution: back off when frames can't keep to the budget, creep back up when there is headroom
       if (avgMs > 1.45 && pr > minPR) { pr = Math.max(minPR, pr - 0.25); renderer.setPixelRatio(pr); renderer.setSize(container.clientWidth, container.clientHeight); composer.setPixelRatio(pr); composer.setSize(container.clientWidth, container.clientHeight) }
@@ -759,6 +766,10 @@ export function createGame(container, opts = {}) {
     const iMoved = dir.lengthSq() > 0 && walk(me, dir, dt, (eyes ? SPEED * 0.8 : SPEED) * run, !eyes || !steering)
     if (me.path.length && dir.lengthSq() > 0 && !iMoved) me.path = []
     me.moving = iMoved
+    // soft footsteps while you walk (quicker when running), and the sea louder the nearer you are to it
+    stepT = iMoved ? stepT + dt * run : 0.3
+    if (stepT > 0.42) { stepT = 0; opts.onSfx?.('step') }
+    if (frameCount % 30 === 0) setSeaNear(me.pos.z > HZ ? 0.55 + (me.pos.z - HZ) / 12 : eyes ? 0.2 : 0.35)
 
     // --- partner wanders between the rooms, takes the stairs, and now and then steps out into the garden ---
     if (solo) { /* nobody else lives in a starter home */ } else if (partner.path.length) {
@@ -879,11 +890,15 @@ export function createGame(container, opts = {}) {
     scenery.update(sceneryT, pr, container.clientHeight)
     // front door swings open when you walk up to it
     const dd = Math.hypot(me.pos.x - house.door.x, me.pos.z - (HZ + 1.0))
-    doorOpen += ((dd < 2.6 && levelOf(me.pos.y) === 0 ? 1 : 0) - doorOpen) * Math.min(1, dt * 5)
+    const doorWant = dd < 2.6 && levelOf(me.pos.y) === 0 ? 1 : 0
+    if (doorWant !== doorWas) { doorWas = doorWant; opts.onSfx?.('door') }
+    doorOpen += (doorWant - doorOpen) * Math.min(1, dt * 5)
     house.door.pivot.rotation.y = -1.75 * doorOpen
     // the garden gate swings outward the same way when you come near it, from either side
     const gd = Math.hypot(me.pos.x, me.pos.z - house.gate.z)
-    gateOpen += ((gd < 2.4 && levelOf(me.pos.y) === 0 ? 1 : 0) - gateOpen) * Math.min(1, dt * 5)
+    const gateWant = gd < 2.4 && levelOf(me.pos.y) === 0 ? 1 : 0
+    if (gateWant !== gateWas) { gateWas = gateWant; opts.onSfx?.('gate') }
+    gateOpen += (gateWant - gateOpen) * Math.min(1, dt * 5)
     house.gate.leaves.forEach(l => { l.pivot.rotation.y = l.side * 1.6 * gateOpen })
     if (roofApplied !== roofFade) { roofApplied = roofFade; setOpacity(house.roof, roofFade) }
 
@@ -919,7 +934,7 @@ export function createGame(container, opts = {}) {
   settleCoplanar(scene)
   frame()
 
-  return {
+  const api = {
     setView,
     takeStairs,
     /** lock the keyboard while a window (shop, settings...) is open */
@@ -979,6 +994,20 @@ export function createGame(container, opts = {}) {
     /** 'low' | 'medium' | 'high': caps the render sharpness */
     /** the Reduce motion setting */
     setReduceMotion(b) { calmMotion = !!b },
+    /** 'night' | 'evening' | 'auto' */
+    setTimeOfDay(t) {
+      timeSetting = t
+      const next = resolveTime(t)
+      if (next === timeNow && house.daylightSet) return
+      timeNow = next
+      house.daylightSet = true
+      applyPalette(timeNow)
+      scene.fog.color.copy(FOG_COLOR) // (the fog keeps its own copy of the colour)
+      house.setDaylight(timeNow)
+      scene.environment?.dispose?.()
+      scene.environment = makeEnvironment(renderer, timeNow)
+      shadowFrames = 3
+    },
     setQuality(q) {
       const cap = { low: 1, medium: 1.5, high: 2 }[q] || 2
       maxPR = Math.min(window.devicePixelRatio, cap)
@@ -1096,4 +1125,5 @@ export function createGame(container, opts = {}) {
       container.innerHTML = ''
     },
   }
+  return api
 }
