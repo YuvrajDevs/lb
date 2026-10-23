@@ -27,7 +27,7 @@ function signTexture(text) {
   for (let y = 0; y < 220; y += 18) { g.fillStyle = y % 36 ? 'rgba(255,230,190,0.06)' : 'rgba(0,0,0,0.08)'; g.fillRect(0, y, 768, 9) }
   g.strokeStyle = '#e9d3a8'; g.lineWidth = 10; g.strokeRect(10, 10, 748, 200)
   g.fillStyle = '#fff1d0'
-  g.font = '700 96px Georgia, serif'
+  g.font = '600 104px Oswald, sans-serif'
   g.textAlign = 'center'; g.textBaseline = 'middle'
   g.fillText(text, 384, 112, 680)
   const t = new THREE.CanvasTexture(c)

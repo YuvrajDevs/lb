@@ -46,10 +46,17 @@ function App() {
   const [tryOn, setTryOn] = useState({ skin: null, hat: null })
   const [ed, setEd] = useState(null) // the room editor's live state
   const [rotateNote, setRotateNote] = useState(true)
+  const [ready, setReady] = useState(false) // the 3D world exists
 
   useEffect(() => {
+    let alive = true
+    let g = null
     const saved = store.get()
-    const g = createGame(mount.current, {
+    const boot = async () => {
+      // canvas text (signs, name plates) needs Oswald loaded before it is drawn
+      try { await Promise.all([document.fonts.load('600 40px Oswald'), document.fonts.load('400 40px Oswald')]) } catch { /* the fallback font is fine */ }
+      if (!alive) return
+      g = createGame(mount.current, {
       onView: setView,
       layout: saved.layout,
       style: saved.style,
@@ -60,30 +67,33 @@ function App() {
       onEditor: setEd,
       onBlocked: reason => store.notify(reason, 'warn'),
       onSfx: sfx,
-    })
-    game.current = g
-    if (debug) { window.__cc = g; window.__store = store }
-    return () => g.dispose()
+      })
+      game.current = g
+      setReady(true)
+      if (debug) { window.__cc = g; window.__store = store }
+    }
+    boot()
+    return () => { alive = false; g?.dispose() }
   }, [])
 
   // keep the 3D world in sync with the app state
   const skin = tryOn.skin ?? store.equippedTier('skin')
   const hat = tryOn.hat ?? store.equippedTier('hat')
-  useEffect(() => { game.current?.setSkin(skin) }, [skin])
-  useEffect(() => { game.current?.setHat(hat) }, [hat])
-  useEffect(() => { game.current?.setName(s.profile.house) }, [s.profile.house])
-  useEffect(() => { game.current?.setQuality(s.settings.quality) }, [s.settings.quality])
+  useEffect(() => { game.current?.setSkin(skin) }, [skin, ready])
+  useEffect(() => { game.current?.setHat(hat) }, [hat, ready])
+  useEffect(() => { game.current?.setName(s.profile.house) }, [s.profile.house, ready])
+  useEffect(() => { game.current?.setQuality(s.settings.quality) }, [s.settings.quality, ready])
   const editing = !!ed?.active
-  useEffect(() => { game.current?.setInputEnabled(!open && !editing) }, [open, editing])
-  useEffect(() => { game.current?.setIdle(!!open && !editing) }, [open, editing])
+  useEffect(() => { game.current?.setInputEnabled(!open && !editing) }, [open, editing, ready])
+  useEffect(() => { game.current?.setIdle(!!open && !editing) }, [open, editing, ready])
 
   // what the home looks like follows the saved state (this also handles undo, redo and reset)
-  useEffect(() => { if (s.layout) game.current?.setLayout(s.layout) }, [s.layout])
-  useEffect(() => { ['study', 'bedroom', 'kitchen', 'living'].forEach(id => game.current?.setStyle(id, s.style[id])) }, [s.style])
+  useEffect(() => { if (s.layout) game.current?.setLayout(s.layout) }, [s.layout, ready])
+  useEffect(() => { ['study', 'bedroom', 'kitchen', 'living'].forEach(id => game.current?.setStyle(id, s.style[id])) }, [s.style, ready])
   const fenceTier = s.equipped.fence ? ITEM_BY_ID[s.equipped.fence].tier : 0
   const signTier = s.equipped.sign ? ITEM_BY_ID[s.equipped.sign].tier : 0
-  useEffect(() => { game.current?.setFence(fenceTier) }, [fenceTier])
-  useEffect(() => { game.current?.setSign(signTier) }, [signTier])
+  useEffect(() => { game.current?.setFence(fenceTier) }, [fenceTier, ready])
+  useEffect(() => { game.current?.setSign(signTier) }, [signTier, ready])
 
   // sound
   useEffect(() => { startOnFirstGesture() }, [])

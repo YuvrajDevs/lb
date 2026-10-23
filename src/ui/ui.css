@@ -1,9 +1,9 @@
 /* ---------- tokens ---------- */
 :root {
-  --panel: rgba(24, 20, 44, 0.78);
-  --panel-solid: #1b1736;
-  --panel-2: rgba(255, 255, 255, 0.05);
-  --edge: rgba(255, 224, 196, 0.14);
+  --panel: rgba(0, 0, 0, 0.8);
+  --panel-solid: rgba(5, 5, 8, 0.96);
+  --panel-2: rgba(255, 255, 255, 0.06);
+  --edge: rgba(255, 255, 255, 0.1);
   --text: #fff0dc;
   --muted: #b9a9c6;
   --amber: #ffb86b;
@@ -411,3 +411,70 @@ input[type='text'], input:not([type]), .field input, .invite input {
 .rotate-note { position: absolute; z-index: 50; left: 50%; top: 14px; transform: translateX(-50%); display: none; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 16px; background: var(--panel-solid); border: 1px solid rgba(255, 184, 107, 0.5); font-size: 13px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); max-width: calc(100% - 24px); }
 .rotate-note button { border: 0; background: transparent; color: var(--muted); font-size: 18px; cursor: pointer; }
 @media (pointer: coarse) and (orientation: portrait) and (max-width: 760px) { .rotate-note { display: flex; } }
+
+
+/* ---------- dark theme: 80% black panels, sharp Oswald labels ---------- */
+:root { --radius: 14px; }
+body, button, input { font-family: 'Oswald', system-ui, sans-serif; }
+
+/* every panel is the same black glass */
+.panel, .dock, .pill, .ed-areas, .ed-drawer, .ed-bar, .sel-tools, .ed-msg, .toast, .compass-wrap .nudge, .rotate-note, .pad button {
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.panel { border-radius: 14px; }
+.dock { border-radius: 16px; }
+.pill { border-radius: 12px; }
+.ed-areas, .ed-bar, .ed-drawer { border-radius: 14px; }
+.sheet { background: rgba(4, 4, 7, 0.92); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 18px; }
+.scrim { background: rgba(0, 0, 0, 0.62); }
+.sheet-head { border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.sheet-head h2 { font-size: 22px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.sheet-head p { letter-spacing: .02em; }
+
+/* buttons: flat, squarer, uppercase, one clear primary */
+.btn, .chip, .bar-btn, .seg button, .views button, .ed-areas button, .ed-tabs button, .rail-btn, .dock-btn span, .try {
+  font-family: 'Oswald', system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase;
+}
+.btn { border-radius: 8px; padding: 9px 16px; font-size: 12.5px; font-weight: 600; }
+.btn.primary { background: #ffb347; color: #1a1006; }
+.btn.primary:hover:not(:disabled) { background: #ffc46b; filter: none; }
+.btn.ghost { background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.14); color: #f4f0ea; }
+.btn.ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
+.chip { border-radius: 8px; padding: 6px 12px; font-size: 11.5px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); }
+.chip.on, .ed-areas button.on, .views button.on, .seg button.on, .dock-btn.on { background: #ffb347; color: #1a1006; border-color: #ffb347; }
+.seg { border-radius: 10px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); }
+.seg button, .views button { border-radius: 7px; }
+.views { border-radius: 12px; }
+.ed-areas button, .ed-tabs button { border-radius: 9px; font-size: 12.5px; }
+.ed-tabs { background: rgba(255, 255, 255, 0.05); border-radius: 11px; }
+.ed-tabs button.on { background: rgba(255, 179, 71, 0.18); color: #ffd08a; }
+.dock-btn { border-radius: 12px; }
+.dock-btn span { font-size: 10px; }
+.bar-btn { border-radius: 9px; background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.12); font-size: 12px; }
+.bar-btn.on { background: rgba(255, 179, 71, 0.2); color: #ffd08a; border-color: rgba(255, 179, 71, 0.55); }
+.icon-btn { background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.12); }
+.rail-btn { border-radius: 9px; font-size: 12.5px; }
+.rail-btn.on { background: rgba(255, 179, 71, 0.16); color: #ffd08a; }
+
+/* cards, tiles, inputs */
+.card, .tile, .ed-card, .slot, .panel-card, .day, .perk, .how, .invites li, .couple-hero {
+  background: rgba(255, 255, 255, 0.045); border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 12px;
+}
+.card h3, .ed-card b { font-weight: 500; letter-spacing: .02em; }
+.card.r-epic, .card.r-legendary { background: linear-gradient(180deg, color-mix(in srgb, var(--rc) 12%, transparent), rgba(255, 255, 255, 0.03)); }
+.rarity { font-weight: 500; letter-spacing: .14em; }
+.price { font-weight: 600; }
+.field input, .invite input, .chat input { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; }
+.sel-tools { border: 1px solid rgba(255, 179, 71, 0.6); border-radius: 12px; }
+.sel-tools button { border-radius: 8px; background: rgba(255, 255, 255, 0.08); }
+.ed-msg { border-radius: 10px; }
+.toast { border-radius: 10px; text-transform: none; letter-spacing: .02em; }
+.switch-line, .toggle b { letter-spacing: .02em; }
+.top-left h1 { font-weight: 700; letter-spacing: .08em; }
+.stairs { border-radius: 10px; background: #ffb347; color: #1a1006; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+.big-num { font-weight: 600; }
+.day .gift { border-radius: 10px; }
+.meter, .meter i { border-radius: 4px; }

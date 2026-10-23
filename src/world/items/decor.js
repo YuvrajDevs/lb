@@ -162,7 +162,7 @@ function signTexture(text, t) {
   if (t <= 3) for (let y = 0; y < 160; y += 18) { x.fillStyle = y % 36 ? 'rgba(255,230,190,0.06)' : 'rgba(0,0,0,0.08)'; x.fillRect(0, y, 512, 9) }
   if (t === 3) { x.strokeStyle = '#e9d3a8'; x.lineWidth = 8; x.strokeRect(8, 8, 496, 144) }
   x.fillStyle = at(['#fff1d0', '#fff1d0', '#fff1d0', '#2f2f36', '#e8d8b8', '#ff7ae0', '#2f3138', '#ffe29a', '#ffe9a0', '#9fffe8'], t)
-  x.font = '700 76px Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle'
+  x.font = '600 84px Oswald, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'
   if (t === 6) { x.shadowColor = '#ff7ae0'; x.shadowBlur = 24 }
   if (t === 10) { x.shadowColor = '#5fffd0'; x.shadowBlur = 20 }
   x.fillText(text, 256, 84, 460)

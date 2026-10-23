@@ -192,7 +192,7 @@ export function labelTexture(text) {
   const [c, g] = canvas(1024, 96)
   g.fillStyle = '#efe0bd'; g.fillRect(0, 0, c.width, c.height)
   g.fillStyle = '#7a4f35'
-  g.font = '600 50px Georgia, serif'
+  g.font = '600 52px Oswald, sans-serif'
   g.textAlign = 'center'; g.textBaseline = 'middle'
   g.fillText(text, c.width / 2, c.height / 2 + 3)
   return finish(c)

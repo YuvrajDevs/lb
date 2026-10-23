@@ -4,6 +4,11 @@ import { createCube, FLOAT } from './cube.js'
 import { HX, HZ } from './kit.js'
 import { resolveDefaults, footOf, infoOf } from './furnish.js'
 import { createEditor } from './editor.js'
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { AREA_LIST } from '../game/areas.js'
 import { CELL } from '../game/grid.js'
 
@@ -45,6 +50,18 @@ export function createGame(container, opts = {}) {
   container.appendChild(renderer.domElement)
 
   const scene = new THREE.Scene()
+  // a soft blue night backdrop (the bloom pass needs an opaque background to blend with)
+  {
+    const c = document.createElement('canvas')
+    c.width = 4; c.height = 256
+    const g = c.getContext('2d')
+    const gr = g.createLinearGradient(0, 0, 0, 256)
+    gr.addColorStop(0, '#05071b'); gr.addColorStop(0.55, '#10164a'); gr.addColorStop(1, '#2a2a72')
+    g.fillStyle = gr; g.fillRect(0, 0, 4, 256)
+    const t = new THREE.CanvasTexture(c)
+    t.colorSpace = THREE.SRGBColorSpace
+    scene.background = t
+  }
   // the layout of every room: the player's saved one, or the standard furnishing for a new home
   const layout = opts.layout || Object.fromEntries(AREA_LIST.map(id => [id, resolveDefaults(id)]))
   if (!opts.layout) opts.onLayoutInit?.(layout)
@@ -80,11 +97,37 @@ export function createGame(container, opts = {}) {
     camera.updateProjectionMatrix()
     eyeCam.updateProjectionMatrix()
     renderer.setSize(w, h)
+    composer.setPixelRatio(pr)
+    composer.setSize(w, h)
   }
   resize()
   const ro = new ResizeObserver(resize)
   ro.observe(container)
   view.dist = roomDist
+
+  // ---- the look: glow around lit windows and lamps, a soft vignette and cooler shadows ----
+  const GRADE = {
+    uniforms: { tDiffuse: { value: null } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `
+      uniform sampler2D tDiffuse; varying vec2 vUv;
+      void main(){
+        vec4 c = texture2D(tDiffuse, vUv);
+        float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+        c.rgb += vec3(0.002, 0.006, 0.02) * (1.0 - smoothstep(0.0, 0.5, l)); // shadows lean blue
+        float d = distance(vUv, vec2(0.5));
+        c.rgb *= 1.0 - smoothstep(0.38, 0.95, d) * 0.45;                     // vignette
+        gl_FragColor = c;
+      }`,
+  }
+  let bloomOn = true
+  const composer = new EffectComposer(renderer)
+  const renderPass = new RenderPass(scene, camera)
+  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.7, 0.92)
+  composer.addPass(renderPass)
+  composer.addPass(bloom)
+  composer.addPass(new ShaderPass(GRADE))
+  composer.addPass(new OutputPass())
 
   // ---- people ----
   function makeActor(color, room, lx, lz) {
@@ -374,8 +417,8 @@ export function createGame(container, opts = {}) {
     elapsed += dt
     if (++frameCount % 45 === 0) {
       // adaptive resolution: back off when frames get slow, creep back up when there is headroom
-      if (avgMs > 24 && pr > 1) { pr = Math.max(1, pr - 0.25); renderer.setPixelRatio(pr); renderer.setSize(container.clientWidth, container.clientHeight) }
-      else if (avgMs < 13 && pr < maxPR) { pr = Math.min(maxPR, pr + 0.25); renderer.setPixelRatio(pr); renderer.setSize(container.clientWidth, container.clientHeight) }
+      if (avgMs > 24 && pr > 1) { pr = Math.max(1, pr - 0.25); renderer.setPixelRatio(pr); renderer.setSize(container.clientWidth, container.clientHeight); composer.setPixelRatio(pr); composer.setSize(container.clientWidth, container.clientHeight) }
+      else if (avgMs < 13 && pr < maxPR) { pr = Math.min(maxPR, pr + 0.25); renderer.setPixelRatio(pr); renderer.setSize(container.clientWidth, container.clientHeight); composer.setPixelRatio(pr); composer.setSize(container.clientWidth, container.clientHeight) }
     }
     const t = elapsed
     const eyes = view.mode === 'eyes'
@@ -568,7 +611,7 @@ export function createGame(container, opts = {}) {
     // while a window is open the world only needs to stay alive, not smooth
     if (idle && (frameCount % 4)) return
     if (shadowFrames > 0) { renderer.shadowMap.needsUpdate = true; shadowFrames-- }
-    renderer.render(scene, active)
+    if (bloomOn) { renderPass.camera = active; composer.render() } else renderer.render(scene, active)
   }
   frame()
 
@@ -634,8 +677,11 @@ export function createGame(container, opts = {}) {
       const cap = { low: 1, medium: 1.5, high: 2 }[q] || 2
       maxPR = Math.min(window.devicePixelRatio, cap)
       pr = Math.min(pr, maxPR)
+      bloomOn = q !== 'low' // the glow is the most expensive part: the battery-saver setting drops it
       renderer.setPixelRatio(pr)
       renderer.setSize(container.clientWidth, container.clientHeight)
+      composer.setPixelRatio(pr)
+      composer.setSize(container.clientWidth, container.clientHeight)
     },
     /** tier numbers from the shop (1-10) or null */
     setSkin(tier) { me.cube.setSkin(tier) },
@@ -725,6 +771,7 @@ export function createGame(container, opts = {}) {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
+      composer.dispose()
       renderer.dispose()
       container.innerHTML = ''
     },

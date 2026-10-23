@@ -5,8 +5,8 @@
 :root {
   --ink: #fff0dc;
   --dim: #d9bccb;
-  --glass: rgba(40, 26, 60, 0.55);
-  --line: rgba(255, 220, 190, 0.16);
+  --glass: rgba(0, 0, 0, 0.8);
+  --line: rgba(255, 255, 255, 0.1);
   --glow: #ffb86b;
 }
 
@@ -15,7 +15,7 @@ body {
   margin: 0;
   overflow: hidden;
   color: var(--ink);
-  font-family: ui-rounded, 'Nunito', system-ui, sans-serif;
+  font-family: 'Oswald', system-ui, sans-serif;
   background:
     radial-gradient(ellipse 80% 55% at 50% 110%, #2c2a63 0%, rgba(44, 42, 99, 0) 70%),
     linear-gradient(180deg, #070a1f 0%, #101640 60%, #1b1f55 100%);
