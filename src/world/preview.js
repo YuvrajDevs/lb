@@ -24,7 +24,7 @@ function init() {
   renderer.setClearColor(0x000000, 0)
   scene = new THREE.Scene()
   scene.environment = makeEnvironment(renderer)
-  scene.environmentIntensity = 0.8
+  scene.environmentIntensity = 0.5
   scene.add(new THREE.HemisphereLight('#dfe6ff', '#6a5a78', 1.5))
   const key = new THREE.DirectionalLight('#fff0d8', 2.6)
   key.position.set(-4, 7, 6)

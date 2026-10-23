@@ -125,7 +125,7 @@ export function createGame(container, opts = {}) {
   }
   let bloomOn = true
   scene.environment = makeEnvironment(renderer)
-  scene.environmentIntensity = 0.7
+  scene.environmentIntensity = 0.3
   composer = new EffectComposer(renderer)
   composer.setPixelRatio(pr)
   composer.setSize(container.clientWidth, container.clientHeight)

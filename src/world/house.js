@@ -259,9 +259,9 @@ export function buildHouse(opts = {}) {
   moon.shadow.normalBias = 0.04
   lights.add(moon, moon.target)
   // coloured rim lights, like the neon spill in the references: they graze the glossy surfaces from both sides
-  const rimL = new THREE.DirectionalLight('#a46cff', 1.1)
+  const rimL = new THREE.DirectionalLight('#a46cff', 0.6)
   rimL.position.set(-18, 7, 8)
-  const rimR = new THREE.DirectionalLight('#ff8a5a', 0.9)
+  const rimR = new THREE.DirectionalLight('#ff8a5a', 0.5)
   rimR.position.set(18, 5, 10)
   lights.add(rimL, rimR)
 
