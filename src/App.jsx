@@ -65,7 +65,8 @@ function App() {
   const [title, setTitle] = useState(true) // the title screen, shown once each time the game opens
   // a new player's welcome: 'name' (who's moving in), 'rising' (the home rises from the cloud), 'guide'
   const [welcome, setWelcome] = useState(null)
-  const arriving = useRef(!store.get().settings.arrived && !store.get().settings.onboarded) // brand new: asked their name first
+  // a brand-new player (asked their name first): known only once their account has loaded (see below)
+  const arriving = useRef(false)
   // the title, the welcome and the house rising are moments of their own: no HUD over them
   const cinematic = title || welcome === 'name' || welcome === 'rising'
   const viewPick = useRef(null)
@@ -97,7 +98,7 @@ function App() {
     }
   }, [isOnline, s.net?.status])
   // a brand-new account: asked its name first
-  useEffect(() => { if (isOnline && !s.settings.arrived && !s.settings.onboarded) arriving.current = true }, [isOnline, s.settings.arrived, s.settings.onboarded])
+  useEffect(() => { arriving.current = isOnline && !s.settings.arrived && !s.settings.onboarded }, [isOnline, s.settings.arrived, s.settings.onboarded])
   const titleRef = useRef(true)
   titleRef.current = title
   const lastKind = useRef(homeKind)
@@ -381,7 +382,7 @@ function App() {
     setTimeout(() => setTitle(false), 650)
     // someone new (or still called by the old default name) is asked who they are first
     const p = store.get().profile
-    if (arriving.current || !p.name) setTimeout(() => setWelcome('name'), 700)
+    if (arriving.current) setTimeout(() => setWelcome('name'), 700)
   }
   const tryItem = useCallback((slot, tier) => { setTryOn(t => ({ ...t, [slot]: tier })); if (tier != null) store.questEvent('tryon') }, [])
   const openShopAt = useCallback(cat => { setShopCat(cat); setOpen('shop') }, [])

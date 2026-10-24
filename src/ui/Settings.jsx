@@ -16,7 +16,7 @@ const KEYS = [
   ['Eye button', 'Views: my eyes · close-up · room · house · outside · playground'],
   ['Click a lamp or curtain', 'Switch it off and on · open and shut'],
   ['Hold Shift or Space', 'Run (Shift is twice as fast)'],
-  ['Drag (my eyes)', 'Look around · scroll out to leave'],
+  ['Drag (my eyes)', 'Look around · the eye button to leave'],
   ['Esc', 'Close any window'],
 ]
 
@@ -80,8 +80,7 @@ export default function Settings({ onClose, debug, onAccount, onMenu }) {
 
         <section>
           <h3><Icon name="chat" size={16} /> Chat and privacy</h3>
-          <Toggle label="Show chat" hint="Arrives with online play. Only people in your world will be able to write to you." value={s.settings.chat} onChange={v => set('chat', v)} disabled />
-          <p className="soft">You will be able to report or block anyone from their message.</p>
+          <Toggle label="Show chat" hint="Only people in your world can write to you. Report or block anyone from their message." value={s.settings.chat} onChange={v => set('chat', v)} disabled />
         </section>
 
         <section>
