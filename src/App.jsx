@@ -7,7 +7,7 @@ import { autoFurnish } from './world/autofurnish'
 import { setAudio, startOnFirstGesture, sfx } from './game/audio'
 import { ITEM_BY_ID } from './game/catalog'
 import { store } from './game/store'
-import { windowEarning } from './game/economy'
+import { windowEarning, WINDOW_MIN } from './game/economy'
 import { useStore } from './ui/useStore'
 import { Boxet, Icon } from './ui/icons'
 import Compass from './Compass'
@@ -21,6 +21,7 @@ import Settings from './ui/Settings'
 import Onboarding from './ui/Onboarding'
 import World from './ui/World'
 import DailyReward from './ui/DailyReward'
+import StarCatch from './ui/StarCatch'
 import './ui/ui.css'
 
 const VIEWS = [
@@ -29,6 +30,7 @@ const VIEWS = [
   ['close', 'close-up'],
   ['eyes', 'my eyes'],
   ['street', 'street'],
+  ['playground', 'playground'],
 ]
 const HINTS = {
   house: 'drag or Q/E to spin · scroll in for a room, out for the street · click lamps and curtains',
@@ -36,6 +38,7 @@ const HINTS = {
   close: 'WASD or click the floor to move · scroll in to see through your eyes, out for the room',
   eyes: 'W/S walk · A/D step aside · drag to look · click lamps and curtains · scroll out to leave',
   street: 'drag or Q/E to walk around the house · scroll in to come back to the house',
+  playground: 'click anywhere to walk there · walk up to a glowing station to play · scroll in to come back',
 }
 const debug = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug')
 
@@ -88,6 +91,11 @@ function App() {
       onBlocked: reason => store.notify(reason, 'warn'),
       onSfx: sfx,
       onNotice: text => store.notify(text, 'info'),
+      onStation: id => {
+        if (id === 'stars') setOpen('stars')
+        else if (id === 'quiz') store.notify('The couple quiz needs your partner here with you. It arrives with online play.', 'info')
+        else store.notify('The arcade is still being built. Soon!', 'info')
+      },
       })
       game.current = g
       if (!saved.settings.artLowered) store.setSetting('artLowered', true)
@@ -126,6 +134,20 @@ function App() {
     window.addEventListener('pointerdown', away)
     return () => window.removeEventListener('pointerdown', away)
   }, [viewMenu])
+
+  // active time: any input in the last 2 minutes, with the game visible, counts towards the next payout
+  const lastInput = useRef(Date.now())
+  useEffect(() => {
+    const mark = () => { lastInput.current = Date.now() }
+    const evs = ['pointerdown', 'keydown', 'wheel', 'touchstart']
+    evs.forEach(e => window.addEventListener(e, mark, { passive: true }))
+    const STEP = 15
+    const t = setInterval(() => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastInput.current > 120000 || !store.get().settings.onboarded) return
+      store.addActive(STEP, windowEarning({ onlineActive: 1, withPartner: false }))
+    }, STEP * 1000)
+    return () => { evs.forEach(e => window.removeEventListener(e, mark)); clearInterval(t) }
+  }, [])
 
   // sound
   useEffect(() => { startOnFirstGesture() }, [])
@@ -172,8 +194,9 @@ function App() {
     sfx('place')
   }
 
-  const online = s.world.members.filter(m => m.online).length
-  const rate = windowEarning({ onlineActive: online, withPartner: s.couple.state === 'active' })
+  // (offline, only you count as online; with online play the server counts friends and your partner)
+  const rate = windowEarning({ onlineActive: 1, withPartner: false })
+  const minsLeft = Math.max(1, Math.ceil(WINDOW_MIN - (s.active?.sec || 0) / 60))
   const eyes = view.mode === 'eyes'
 
   return (
@@ -187,7 +210,7 @@ function App() {
         <p>{view.room}</p>
         <button className="pill" onClick={() => setOpen('shop')} aria-label={`${s.boxets} Boxets. Open the shop`}>
           <Boxet size={18} /> <b>{s.boxets.toLocaleString()}</b>
-          <small>{rate}/30 min</small>
+          <small title={`Every ${WINDOW_MIN} minutes of play pays ${rate} Boxets`}>+{rate} in {minsLeft} min</small>
         </button>
       </header>
 
@@ -231,6 +254,7 @@ function App() {
       {open === 'world' && <World onClose={close} />}
       {open === 'daily' && <DailyReward onClose={close} />}
       {open === 'settings' && <Settings onClose={close} debug={debug} />}
+      {open === 'stars' && <StarCatch onClose={close} />}
 
       {rotateNote && !open && !editing && (
         <div className="rotate-note" role="note">

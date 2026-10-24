@@ -207,11 +207,12 @@ export function seating(t, g) {
   box(g, [w, 0.85, 0.3], [0, 0.5, -0.45], col)
   ;[-1, 1].forEach(s => box(g, [0.28, 0.75, 1.2], [s * (w / 2 - 0.14), 0, 0], col))
   const n = Math.max(1, Math.round((w - 0.5) / 0.9))
-  for (let i = 0; i < n; i++) box(g, [(w - 0.76) / n - 0.04, 0.16, 0.95], [-((w - 0.76) / 2) + ((w - 0.76) / n) * (i + 0.5), 0.5, 0.08], cush)
+  // (the seat cushions sit 5 mm up, so their undersides never share a plane with the frame's back rest)
+  for (let i = 0; i < n; i++) box(g, [(w - 0.76) / n - 0.04, 0.16, 0.95], [-((w - 0.76) / 2) + ((w - 0.76) / n) * (i + 0.5), 0.505, 0.08], cush)
   if (t >= 5) box(g, [0.5, 0.45, 0.15], [-w / 2 + 0.55, 0.86, -0.05], '#f2c36b').rotation.z = 0.15
   if (t === 6) {
     box(g, [1.2, 0.5, 1.0], [-w / 2 + 0.6, 0, 1.1], col)
-    box(g, [1.0, 0.16, 0.9], [-w / 2 + 0.6, 0.5, 1.1], cush)
+    box(g, [1.0, 0.16, 0.9], [-w / 2 + 0.6, 0.505, 1.1], cush)
   }
   if (t === 7) for (let i = -1; i <= 1; i++) for (let j = 0; j < 2; j++) box(g, [0.14, 0.14, 0.06], [i * 0.5, 0.95 + j * 0.2, -0.28], '#e8c86a')
   if (t >= 9) [-1, 1].forEach(s => box(g, [0.08, 0.1, 1.3], [s * (w / 2 - 0.02), 0.78, 0], GOLD, METAL))

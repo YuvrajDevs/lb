@@ -204,6 +204,7 @@ export function createGame(container, opts = {}) {
 
   function resize() {
     const w = container.clientWidth, h = container.clientHeight
+    if (!w || !h) return // hidden (a minimised window or a closed pane): keep the last good size, never divide by 0
     const aspect = w / h
     const t = Math.tan((FOV * Math.PI) / 360)
     roomDist = Math.max(2.95 / 0.9 / t, (HX + 0.5) / 0.95 / (t * aspect)) + HZ + 0.3
@@ -289,7 +290,7 @@ export function createGame(container, opts = {}) {
     if (levelOf(me.pos.y) === 1 && Math.hypot(me.pos.x - S.x, me.pos.z - S.landingZ) < 1.5) return 'down'
     return null
   }
-  const shownMode = () => (view.mode === 'room' && view.mul.room > mulMax * 0.9 ? 'house' : view.mode)
+  const shownMode = () => (view.mode === 'room' && view.mul.room > mulMax * 0.9 ? 'house' : view.mode === 'street' && view.focusZ != null ? 'playground' : view.mode)
   const editing = () => view.mode === 'edit'
   const closedIn = () => view.mode === 'eyes' || view.mode === 'street' || (editing() && view.editArea === 'garden') // outside or first person: the house is closed, no cutaway
 
@@ -302,6 +303,15 @@ export function createGame(container, opts = {}) {
   }
 
   function setView(name) {
+    // the playground: the street camera, looking over the back garden at the playground behind the house
+    if (name === 'playground') {
+      setView('street')
+      view.azGoal = 0
+      view.elGoal = 0.85 // high enough to look over the roof
+      view.focusZ = (PLAYGROUND.zNear + PLAYGROUND.zFar) / 2 - 3.5
+      report()
+      return
+    }
     const eyes = name === 'eyes'
     const wasStreet = view.mode === 'street'
     view.override = null
@@ -313,6 +323,7 @@ export function createGame(container, opts = {}) {
     else return
     if (wasStreet && name !== 'street') { view.azGoal = 0 }
     view.focusX = 0
+    view.focusZ = null
     me.path = []
     active = eyes ? eyeCam : camera
     me.cube.setVisible(!eyes)
@@ -407,7 +418,17 @@ export function createGame(container, opts = {}) {
     const cells = []
     for (let k = idx(ti, tj); k !== undefined; k = came.get(k)) cells.push([k % nx, Math.floor(k / nx)])
     cells.reverse()
-    const clear = (a, b) => { const n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * 2); for (let t = 1; t < n; t++) if (!ok(Math.round(a[0] + (b[0] - a[0]) * t / n), Math.round(a[1] + (b[1] - a[1]) * t / n))) return false; return true }
+    // (a straight line is only taken if every point along it, every 8 cm, is clear: rounding to the grid could
+    //  otherwise shave a fence post's corner and leave you pushing against it)
+    const clear = (a, b) => {
+      const x0 = wx(a[0]), z0 = wz(a[1]), x1 = wx(b[0]), z1 = wz(b[1])
+      const n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.08)
+      for (let t = 1; t < n; t++) {
+        const x = x0 + (x1 - x0) * t / n, z = z0 + (z1 - z0) * t / n
+        if (blocked(x, z, level) || onStair(x, z)) return false
+      }
+      return true
+    }
     const pts = [cells[0]]
     for (let k = 2; k < cells.length; k++) if (!clear(pts[pts.length - 1], cells[k])) pts.push(cells[k - 1])
     pts.push(cells[cells.length - 1])
@@ -482,23 +503,36 @@ export function createGame(container, opts = {}) {
   const endDrag = e => {
     if (editing()) { drag = null; return }
     // a plain click uses a lamp or curtain if there is one under the pointer; otherwise it walks there
-    if (drag && !drag.moved && e.type === 'pointerup' && !interactAt(e) && !stationAt(e) && !closedIn()) clickMove(e)
+    // (outside views keep the house closed, but from the playground view you can still walk around the playground)
+    if (drag && !drag.moved && e.type === 'pointerup' && !interactAt(e) && !stationAt(e) && (!closedIn() || shownMode() === 'playground')) clickMove(e)
     drag = null
   }
 
-  // ---- the playground's game stations: for now a click says the game is on its way ----
+  // ---- the playground's game stations: click one to walk up to it; standing at it starts its game ----
+  let pendingStation = null
   const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.5)
   function stationAt(e) {
     const r = el.getBoundingClientRect()
     ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), active)
+    // the glowing ring, the floating gem or the board above it, or the ground right around the pad
+    const stations = house.playground.stations
+    const hit = house.playground.group.visible && ray.intersectObjects(stations.flatMap(s => s.hits), false)[0]
     const p = new THREE.Vector3()
-    if (!ray.ray.intersectPlane(groundPlane, p)) return false
-    const st = house.playground.stations.find(s => Math.hypot(s.x - p.x, s.z - p.z) < 1.6)
+    const st = hit ? stations.find(s => s.hits.includes(hit.object))
+      : ray.ray.intersectPlane(groundPlane, p) && stations.find(s => Math.hypot(s.x - p.x, s.z - p.z) < 1.6)
     if (!st) return false
-    opts.onNotice?.(`${st.name} is coming soon`)
     opts.onSfx?.('click')
+    if (nearStation(st)) { opts.onStation?.(st.id); return true }
+    if (levelOf(me.pos.y) !== 0) { opts.onNotice?.('Head downstairs and out of the back gate to reach the playground'); return true }
+    // walk up to the front of its pad, then start it on arrival
+    const spot = new THREE.Vector3(st.x, me.pos.y, st.z + 1.9)
+    me.path = findPath(me.pos, spot, 0) || groundRoute(me, spot)
+    marker.position.set(spot.x, me.pos.y + 0.03, spot.z)
+    markerLife = 1
+    pendingStation = st
     return true
   }
+  const nearStation = st => levelOf(me.pos.y) === 0 && Math.hypot(st.x - me.pos.x, st.z - me.pos.z) < 2.8
 
   // ---- things you can click: lamps switch off and on, curtains open and close ----
   let switches = { ...(opts.switches || {}) }
@@ -811,6 +845,11 @@ export function createGame(container, opts = {}) {
     const iMoved = dir.lengthSq() > 0 && walk(me, dir, dt, (eyes ? SPEED * 0.8 : SPEED) * run, !eyes || !steering)
     if (me.path.length && dir.lengthSq() > 0 && !iMoved) me.path = []
     me.moving = iMoved
+    // walked up to a game station you clicked: start its game
+    if (pendingStation && !me.path.length) {
+      if (steering || nearStation(pendingStation)) { if (!steering) opts.onStation?.(pendingStation.id); pendingStation = null }
+      else pendingStation = null
+    }
     // soft footsteps while you walk (quicker when running), and the sea louder the nearer you are to it
     stepT = iMoved ? stepT + dt * run : 0.3
     if (stepT > 0.42) { stepT = 0; opts.onSfx?.('step') }
@@ -876,7 +915,7 @@ export function createGame(container, opts = {}) {
       if (view.mode === 'close') {
         goalTarget.set(me.pos.x, me.pos.y + FLOAT + 0.4, me.pos.z)
       } else if (view.mode === 'street') {
-        goalTarget.set(view.focusX || 0, 4.6, 3.0)
+        goalTarget.set(view.focusX || 0, view.focusZ != null ? 0 : 4.6, view.focusZ ?? 3.0)
       } else if (view.mode === 'edit') {
         if (view.editArea === 'garden') goalTarget.set(0, 0.4, 6.4)
         else { const er = rooms.find(r => r.id === view.editArea); goalTarget.set(er.ox, er.oy + 1.1, 0.2) }
@@ -887,10 +926,10 @@ export function createGame(container, opts = {}) {
       }
       camTarget.lerp(goalTarget, k)
       const goalDist = view.mode === 'close' ? CLOSE_DIST * view.mul.close
-        : view.mode === 'street' ? houseDist * 1.05 * view.mul.street
+        : view.mode === 'street' ? (view.focusZ != null ? 30 : houseDist * 1.05) * view.mul.street
         : view.mode === 'edit' ? (view.editArea === 'garden' ? houseDist * 0.62 : roomDist * 0.98) * view.mul.edit
         : roomDist * view.mul.room
-      view.dist += (goalDist - view.dist) * k
+      view.dist = Number.isFinite(view.dist) ? view.dist + (goalDist - view.dist) * k : goalDist
       camera.position.set(
         camTarget.x + Math.sin(view.az) * Math.cos(view.el) * view.dist,
         camTarget.y + Math.sin(view.el) * view.dist,
@@ -1134,9 +1173,13 @@ export function createGame(container, opts = {}) {
       where() { return { x: +me.pos.x.toFixed(2), y: +me.pos.y.toFixed(2), z: +me.pos.z.toFixed(2), room: roomAt(me).name, door: +doorOpen.toFixed(2), path: me.path.map(p => [+p.x.toFixed(1), +p.z.toFixed(1)]) } },
       blockedAt(level, x, z) { return blocked(x, z, level) ? colliders[level].filter(c => x > c.minX - HALF && x < c.maxX + HALF && z > c.minZ - HALF && z < c.maxZ + HALF) : false },
       // flood-fill the walkable floor of both storeys + garden and report what is connected
+      // flood-fill the walkable floor (both storeys of the couple house, or the starter home) and the outside, and
+      // report which places can be reached: every room, both gates, the cliff walk and each playground station
       reach() {
         const step = 0.2
         const cell = v => Math.round(v / step)
+        const P = plot()
+        const bx = Math.max(P.x, PLAYGROUND.x, -walkSpan[0], walkSpan[1]) + 1
         const fill = (level, sx, sz) => {
           const seen = new Set()
           const q = [[cell(sx), cell(sz)]]
@@ -1145,35 +1188,35 @@ export function createGame(container, opts = {}) {
             const [i, j] = q.pop()
             ;[[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([di, dj]) => {
               const ni = i + di, nj = j + dj
-              if (ni * step < -15 || ni * step > 15 || nj * step < -7 || nj * step > 12 || blocked(ni * step, nj * step, level)) return
+              const x = ni * step, z = nj * step
+              if (Math.abs(x) > bx || z < PLAYGROUND.zFar - 1 || z > CLIFF_Z || blocked(x, z, level)) return
               const k = `${ni},${nj}`
               if (!seen.has(k)) { seen.add(k); q.push([ni, nj]) }
             })
           }
           return p => seen.has(`${cell(p[0])},${cell(p[1])}`)
         }
-        const up = fill(1, rooms[0].ox + 1.2, 1.6)
         const down = fill(0, house.door.x, HZ + 2.0) // start in the garden, in front of the door
-        const at = (id, lx, lz) => { const r = byId(id); return [r.ox + lx, lz] }
-        return {
-          upper: {
-            study: up(at('study', 1.2, 1.6)),
-            bedroom: up(at('bedroom', 1.0, 2.0)),
-            bedroomBed: up(at('bedroom', -0.2, 2.2)),
-            landing: up([S.x, S.landingZ]),
-            studyDeskSide: up(at('study', 2.6, -2.0)),
-          },
+        const out = {
           ground: {
             garden: down([house.door.x, HZ + 2.0]),
-            livingViaDoor: down(at('living', -3.4, 2.4)),
-            living: down(at('living', 2.0, 2.0)),
-            livingTV: down(at('living', -3.5, 0.2)),
-            stairFoot: down([S.x, S.footZ]),
-            kitchen: down(at('kitchen', 0.5, 2.4)),
-            kitchenTable: down(at('kitchen', -2.6, 1.0)),
-            kitchenFridgeSide: down(at('kitchen', 3.8, 0.5)),
+            frontGate: down([0, PLOT_FRONT + 1.0]),
+            backGate: down([0, house.gates[1].z - 1.0]),
+            playground: down([0, (PLAYGROUND.zNear + PLAYGROUND.zFar) / 2]),
+            ...Object.fromEntries(house.playground.stations.map(st => [`station:${st.id}`, down([st.x, st.z + 1.9])])),
           },
         }
+        // a room counts as reachable if any spot on its floor is (the probe can't land on a table by chance)
+        const inRoom = (r, can) => { for (let x = -HX + 0.6; x < HX - 0.5; x += 0.4) for (let z = -HZ + 0.6; z < HZ - 0.5; z += 0.4) if (can([r.ox + x, z])) return true; return false }
+        rooms.filter(r => levelOf(r.oy) === 0).forEach(r => { out.ground[r.id] = inRoom(r, down) })
+        if (!solo) {
+          const up = fill(1, rooms[0].ox + 1.2, 1.6)
+          out.upper = { landing: up([S.x, S.landingZ]) }
+          rooms.filter(r => levelOf(r.oy) === 1).forEach(r => { out.upper[r.id] = inRoom(r, up) })
+          out.ground.stairFoot = down([S.x, S.footZ])
+        }
+        const bad = [...Object.entries(out.ground), ...Object.entries(out.upper || {})].filter(([, ok]) => !ok).map(([k]) => k)
+        return { ok: !bad.length, bad, ...out }
       },
       info() { return { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, pixelRatio: pr } },
       elevation(v) { view.elGoal = v; view.el = v },

@@ -80,6 +80,9 @@ const SOUNDS = {
   pick: () => tone(520, { dur: 0.1, to: 330, gain: 0.35 }),
   error: () => { tone(190, { dur: 0.09, type: 'square', gain: 0.2 }); tone(160, { dur: 0.12, type: 'square', gain: 0.2, at: 0.1 }) },
   claim: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, { dur: 0.22, at: i * 0.09, gain: 0.35, type: 'triangle' })),
+  // a soft chime on a pentatonic note, so a run of caught stars always sounds pretty
+  star: () => { const f = [784, 880, 988, 1175, 1319, 1568][Math.floor(Math.random() * 6)]; tone(f, { dur: 0.3, gain: 0.22, type: 'sine' }); tone(f * 2, { dur: 0.12, gain: 0.06, type: 'sine', at: 0.02 }) },
+  tick: () => tone(1320, { dur: 0.04, gain: 0.12, type: 'sine' }),
 }
 
 export function sfx(name) {

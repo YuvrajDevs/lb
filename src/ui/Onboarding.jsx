@@ -16,7 +16,7 @@ const STEPS = [
   },
   { icon: 'eye', title: 'Looking around', text: `${touch ? 'Use' : 'Scroll or use'} the eye button by the compass to change the view: from your own eyes, to the room, the whole house and the street. Drag to turn.` },
   { icon: 'lamp', title: 'Make it feel like home', text: 'Tap a lamp to switch it off or on, and curtains to open or close them. Edit home lets you place furniture, or auto-furnish a room.' },
-  { icon: 'gift', title: 'Boxets', text: 'Collect your daily gift, spend Boxets in the shop, and earn more by spending time together. Out the back gate is a playground, where games are on their way.' },
+  { icon: 'gift', title: 'Boxets', text: 'Every 30 minutes of play earns Boxets, and so does your daily gift. Out of the back gate is the playground: walk up to a glowing station to play Star catch. Spend it all in the shop.' },
 ]
 
 export default function Onboarding({ onDone }) {

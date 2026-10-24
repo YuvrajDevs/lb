@@ -4,8 +4,8 @@ import { glow, pool } from './fx.js'
 import { PLAYGROUND } from '../game/areas.js'
 
 // The playground behind the house: a soft play floor with swings, a slide, a seesaw, a roundabout and a sandpit,
-// benches and lamps, and three game stations at the far end. The stations are where the 3D games will start
-// (for now they glow and say "soon"). Ground level is y = -0.5, like the garden.
+// benches and lamps, and three game stations at the far end. Walking up to a station starts its game.
+// Ground level is y = -0.5, like the garden.
 
 const Y = -0.5
 const WOOD = '#8a6a4a', METAL = '#3a3f58', RED = '#d0584a', TEAL = '#3f8f8a', CREAM = '#f2eadb'
@@ -93,7 +93,7 @@ export function buildPlayground() {
     box(group, [0.1, 0.5, 1.8], [x + (x < 0 ? -0.22 : 0.22), Y + 0.45, z], WOOD)
     solid(x, z, 0.7, 2.0)
   })
-  ;[[-14.5, -6.5], [14.5, -6.5], [-14.5, -26.5], [14.5, -26.5], [0, -13.5]].forEach(([x, z]) => {
+  ;[[-14.5, -7.5], [14.5, -7.5], [-14.5, -26.5], [14.5, -26.5], [0, -13.5]].forEach(([x, z]) => {
     cyl(group, 0.07, 2.8, [x, Y, z], '#2f3138', {}, 8)
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshBasicMaterial({ color: '#ffe2a8', toneMapped: false }))
     head.position.set(x, Y + 3.0, z)
@@ -104,9 +104,38 @@ export function buildPlayground() {
     solid(x, z, 0.3, 0.3)
   })
 
+  // strings of warm fairy lights between the lamp posts, sagging a little, so the playground glows at night
+  // (one instanced mesh for every bulb, one line per wire: a couple of draw calls in all)
+  const strings = [[[-14.5, -7.5], [-14.5, -26.5]], [[14.5, -7.5], [14.5, -26.5]], [[-14.5, -7.5], [0, -13.5]], [[0, -13.5], [14.5, -7.5]]]
+  const bulbs = []
+  const wire = []
+  strings.forEach(([[x0, z0], [x1, z1]]) => {
+    const len = Math.hypot(x1 - x0, z1 - z0)
+    const n = Math.round(len / 0.9)
+    let prev = null
+    for (let i = 0; i <= n; i++) {
+      const t = i / n
+      const p = [x0 + (x1 - x0) * t, Y + 2.85 - Math.sin(t * Math.PI) * 0.7, z0 + (z1 - z0) * t]
+      if (prev) wire.push(...prev, ...p) // one segment from the last point to this one
+      prev = p
+      if (i && i < n) bulbs.push(p)
+    }
+  })
+  const bulbMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshBasicMaterial({ color: '#ffd9a0', toneMapped: false }), bulbs.length)
+  const m4 = new THREE.Matrix4()
+  bulbs.forEach((p, i) => bulbMesh.setMatrixAt(i, m4.makeTranslation(p[0], p[1] - 0.1, p[2])))
+  bulbMesh.userData.keep = true
+  group.add(bulbMesh)
+  const wireGeo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(wire, 3))
+  const wires = new THREE.LineSegments(wireGeo, new THREE.LineBasicMaterial({ color: '#1c1a28' }))
+  wires.userData.keep = true
+  group.add(wires)
+  // a soft glow every few bulbs (glows are the expensive part, so not one per bulb)
+  bulbs.forEach((p, i) => { if (i % 4 === 2) glow(group, [p[0], p[1] - 0.1, p[2]], '#ffcc77', 1.3, 0.35) })
+
   // the game stations: glowing pads with a floating gem and a board saying what is coming
   const stations = []
-  ;[[-8, -25.5, 'Star catch', '#ffd46b'], [0, -26, 'Couple quiz', '#ff8fb8'], [8, -25.5, 'Arcade', '#7fe0ff']].forEach(([x, z, name, color]) => {
+  ;[[-8, -25.5, 'stars', 'Star catch', 'play now', '#ffd46b'], [0, -26, 'quiz', 'Couple quiz', 'play together', '#ff8fb8'], [8, -25.5, 'arcade', 'Arcade', 'coming soon', '#7fe0ff']].forEach(([x, z, id, name, sub, color]) => {
     cyl(group, 1.4, 0.12, [x, Y, z], '#1a1730', {}, 32)
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.06, 8, 40), new THREE.MeshBasicMaterial({ color, toneMapped: false }))
     ring.rotation.x = -Math.PI / 2
@@ -120,13 +149,13 @@ export function buildPlayground() {
     group.add(gem)
     glow(group, [x, Y + 1.6, z], color, 3.2, 0.55)
     pool(group, [x, Y + 0.14, z], color, 2.0, 0.3)
-    const board = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 0.08), new THREE.MeshBasicMaterial({ map: labelTexture(name, 'coming soon'), toneMapped: false }))
+    const board = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 0.08), new THREE.MeshBasicMaterial({ map: labelTexture(name, sub), toneMapped: false }))
     board.position.set(x, Y + 2.9, z - 0.9)
     board.userData.keep = true
     group.add(board)
     ;[-1.05, 1.05].forEach(dx => box(group, [0.08, 2.6, 0.08], [x + dx, Y, z - 0.98], '#2f3138')) // just behind the board
     solid(x, z - 0.9, 2.5, 0.3)
-    stations.push({ x, z, name, gem })
+    stations.push({ id, x, z, name, gem, hits: [ring, gem, board] }) // hits: what a click on the station can land on
   })
 
   return { group, solids, stations }

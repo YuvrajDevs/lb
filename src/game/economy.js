@@ -7,6 +7,8 @@ export const COUPLE_MULT = 3
 export const DAILY_CAP = 600
 /** the most each way of earning can give in one day (on top of the daily gift) */
 export const EARN_CAPS = { stars: 60, quiz: 30, visit: 30 }
+/** Star catch pays this many Boxets per point scored */
+export const STAR_PAY = 2
 /** how much of `amount` may still be paid today, given what was already earned */
 export function earnable(source, amount, earned) {
   const bySource = Math.max(0, (EARN_CAPS[source] ?? DAILY_CAP) - (earned.by[source] || 0))

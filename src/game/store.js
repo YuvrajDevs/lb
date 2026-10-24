@@ -1,5 +1,5 @@
 import { ITEM_BY_ID, CAT_BY_ID } from './catalog.js'
-import { dailyReward, milestoneOf, dayNumber, toDateStr, nextSlotPrice, WORLD_BASE_SLOTS, MILESTONE_ITEMS, earnable, EARN_CAPS } from './economy.js'
+import { dailyReward, milestoneOf, dayNumber, toDateStr, nextSlotPrice, WORLD_BASE_SLOTS, MILESTONE_ITEMS, earnable, EARN_CAPS, WINDOW_MIN } from './economy.js'
 import { starterOwned } from './defaults.js'
 import { sfx } from './audio.js'
 
@@ -220,13 +220,29 @@ export const store = {
   // ---- earning from games and visits (each capped per day; see economy.js) ----
   earnedToday() { return state.earned?.date === state.today ? state.earned : { date: state.today, total: 0, by: {}, visited: [] } },
   leftToday: source => Math.max(0, (EARN_CAPS[source] || 0) - (store.earnedToday().by[source] || 0)),
-  /** pay out for a game or a visit; returns how many Boxets were actually given */
-  earn(source, amount, note) {
+  /** pay out for a game, a visit or active time; returns how many Boxets were actually given */
+  earn(source, amount, note, quiet = false) {
     const e = store.earnedToday()
     const give = earnable(source, amount, e)
     const next = { ...e, total: e.total + give, by: { ...e.by, [source]: (e.by[source] || 0) + give }, visited: note ? [...(e.visited || []), note] : e.visited || [] }
     set({ boxets: state.boxets + give, earned: next })
+    if (quiet) return give
     if (give > 0) { sfx('claim'); toast(`+${give} Boxets`, 'good') } else toast("That's all you can earn from this today", 'info')
+    return give
+  },
+
+  // ---- active time: every full window of active play pays (see economy.js; the server takes this over later) ----
+  /** seconds of active play in the current window */
+  activeSec: () => state.active?.sec || 0,
+  /** count `sec` more seconds of active play; pays `rate` Boxets each time a window fills up */
+  addActive(sec, rate) {
+    let s = (state.active?.sec || 0) + sec
+    const full = WINDOW_MIN * 60
+    if (s < full) { set({ active: { sec: s } }); return 0 }
+    s -= full
+    set({ active: { sec: s } })
+    const give = store.earn('time', rate, null, true)
+    if (give > 0) { sfx('claim'); toast(`+${give} Boxets for ${WINDOW_MIN} minutes of play`, 'good') } else toast("You've earned all you can today. See you tomorrow!", 'info')
     return give
   },
 

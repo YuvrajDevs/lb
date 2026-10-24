@@ -86,7 +86,7 @@ export const AREAS = {
 // ---- the plots: where the fence runs and what stands in the garden, for the couple house and the starter home ----
 // x: the fence's half-width; doorX: the front door; signX: the name sign; bushes: [x, z, radius]
 // the playground behind every home: a level clearing reached through the garden's back gate
-export const PLAYGROUND = { x: 16, zNear: -5.3, zFar: -28 }
+export const PLAYGROUND = { x: 16, zNear: -6.3, zFar: -29 }
 
 export const PLOTS = {
   // (no bushes beside the couple house: those narrow side paths lead round to the back gate and the playground)

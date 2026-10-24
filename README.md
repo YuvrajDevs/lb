@@ -33,7 +33,8 @@ npm run build
 - **Wardrobe:** dress your cube.
 - **Edit home:** place, move, turn and pick up furniture on a 10 cm grid (snaps of 0.1 / 0.3 / 0.6), with no-build zones for doorways, stairs, windows and the garden path. **Auto-furnish** fills a room with things you own but haven't placed, in a matching style. **Reset** brings back the standard furnishing. Undo / redo with Ctrl+Z / Ctrl+Y. Paint, flooring, fences and name signs too. Curtains fit themselves to the window they hang at.
 - **World:** neighbours and house slots (4 free, then 500 and 1,000 Boxets from the shared world fund); the couple page: send a couple invite (the homes merge in a big cloud and the four-room house rises), or request to end it (a 24-hour wait, which can be cancelled).
-- **Play:** ways to earn, each capped per day: **Star catch** (tap falling stars, 2 Boxets each, up to 60), the **couple quiz** (30 a day), and **visiting** neighbours (10 per home, up to 30).
+- **Earning:** every 30 minutes of active play pays Boxets (15 on your own; friends and a partner online raise it once online play arrives), up to 600 a day.
+- **The playground** (out of the back gate, or the *playground* view): walk up to a glowing station to play. **Star catch**: tap falling stars for 40 seconds, 2 Boxets a point, up to 60 a day. The couple quiz and the arcade come with online play.
 - **Daily gift:** a reward for each calendar day since you joined; milestone days (7, 30, 100, 365) also give a hat, a golden frame, a glowing sign and a legendary skin.
 - **Settings:** names, graphics quality, time of day, reduce motion, hints, sound, controls.
 

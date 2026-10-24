@@ -48,7 +48,7 @@ export function buildHouse(opts = {}) {
   const group = new THREE.Group()
   const solo = getHomeKind() === 'solo'
   const P = PLOTS[getHomeKind()]
-  const PLOT = { x: P.x, zBack: -(D / 2 + T + 1.4), zFront: D / 2 + T + 5.2 } // the fenced garden
+  const PLOT = { x: P.x, zBack: -(D / 2 + T + 2.4), zFront: D / 2 + T + 5.2 } // the fenced garden
   const BUSHES = P.bushes
   const specs = solo
     ? [{ id: 'home', name: 'home', col: 0.5, row: 1, build: buildHome }]
@@ -239,6 +239,18 @@ export function buildHouse(opts = {}) {
     glow(garden, [x, -0.5 + 1.05, z], '#ffcc66', 1.5, 0.6)
     pool(garden, [x, -0.5, z], '#ffcc66', 2.0, 0.22)
   })
+  // a signpost by the back gate, so the way to the playground is never a secret
+  {
+    const px = gate + 0.75, pz = PLOT.zBack + 0.55
+    box(garden, [0.1, 1.5, 0.1], [px, -0.5, pz], '#6b4a30')
+    const wood = std('#7a5a3c')
+    const face = new THREE.MeshBasicMaterial({ map: signTexture('Playground ↑'), toneMapped: false })
+    const board = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.32, 0.05), [wood, wood, wood, wood, face, wood])
+    board.position.set(px, -0.5 + 1.25, pz + 0.06)
+    board.userData.keep = true
+    garden.add(board)
+    glow(garden, [px, 0.9, pz + 0.3], '#ffcc66', 1.1, 0.35)
+  }
   // bushes
   // (the two beside the house are smaller and sit in the gap to the fence, so they never poke through a wall)
   BUSHES.forEach(([x, z, r]) => {
@@ -288,6 +300,7 @@ export function buildHouse(opts = {}) {
   const fw = 0.2
   gc.push({ minX: -PLOT.x - fw, maxX: -gate, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw }) // back fence, with its gate gap
   gc.push({ minX: gate, maxX: PLOT.x + fw, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw })
+  gc.push({ minX: gate + 0.68, maxX: gate + 0.82, minZ: PLOT.zBack + 0.48, maxZ: PLOT.zBack + 0.62 }) // the playground signpost
   // the playground behind, and the invisible edge of everywhere you can walk: round the playground, and closing
   // the gaps between it and the garden's side fences
   const PG = PLAYGROUND
@@ -438,6 +451,8 @@ export function buildHouse(opts = {}) {
   bake(gardenPlaced, { clone: true })
   bake(street, { clone: true })
   bake(playground.group)
+  // the low moon throws the house's shadow 20 m back; the playground stays out of it, so it never sits in the dark
+  playground.group.traverse(o => { if (o.isMesh) o.receiveShadow = false })
 
   // the room with the front door; and the staircase (only the two-storey house has one)
   const entry = rooms.find(r => r.door) || rooms[0]
