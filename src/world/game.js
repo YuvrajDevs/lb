@@ -340,6 +340,7 @@ export function createGame(container, opts = {}) {
   const keys = new Set()
   let inputOn = true
   let idle = false
+  let paused = false
   const typingNow = () => ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)
   const onKeyDown = e => {
     if (!inputOn || typingNow()) return
@@ -777,6 +778,8 @@ export function createGame(container, opts = {}) {
   function frame() {
     raf = requestAnimationFrame(frame)
     const nowMs = performance.now()
+    // a minigame has the screen: the world stops drawing altogether, so the GPU is all the game's
+    if (paused) { last = nowMs; return }
     // frame budget: never faster than the cap (a 120 Hz screen would otherwise draw everything twice as often),
     // half speed once nobody has touched anything for a few seconds, and barely at all in a background window
     const calm = nowMs - lastInput > 4000 && !keys.size && !me.path.length
@@ -1037,6 +1040,8 @@ export function createGame(container, opts = {}) {
     setKey(k, on) { if (on && inputOn) keys.add(k); else keys.delete(k) },
     /** true while a window covers the world: render it at a quarter of the speed */
     setIdle(b) { idle = b },
+    /** stop drawing the world entirely (while a minigame runs in its own scene) */
+    setPaused(b) { paused = !!b },
 
     // ---- editing the home ----
     editor,

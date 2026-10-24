@@ -118,6 +118,8 @@ function App() {
   const editing = !!ed?.active
   useEffect(() => { game.current?.setInputEnabled(!open && !editing && !!s.settings.onboarded) }, [open, editing, ready, s.settings.onboarded])
   useEffect(() => { game.current?.setIdle(!!open && !editing) }, [open, editing, ready])
+  // a minigame draws its own world: the home stops drawing meanwhile
+  useEffect(() => { game.current?.setPaused(open === 'stars') }, [open, ready])
 
   // what the home looks like follows the saved state (this also handles undo, redo and reset)
   useEffect(() => { if (s.layout) game.current?.setLayout(s.layout) }, [s.layout, ready])
@@ -254,7 +256,7 @@ function App() {
       {open === 'world' && <World onClose={close} />}
       {open === 'daily' && <DailyReward onClose={close} />}
       {open === 'settings' && <Settings onClose={close} debug={debug} />}
-      {open === 'stars' && <StarCatch onClose={close} />}
+      {open === 'stars' && <StarCatch onClose={close} skin={skin} hat={hat} />}
 
       {rotateNote && !open && !editing && (
         <div className="rotate-note" role="note">

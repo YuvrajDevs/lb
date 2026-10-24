@@ -83,6 +83,8 @@ const SOUNDS = {
   // a soft chime on a pentatonic note, so a run of caught stars always sounds pretty
   star: () => { const f = [784, 880, 988, 1175, 1319, 1568][Math.floor(Math.random() * 6)]; tone(f, { dur: 0.3, gain: 0.22, type: 'sine' }); tone(f * 2, { dur: 0.12, gain: 0.06, type: 'sine', at: 0.02 }) },
   tick: () => tone(1320, { dur: 0.04, gain: 0.12, type: 'sine' }),
+  // the teleport to a minigame and back: an airy rising sweep with a shimmer on top
+  whoosh: () => { noise(0.7, { freq: 300, to: 2400, q: 0.8, gain: 0.1, type: 'bandpass' }); [1047, 1319, 1568].forEach((f, i) => tone(f, { dur: 0.35, at: 0.25 + i * 0.06, gain: 0.08, type: 'sine' })) },
 }
 
 export function sfx(name) {
