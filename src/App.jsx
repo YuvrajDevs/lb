@@ -8,6 +8,8 @@ import { setAudio, startOnFirstGesture, sfx } from './game/audio'
 import { ITEM_BY_ID } from './game/catalog'
 import { store } from './game/store'
 import { startAccount } from './net/account'
+import { onLive, joinLive, leaveLive, track, sendMove, sendEmote, sendChat, chatHistory } from './net/live'
+import Chat from './ui/Chat'
 import { windowEarning, WINDOW_MIN } from './game/economy'
 import { useStore } from './ui/useStore'
 import { Boxet, Icon } from './ui/icons'
@@ -93,13 +95,15 @@ function App() {
       onLayoutFix: store.fixArea,
       switches: saved.switches,
       intro,
-      neighbours: saved.world.members.filter(m => !m.you),
+      neighbours: saved.world.members, // the whole street, you included
       lowerArt: !saved.settings.artLowered, // a one-off: hang the pictures at eye height
       onSwitch: store.setSwitch,
       onEditor: setEd,
       onBlocked: reason => store.notify(reason, 'warn'),
       onSfx: sfx,
       onNotice: text => store.notify(text, 'info'),
+      partnerAI: !store.online(), // online, your real partner walks around instead
+      onMove: m => { if (liveId.current) sendMove(liveId.current, m) },
       onStation: id => {
         if (id === 'stars') setOpen('stars')
         else if (id === 'quiz') store.notify('The couple quiz needs your partner here with you. It arrives with online play.', 'info')
@@ -114,7 +118,7 @@ function App() {
     }
     boot()
     return () => { alive = false; g?.dispose(); game.current = null; setReady(false); setEd(null) }
-  }, [homeKind, street])
+  }, [homeKind, street, s.net?.status === 'online'])
 
   // keep the 3D world in sync with the app state
   const skin = tryOn.skin ?? store.equippedTier('skin')
@@ -174,6 +178,52 @@ function App() {
 
   // your account: signs you back in if you were, and loads it into the store
   const [joinCode, setJoinCode] = useState(() => { takeJoinFromUrl(); return pendingJoin() })
+
+  // ---- together, live: who is in your world right now, where they are, what they say ----
+  const [here, setHere] = useState([])
+  const [chatLog, setChatLog] = useState([])
+  const liveId = useRef(null) // your id while connected
+  const shown = useRef(new Set()) // peers currently in the game
+  useEffect(() => {
+    onLive({
+      presence: list => {
+        setHere(list)
+        const g = game.current
+        const now = new Set(list.filter(p => p.id !== liveId.current).map(p => p.id))
+        shown.current.forEach(id => { if (!now.has(id)) g?.peerRemove(id) })
+        list.forEach(p => { if (p.id !== liveId.current) g?.peerSet(p.id, { name: p.name, skin: p.skin ?? null, hat: p.hat ?? null }) })
+        shown.current = now
+      },
+      move: (id, m) => game.current?.peerMove(id, m),
+      emote: (id, kind) => game.current?.emote(id, kind),
+      chat: msg => { setChatLog(l => [...l.slice(-80), msg]); game.current?.say(msg.from, msg.body) },
+    })
+  }, [])
+  const signedInNow = s.net?.status === 'online'
+  const worldNow = signedInNow ? s.world.id : null
+  const meLive = signedInNow ? { id: s.profile.id, name: s.profile.name, skin: store.equippedTier('skin'), hat: store.equippedTier('hat') } : null
+  const meKey = meLive && `${meLive.id}|${meLive.name}|${meLive.skin}|${meLive.hat}`
+  useEffect(() => {
+    if (!worldNow || !meLive) { liveId.current = null; leaveLive(); setHere([]); return }
+    liveId.current = meLive.id
+    joinLive(worldNow, meLive)
+    chatHistory(worldNow).then(setChatLog)
+  }, [worldNow]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (meLive && worldNow) track(meLive) }, [meKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  // the world was rebuilt (a new street): put everyone back in it
+  useEffect(() => {
+    if (!ready) return
+    shown.current = new Set()
+    here.forEach(p => { if (p.id !== liveId.current) { game.current?.peerSet(p.id, { name: p.name, skin: p.skin ?? null, hat: p.hat ?? null }); shown.current.add(p.id) } })
+  }, [ready]) // eslint-disable-line react-hooks/exhaustive-deps
+  const say = async text => {
+    try {
+      const msg = await sendChat(worldNow, meLive, text)
+      setChatLog(l => [...l.slice(-80), msg])
+      game.current?.say('me', text)
+    } catch (e) { store.notify(e.message, 'warn') }
+  }
+  const emote = kind => { game.current?.emote('me', kind); if (liveId.current) sendEmote(liveId.current, kind) }
   useEffect(() => { startAccount() }, [])
 
   // sound
@@ -296,6 +346,10 @@ function App() {
       {s.settings.hints && !open && !editing && <p className="hud hint">{HINTS[view.mode]}</p>}
 
       {!editing && <Dock open={open} onOpen={id => (id === 'edit' ? startEdit() : setOpen(id))} giftReady={store.canClaim()} />}
+      {!editing && !open && signedInNow && worldNow && (
+        <Chat log={chatLog} onSend={say} onEmote={emote} meId={s.profile.id} people={here}
+          onReport={m => store.server()?.report(m.from, 'Something they said in chat', m.id).then(() => store.notify(`Reported. Thank you.`, 'good'), e => store.notify(e.message, 'warn'))} />
+      )}
       {editing && <Editor game={game.current} ed={ed} onExit={stopEdit} onOpenShop={() => setOpen('shop')} onReset={resetArea} onAuto={autoArea} />}
       </>}
 

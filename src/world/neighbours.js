@@ -72,34 +72,44 @@ function home(group, x, member, k) {
 /** NEIGHBOUR_PLOT_Z: the back and front of every neighbour's fenced plot (the same depth as yours) */
 export const NEIGHBOUR_PLOT_Z = [-(7.8 / 2 + 1.4), 7.8 / 2 + 5.2]
 
+const GAP = 3 // between neighbouring fences: room to walk between the homes
+
 /**
- * Where each neighbour's plot goes ([{ x, half }], in the order of `members`): to the right first, then to the
- * left beyond the stream (the stream and its bridge lie between your plot and the left side).
+ * The street: every home in the world in one row, in the order people joined, the same for everyone, so a walk
+ * from one home to the next looks the same on every screen. Yours is at x = 0. Returns [{ x, half, member }] in
+ * the order of `members` (which includes you, marked `you`).
  */
-export function neighbourPlots(members, myHalf) {
-  let right = myHalf + 1.2, left = -26
-  return members.map((m, k) => {
-    const half = m.kind === 'couple' ? 12.8 : 9.3
-    if (k % 2 === 0) { const x = right + half; right += half * 2 + 1.2; return { x, half } }
-    const x = left - half; left -= half * 2 + 1.2; return { x, half }
-  })
+export function streetPlots(members, myHalf) {
+  const halfOf = m => (m.you ? myHalf : m.kind === 'couple' ? 12.8 : 9.3)
+  let me = members.findIndex(m => m.you)
+  const list = me < 0 ? [{ you: true }, ...members] : members
+  if (me < 0) me = 0
+  const out = list.map(m => ({ x: 0, half: halfOf(m), member: m }))
+  let r = myHalf
+  for (let i = me + 1; i < out.length; i++) { out[i].x = r + GAP + out[i].half; r = out[i].x + out[i].half }
+  let l = -myHalf
+  for (let i = me - 1; i >= 0; i--) { out[i].x = l - GAP - out[i].half; l = out[i].x - out[i].half }
+  return out
 }
 
-/** how far the neighbours' plots reach to the left and right ([left, right] x), so the walk outside can run that far */
+/** the other homes' plots ([{ x, half, member }]), in street order */
+export const neighbourPlots = (members, myHalf) => streetPlots(members, myHalf).filter(p => !p.member.you)
+
+/** how far the street reaches to the left and right ([left, right] x) */
 export function neighbourSpan(members, myHalf) {
   let left = -myHalf, right = myHalf
-  neighbourPlots(members, myHalf).forEach(p => { left = Math.min(left, p.x - p.half); right = Math.max(right, p.x + p.half) })
+  streetPlots(members, myHalf).forEach(p => { left = Math.min(left, p.x - p.half); right = Math.max(right, p.x + p.half) })
   return [left, right]
 }
 
 /**
- * Lays the neighbours out along the cliff: to the right first, then to the left beyond the stream.
- *   members: the world's other homes [{ house, kind, online }], myHalf: half-width of your own plot
+ * Builds the other homes along the street (see streetPlots).
+ *   members: every home in the world [{ house, kind, online, you }], myHalf: half-width of your own plot
  */
 export function buildNeighbours(members, myHalf) {
   const group = new THREE.Group()
   const spots = []
-  neighbourPlots(members, myHalf).forEach(({ x }, k) => { home(group, x, members[k], k); spots.push(x) })
+  neighbourPlots(members, myHalf).forEach(({ x, member }, k) => { home(group, x, member, k); spots.push(x) })
   group.userData.spots = spots // each neighbour's plot centre (x), in the same order as `members`
   bake(group)
   return group

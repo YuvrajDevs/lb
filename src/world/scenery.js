@@ -86,14 +86,23 @@ const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147
 // the glowing stream: winds down from the hills, past the left of the garden, to the cliff
 export const FRONT_FLAT = 7.5 // in front of this line (towards the sea) the land is level
 
-export const streamX = z => -20 + Math.sin(z * 0.075) * 4.5 + Math.sin(z * 0.19) * 1.2
+// The street: how far the row of homes reaches left and right of yours. The stream always runs down past the
+// left end of it, and the land stays level along all of it. Set before the scenery and the house are built.
+let STREAM_BASE = -20
+let BAND = [-58, 58]
+export function setStreet(left, right) {
+  STREAM_BASE = Math.min(-20, left - 8)
+  BAND = [Math.min(-58, left - 14), Math.max(58, right + 14)]
+}
+export const streetBand = () => BAND
+export const streamX = z => STREAM_BASE + Math.sin(z * 0.075) * 4.5 + Math.sin(z * 0.19) * 1.2
 const STREAM_TOP = -58
 
 /** height of the land above GROUND_Y */
 function heightAt(x, z) {
   // the garden stays flat, and so does the whole strip along the front (the cliff walk runs its full width)
   // (and a level strip along the cliff top, either side, where the neighbours' plots are; the stream keeps its valley)
-  const plot = (Math.abs(x) < 15 && z > -8) || z > FRONT_FLAT || (Math.abs(x) < 58 && z > -8 && Math.abs(x - streamX(z)) > 5) ||
+  const plot = (Math.abs(x) < 15 && z > -8) || z > FRONT_FLAT || (x > BAND[0] && x < BAND[1] && z > -8 && Math.abs(x - streamX(z)) > 5) ||
     (Math.abs(x) < 19 && z > -31) // the playground clearing behind the house
   if (plot) return 0
   const back = smooth(-8, -42, z) // rises behind the house
@@ -585,7 +594,7 @@ export function buildScenery(palette = 'night') {
     lawn: flat('#3b4f6e'), rock: flat('#4b3c6e'),
   }
   const stoneMats = [flat('#6c5a9a'), flat('#8a78bc'), flat('#54467e')]
-  const free = (x, z) => !(Math.abs(x) < 60 && z > -9) && !(Math.abs(x) < 21 && z > -33) && Math.abs(x - streamX(z)) > 2.4 && z < FRONT_FLAT - 1.5 // nothing grows on the cliff walk
+  const free = (x, z) => !(x > BAND[0] - 2 && x < BAND[1] + 2 && z > -9) && !(Math.abs(x) < 21 && z > -33) && Math.abs(x - streamX(z)) > 2.4 && z < FRONT_FLAT - 1.5 // nothing grows on the cliff walk
 
   // a forest that thickens toward the hills behind
   for (let i = 0; i < 160; i++) {

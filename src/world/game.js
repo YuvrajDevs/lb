@@ -5,10 +5,11 @@ import { HX, HZ } from './kit.js'
 import { resolveDefaults, footOf, infoOf } from './furnish.js'
 import { createEditor } from './editor.js'
 import { makeEnvironment } from './env.js'
-import { buildScenery, applyPalette, FOG_COLOR, FOG_NEAR, FOG_FAR, CLIFF_Z } from './scenery.js'
+import { buildScenery, applyPalette, setStreet, FOG_COLOR, FOG_NEAR, FOG_FAR, CLIFF_Z } from './scenery.js'
 import { bake } from './bake.js'
 import { setCurtain } from './switches.js'
-import { buildNeighbours, neighbourSpan, neighbourPlots } from './neighbours.js'
+import { buildNeighbours, neighbourSpan, neighbourPlots, streetPlots } from './neighbours.js'
+import { createPeers } from './peers.js'
 import { setSeaNear } from '../game/audio.js'
 import { findZFighting, settleCoplanar } from './zfight.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
@@ -145,8 +146,11 @@ export function createGame(container, opts = {}) {
     if (opts.layout) opts.onLayoutFix?.(id, layout[id])
   })
   if (!opts.layout) opts.onLayoutInit?.(layout)
-  const walkSpan = neighbourSpan(opts.neighbours || [], plot().x) // how far the cliff walk reaches either side
-  const house = buildHouse({ layout, style: opts.style, fence: opts.fence, sign: opts.sign, switches: opts.switches, walk: walkSpan, plots: neighbourPlots(opts.neighbours || [], plot().x) })
+  // the street: every home in the world, yours included (opts.neighbours lists them all, yours marked `you`)
+  const street = opts.neighbours || []
+  const walkSpan = neighbourSpan(street, plot().x) // how far the street reaches either side
+  setStreet(walkSpan[0], walkSpan[1]) // (the stream runs past its left end; the land is level along it)
+  const house = buildHouse({ layout, style: opts.style, fence: opts.fence, sign: opts.sign, switches: opts.switches, walk: walkSpan, plots: neighbourPlots(street, plot().x) })
   scene.add(house.group, house.lights)
   // the cliff, the sea in front and the magical land behind
   // the time of day: 'night', 'evening', or 'auto' (evening from 5 to 8 pm on your own clock, night otherwise)
@@ -180,7 +184,7 @@ export function createGame(container, opts = {}) {
   }
 
   // the other homes in your world, along the cliff either side (simple versions, so they cost little)
-  const neighbours = buildNeighbours(opts.neighbours || [], plot().x)
+  const neighbours = buildNeighbours(street, plot().x)
   scene.add(neighbours)
   scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR) // the island sits in a thick bank of fog (see scenery.js)
   const { rooms, colliders, stairs: S } = house
@@ -266,7 +270,31 @@ export function createGame(container, opts = {}) {
   const solo = getHomeKind() === 'solo'
   const me = makeActor('#ff8fb8', byId('study') || rooms[0], 1.2, 1.6)
   const partner = makeActor('#9ad0ff', byId('bedroom') || rooms[0], 1.8, 0.4)
-  if (solo) partner.cube.setVisible(false) // a solo player has no partner at home
+  // the stand-in partner who wanders about the couple house; online, your real partner comes instead (a peer)
+  const noPartner = solo || opts.partnerAI === false
+  if (noPartner) partner.cube.setVisible(false)
+
+  // ---- the other people in your world, live (see peers.js and net/live.js) ----
+  // Positions travel relative to the nearest home on the street (its plot id), so the same spot maps to the
+  // same place on every screen, whoever's home sits in the middle there. The playground is shared: everyone's
+  // playground is the one behind the home in the middle of their own screen.
+  const peers = createPeers(scene)
+  peers.attachMe(me.cube)
+  const plotX = new Map(streetPlots(street, plot().x).map(p => [p.member.id ?? 'me', p.x]))
+  const inPlayground = (x, z) => z < PLAYGROUND.zNear - 0.6 && Math.abs(x) < PLAYGROUND.x + 1
+  function encode(a) {
+    const { x, y, z } = a.pos
+    if (inPlayground(x, z)) return { r: 'pg', x, y, z }
+    let best = null, bx = 0
+    plotX.forEach((px, id) => { if (best === null || Math.abs(x - px) < Math.abs(x - bx)) { best = id; bx = px } })
+    return { r: best, x: x - bx, y, z }
+  }
+  function decode(m) {
+    if (m.r === 'pg') return [m.x, m.y, m.z]
+    const px = plotX.get(m.r)
+    return px == null ? null : [px + m.x, m.y, m.z]
+  }
+  let sentAt = 0, sent = null
 
   // the room someone is in (or nearest to, out in the garden) on their storey
   const roomAt = a => {
@@ -870,7 +898,7 @@ export function createGame(container, opts = {}) {
     if (frameCount % 30 === 0) setSeaNear(me.pos.z > HZ ? 0.55 + (me.pos.z - HZ) / 12 : eyes ? 0.2 : 0.35)
 
     // --- partner wanders between the rooms, takes the stairs, and now and then steps out into the garden ---
-    if (solo) { /* nobody else lives in a starter home */ } else if (partner.path.length) {
+    if (noPartner) { /* nobody else here: a starter home, or online, where your real partner is a peer */ } else if (partner.path.length) {
       toTarget.subVectors(partner.path[0], partner.pos)
       toTarget.y = 0
       if (toTarget.length() < 0.18) partner.path.shift()
@@ -910,6 +938,16 @@ export function createGame(container, opts = {}) {
       a.cube.group.rotation.y = a.yaw
       a.cube.update(t, dt, a.moving)
     })
+    peers.update(t, dt)
+    // tell the others where you are: 8 times a second while moving, every 3 seconds when still
+    if (opts.onMove) {
+      const moved = !sent || Math.abs(sent.x - me.pos.x) + Math.abs(sent.z - me.pos.z) + Math.abs(sent.y - me.pos.y) > 0.02 || Math.abs(sent.yaw - me.yaw) > 0.05
+      if (nowMs - sentAt > (moved ? 125 : 3000)) {
+        sentAt = nowMs
+        sent = { x: me.pos.x, y: me.pos.y, z: me.pos.z, yaw: me.yaw }
+        opts.onMove({ ...encode(me), yaw: +me.yaw.toFixed(2), mv: me.moving ? 1 : 0 })
+      }
+    }
 
     // --- cameras ---
     const k = calmMotion ? 1 : 1 - Math.exp(-dt * 6)
@@ -1060,6 +1098,18 @@ export function createGame(container, opts = {}) {
     setKey(k, on) { if (on && inputOn) keys.add(k); else keys.delete(k) },
     /** true while a window covers the world: render it at a quarter of the speed */
     setIdle(b) { idle = b },
+    // ---- other people, live ----
+    peerSet: (id, info) => peers.set(id, info),
+    /** a position message from someone (as sent by onMove); hidden if it refers to a home not on this street */
+    peerMove(id, m) {
+      const at = decode(m)
+      if (!at) { peers.hide(id); return }
+      peers.move(id, at[0], at[1], at[2], m.yaw || 0, !!m.mv)
+    },
+    peerRemove: id => peers.remove(id),
+    /** a speech bubble over someone ('me' for yourself) */
+    say: (id, text) => peers.say(id, text),
+    emote: (id, kind) => peers.emote(id, kind),
     /** stop drawing the world entirely (while a minigame runs in its own scene) */
     setPaused(b) { paused = !!b },
 
@@ -1245,6 +1295,7 @@ export function createGame(container, opts = {}) {
     },
     dispose() {
       cancelAnimationFrame(raf)
+      peers.dispose()
       ro.disconnect()
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
