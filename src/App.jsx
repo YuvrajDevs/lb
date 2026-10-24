@@ -22,7 +22,7 @@ import Onboarding from './ui/Onboarding'
 import World from './ui/World'
 import DailyReward from './ui/DailyReward'
 import StarCatch from './ui/StarCatch'
-import Title from './ui/Title'
+import Title, { Mark } from './ui/Title'
 import './ui/ui.css'
 
 const VIEWS = [
@@ -229,11 +229,16 @@ function App() {
       {title && ready && <Title items={titleItems} onPick={pickTitle} footnote="Offline · your home is saved on this device" />}
       {!title && <>
       <header className="hud top-left">
-        <h1>NeighBoxed</h1>
-        <p>{view.room}</p>
-        <button className="pill" onClick={() => setOpen('shop')} aria-label={`${s.boxets} Boxets. Open the shop`}>
-          <Boxet size={18} /> <b>{s.boxets.toLocaleString()}</b>
-          <small title={`Every ${WINDOW_MIN} minutes of play pays ${rate} Boxets`}>+{rate} in {minsLeft} min</small>
+        <div className="hud-id">
+          <Mark size={30} />
+          <div><h1>NeighBoxed</h1><p>{view.room === 'home' ? s.profile.house : view.room}</p></div>
+        </div>
+        <button className="purse" onClick={() => setOpen('shop')} aria-label={`${s.boxets} Boxets. Open the shop`}>
+          <span className="purse-num"><Boxet size={20} /> {s.boxets.toLocaleString()}</span>
+          <span className="purse-next" title={`Every ${WINDOW_MIN} minutes of play pays ${rate} Boxets`}>
+            <i><i style={{ transform: `scaleX(${(s.active?.sec || 0) / (WINDOW_MIN * 60)})` }} /></i>
+            +{rate} in {minsLeft} min
+          </span>
         </button>
       </header>
 
