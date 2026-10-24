@@ -1,96 +1,58 @@
-# cc
+# LoveBloxed
 
-A tiny home for two, as a Three.js doll house at night: four minimal rooms lit by lamps and the moon, inside a small fenced garden, with you and your partner as floating cubes living in them.
+A cosy little neighbourhood on a cliff by the sea, where friends and couples live as floating cubes in doll houses. You decorate your home, earn Boxets by spending time and playing together, and when two people become a couple their homes merge into one bigger house.
 
-Built with Vite, React and plain [Three.js](https://threejs.org).
+Built with Vite, React and plain [Three.js](https://threejs.org). Everything runs in the browser and saves locally for now; online play (accounts, live friends, server-checked earning) is the next phase, see [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ```
 npm install
-npm run dev
+npm run dev     # play at http://localhost:5173
+npm test        # the rules: economy, rooms, furniture placement
+npm run build
 ```
 
-## The house
+## The world
 
-Two storeys, two rooms each:
+- **Your home.** On your own you live in a **starter home**: one room with a bed, cupboard, table, bookshelf and lamp, on a small fenced plot. As a **couple** you share the **four-room house** (study and bedroom upstairs, kitchen and living room downstairs, with stairs, a balcony and a shared name sign).
+- **Around it.** The plot sits on a cliff top: a moonlit sea with rolling swells in front, a cliff walk with lamps and a railing, and behind the house a magical land of terraced hills, pine trees, crystals, glowing mushrooms, fireflies and floating islands. A stream runs past under a wooden deck and falls over the cliff as a waterfall. Thick fog hides the far edges.
+- **Neighbours.** The other homes in your world stand on their own plots along the cliff (simple versions, lit when their owners are online).
+- **Time of day.** Night, a pink-and-orange evening, or follow your own clock (Settings).
 
-| | left | right |
-|---|---|---|
-| **top** | study | bedroom |
-| **bottom** | kitchen | living room |
+## Moving and looking
 
-Doorways join the rooms side by side. A steep staircase in the living room leads up to the bedroom: stand at its foot (or at the top landing) and press **Space**.
+- **WASD / arrows** to move; **hold Space** to run. **Click** anywhere on the floor, in the garden or on the cliff walk to walk there: the path goes around furniture and through the front door and garden gate.
+- **Scroll** to change view: your eyes ↔ close-up ↔ room ↔ the whole house ↔ the street. Or pick a view from the **eye button** under the compass.
+- **First person** (my eyes): hold and drag to look around.
+- **Compass:** drag to spin, ‹ › to turn, click for the front view. Walls facing the camera fade so you can see in.
+- **Stairs** are walked up and down. **Doors and the garden gate** open as you come near. You can step out onto the **balcony**.
+- **Click a lamp** to switch it off or on (with every lamp off, only moonlight comes in through the window). **Click curtains** to open or close them. Both are remembered.
 
-## Views
+## Screens (the dock)
 
-- **house:** the whole doll house, roof and garden included.
-- **street:** standing in the street looking at the closed-up house, its lit windows, front door and the lit name sign. Drag or Q/E walks you around the outside.
-- **room:** fills the screen with the room you are in. Scroll to zoom out smoothly to the whole house, or in.
-- **close-up:** follows your cube. **my eyes:** first person (W/S walk, A/D turn, drag to look); the room closes in with walls, ceiling and frames.
-- **Compass (top right):** drag the dial to spin 360°, click it for the front view, ‹ › turn 45°. Dragging the scene or Q/E also spins (vertical drag tilts). Walls facing the camera fade away so you can always see in.
-- **Move:** WASD / arrows, or click the floor (clicking in the next room walks you through the doorway).
+- **Shop:** 18 categories x 10 tiers = 180 items, 100 to 2,400 Boxets. Skins and hats can be tried on.
+- **Wardrobe:** dress your cube.
+- **Edit home:** place, move, turn and pick up furniture on a 10 cm grid (snaps of 0.1 / 0.3 / 0.6), with no-build zones for doorways, stairs, windows and the garden path. **Auto-furnish** fills a room with things you own but haven't placed, in a matching style. **Reset** brings back the standard furnishing. Undo / redo with Ctrl+Z / Ctrl+Y. Paint, flooring, fences and name signs too. Curtains fit themselves to the window they hang at.
+- **World:** neighbours and house slots (4 free, then 500 and 1,000 Boxets from the shared world fund); the couple page: send a couple invite (the homes merge in a big cloud and the four-room house rises), or request to end it (a 24-hour wait, which can be cancelled).
+- **Play:** ways to earn, each capped per day: **Star catch** (tap falling stars, 2 Boxets each, up to 60), the **couple quiz** (30 a day), and **visiting** neighbours (10 per home, up to 30).
+- **Daily gift:** a reward for each calendar day since you joined; milestone days (7, 30, 100, 365) also give a hat, a golden frame, a glowing sign and a legendary skin.
+- **Settings:** names, graphics quality, time of day, reduce motion, hints, sound, controls.
 
-## Performance
+## Look and performance
 
-The scene is built to stay light as more houses are added:
+- Warm yellow lamps, soft halos, glossy floors, real see-through windows on every side.
+- Static geometry is merged into a few meshes per room (`src/world/bake.js`); most lighting is faked with glows, pools and beams (`src/world/fx.js`); the moon's shadows are drawn once.
+- At most 60 frames a second, 30 when nothing is moving, almost none in a hidden tab; the sharpness adapts to keep frames smooth. Quality: Low / Medium (default) / High.
 
-- All static furniture, walls, ceilings and the roof are **merged into a few meshes per room** (`src/world/bake.js`) and materials are shared. Measured: about **160 draw calls** for one room and **230** for the whole house (it was ~1,100 and ~1,300), and ~17k triangles.
-- Lighting is mostly **faked**: lamps use emissive shades, additive glows, floor light pools and light cones (`src/world/fx.js`), with only **one real point light per room**.
-- The moon's shadows are **baked once** (the shadow map is not redrawn every frame).
-- **Adaptive resolution** lowers the pixel ratio when frames get slow and raises it again when there is headroom.
+## Developer tools
 
-## Walking the whole house in first person
+Open the game with `?debug` for `window.__cc` (the game) and `window.__store`. Add `&save=name` to use a separate save, so testing never touches the real one.
 
-In "my eyes" you can walk from the street gate, up the path, through the front door (it swings open as you approach), through every room and doorway, and up the stairs: walk into the foot of the staircase (or press Space) and you climb to the bedroom; do the same from the landing to come back down. The fence, sign and bushes block you. `game.debug.reach()` flood-fills the floor plan and reports which spots are connected.
+- `__cc.debug.zfight()` lists any spot where two surfaces would flicker against each other (z-fighting). Every material also gets a small fixed drawing priority as a safety net (`src/world/zfight.js`).
+- `__cc.debug.reach()` checks which parts of the floor plan can be walked to.
+- Settings → Developer: +500 Boxets, next day, reset, and switch between the starter home and the couple house.
 
-## Garden
+## Code map
 
-Each house sits in its own fenced plot with a name sign lit by its own street lamp (currently "Sera & DeM"). `game.setName('Alex & Sam')` changes it, and this is where a couple's shared name will go when two plots merge. From outside (street view) and in first person the house is closed in: the cutaway side only exists in the doll-house views.
-
-## Shop and screens
-
-The dock at the bottom opens every screen: **Shop, Wardrobe, Items, World, Daily gift, Settings**. Boxets (the currency) show top-left with your earning rate.
-
-- **Shop:** 18 categories x 10 tiers = **180 items**. Tier 1 costs **100 Boxets**, climbing to **2,400** at tier 10 (100, 140, 200, 280, 400, 560, 800, 1,150, 1,650, 2,400). Categories: beds, cupboards, tables, bookshelves, seating, lamps, ceiling lights, rugs, plants, wall art, curtains, wall paint, flooring, fences, name signs, garden lights, cube skins and cube hats. Rarity (common, rare, epic, legendary) follows the tier. Skins and hats have a **Try on** button that previews them on your cube in the world.
-- **Wardrobe:** dress your cube (skin and hat) with a live picture of the result.
-- **Items:** everything you own. (Placing furniture inside rooms is the next phase.)
-- **World:** neighbours and slots (4 free, 5th for 500, 6th for 1,000 Boxets from a shared fund), the live earning rate, and the couple page.
-- **Daily gift:** each calendar day since you joined has its own reward and can only be claimed that day; missed days are lost, not owed.
-- **Settings:** names, graphics quality, motion, hints, chat, controls.
-
-Where the numbers live: `src/game/catalog.js` (items and prices), `src/game/economy.js` (earning, daily reward, slot prices), `src/game/store.js` (local save, standing in for the server). `src/world/items/*` holds the 3D model of every item, and `src/world/preview.js` renders the shop pictures.
-
-## The home editor (placing furniture)
-
-Press **Edit home** in the dock. The room you are in opens up with the rest of the house hidden, a tab strip to jump between **Study, Bedroom, Kitchen, Living room and Garden**, and a drawer of everything you own.
-
-- **Place:** drag an item from the drawer onto the room (or click it, then click the room). A green outline with "fits here" means it will go; red says why not ("Blocked by the doorway", "Something is already there").
-- **Move / turn / pick up:** drag a placed item, press **R** to turn it, **Delete** to pick it up, arrow keys to nudge, or use the little toolbar that floats over the selected item. **Ctrl+Z / Ctrl+Y** undo and redo.
-- **Grid:** every room is an invisible grid of 0.1-unit cells (**108 x 72** per room, the garden is 248 x 45). Items snap to **0.1 / 0.3 / 0.6** steps (the 0.1 / 0.3 / 0.6 switch), and **Grid** shows the lines plus the no-build zones (doorways, stairs, stairwell, kitchen counter and fridge, TV unit, the garden path and sign).
-- **Layers:** floor furniture blocks other furniture; rugs lie flat and only block other rugs; ceiling lights only block other ceiling lights; pictures and curtains snap to walls (and cannot cover a window); small lamps and plants can stand on tables and move with them.
-- **Walls & floor:** pick any paint or flooring you own for that room. **Garden:** pick your fence and name sign, and place garden lights.
-- **Ownership:** you can only place what you own, and each copy once ("1 to place" / "All placed"). **Reset** puts the standard furnishing back using only what you still have free. Everything is saved.
-
-Code: `src/game/grid.js` (grid maths, tested), `src/game/areas.js` (rooms and no-build zones), `src/game/defaults.js` (standard furnishing), `src/world/editor.js` (dragging, ghost, selection), `src/world/furnish.js` (builds the 3D objects), `src/ui/Editor.jsx` (the screen).
-
-## Roadmap
-
-The game design (worlds, partnerships, couples, the Boxets economy) and the phased build plan are in [`docs/DESIGN.md`](docs/DESIGN.md).
-
-## Layout
-
-- `src/world/house.js`: assembles the four rooms, roof, garden, sun and collision boxes
-- `src/world/shell.js`: the empty room (walls, doorways, trim, window, ceiling, frames)
-- `src/world/rooms/*.js`: the furniture and lamps for each room
-- `src/world/kit.js`: shared helpers and procedural textures
-- `src/world/bake.js`, `src/world/fx.js`: geometry merging and the fake-lighting helpers
-- `src/ui/`: the screens (Shop, Wardrobe, World, Settings, Daily gift) and their stylesheet
-- `src/game/`: catalog, economy rules and the local store (no 3D code)
-- `src/world/cube.js`: the floating cube
-- `src/world/game.js`: renderer, cameras, input, movement, stairs, wall fading
-- `src/App.jsx`, `src/Compass.jsx`: the small UI
-
-## Picture frames
-
-Every room has three frames on the inner face of its open front wall (seen from "my eyes"), plus a few posters. They hold pastel placeholder art for now. Swap in photos with `game.setFrameImage(index, url)` (`game.frameCount` frames in total).
-
-The partner is a local bot that wanders between rooms. Real two-person play needs a realtime backend that syncs positions.
+- `src/game/`: the rules, no 3D: `economy.js` (earning, daily gift, caps, slots), `catalog.js` (items and prices), `areas.js` (rooms, plots, windows, no-build zones), `defaults.js` (standard furnishing), `grid.js` (placement maths), `store.js` (the local save, standing in for the server), `audio.js` (synthesised music and sounds).
+- `src/world/`: the 3D world: `game.js` (renderer, cameras, input, movement, pathfinding, interactions), `house.js` (rooms, roof, garden), `shell.js` and `exterior.js` (a room's inside and outside), `rooms/` (what each room has built in), `scenery.js` (cliff, sea, sky, land), `neighbours.js`, `furnish.js` and `items/` (furniture models), `editor.js`, `autofurnish.js`, `switches.js` (lamps and curtains), `zfight.js`.
+- `src/ui/`: the screens. `tests/`: `npm test`.

@@ -1,8 +1,8 @@
-# cc — design and build plan
+# LoveBloxed — design and build plan
 
 A cosy 3D neighbourhood for friends and couples. Everyone has a house, earns Boxets by spending time and playing together, and spends them on rooms, furniture and skins. Web first (Three.js), app later (Capacitor wrapper).
 
-Status: the visual prototype is done (see README). Everything below the "Rules" heading is **not built yet**.
+Status (October 2026): the whole game runs **locally in the browser**: both homes, the world around them, the editor with auto-furnish, the shop, wardrobe, daily gift, the couple invite / merge / breakup flow, neighbours, the earning games and the economy rules, all saved on the device (see README). What is left is **online play**: accounts, saving on the server, real friends and partners, server-checked earning, chat. Each phase below says what is already done on the client.
 
 ---
 
@@ -11,7 +11,7 @@ Status: the visual prototype is done (see README). Everything below the "Rules" 
 ### 1.1 Houses
 | Stage | House | Notes |
 |---|---|---|
-| Solo | **Starter house: a single room** (bed, cupboard, table, bookshelf, lamp), small fenced garden | Free, one per player. *Not built yet.* |
+| Solo | **Starter house: a single room** (bed, cupboard, table, bookshelf, lamp), small fenced garden | Free, one per player. *Built (`rooms/home.js`).* |
 | Partnership | Each member keeps their own house; all houses share **one fence** | Up to 4 houses (see 1.4) |
 | Couple | A **big cloud** covers both plots. The couple picks **either one of their two locations** to build on; the ground there **grows** and the **standard bigger house** (the current 4-room house) rises out of the cloud | Shared name sign ("X & Y") |
 
@@ -104,17 +104,17 @@ Game rules and 3D must stay separate so the world can change without touching th
 
 ```
 src/
-  game/            pure JS: no Three.js
-    economy.js     multipliers, caps, daily reward formula (shared with server tests)
-    rules.js       world/couple/partnership rules
-    api.js         thin Supabase client (auth, rpc calls, realtime channels)
-    state.js       client store: profile, world, inventory
-  world/           Three.js: houses, rooms, plots, cameras (exists)
-    plots.js       places N plots in a row, builds the merged fence + signs
-    houses/        starter.js (new), couple.js (the current 4-room house)
-    placement.js   furniture placement editor
-    fx.js, kit.js, bake.js ...
-  ui/              React: HUD, shop, inventory, invites, daily reward modal
+  game/            pure JS: no Three.js (unit-tested: npm test)
+    economy.js     multipliers, caps, daily reward, earning caps, slot prices (to mirror in SQL)
+    catalog.js     items, prices, styles      areas.js   rooms, plots, windows, no-build zones
+    defaults.js    standard furnishing        grid.js    placement maths
+    store.js       local save standing in for the server (to be replaced by api.js + Supabase)
+  world/           Three.js
+    game.js        renderer, cameras, input, movement, pathfinding, lamps/curtains, merge animation
+    house.js       the starter home or the couple house, roof, garden      rooms/  each room
+    scenery.js     cliff, sea, sky, land (night / evening palettes)        neighbours.js  other plots
+    editor.js, autofurnish.js, furnish.js, items/, switches.js, zfight.js, fx.js, kit.js, bake.js
+  ui/              React screens: shop, wardrobe, editor, world, play, daily gift, settings
 ```
 
 Pure functions in `economy.js` are unit-tested and **mirrored** in the SQL functions, with the same test cases run against both.
@@ -130,12 +130,12 @@ Each phase ends with something playable and testable.
 - Set up Supabase project, Auth (email/magic link), environment variables, deploy to free hosting.
 - Test on a real phone and measure frame rate. *(Gate: we know our mobile budget.)*
 
-**Phase 1 — Accounts and a saved solo house**
+**Phase 1 — Accounts and a saved solo house** *(client done: starter home, daily gift; left: login, server save, `claim_daily`)*
 - Login, profile, one saved house. Build the **single-room starter house** (bed, cupboard, table, bookshelf, lamp) and starter garden fence.
 - Daily login reward + modal (`claim_daily`), including the missed-days rule (skip days 3–4, log in on 5 → day-5 reward only).
 - *Done when:* you log in, see your own house, claim a reward once per day.
 
-**Phase 2 — Two real players in one house**
+**Phase 2 — Two real players in one house** *(left: realtime; the partner is still a local bot)*
 - Realtime channel per house: positions at ~5 Hz, only while moving; smoothing on the receiver.
 - Replace the bot partner. Presence heartbeat.
 - **Chat:** speech bubbles over cubes and a small log; world-members only, 120-character cap, rate limit, word filter, report and block (see 6).
@@ -146,23 +146,23 @@ Each phase ends with something playable and testable.
 - Coin display, simple earning feedback (no spammy popups).
 - *Done when:* a scripted test of 1, 2, 3, 4 active players yields the exact expected Boxets.
 
-**Phase 4 — Worlds and the shared fence**
+**Phase 4 — Worlds and the shared fence** *(client done: neighbour plots with simple houses, slots and fund; left: real invites, one shared fence)*
 - Invites, accept, leave. `plots.js` lays out 1–6 houses in a row with one merged fence and name sign. Far houses use a **low-detail shell** (no interior, no lights).
 - Slot purchase (500 / 1000) from the world fund.
 - Partnership multiplier live.
 - *Done when:* 4 browsers in one world, performance still at target.
 
-**Phase 5 — Shop, inventory, placement**
+**Phase 5 — Shop, inventory, placement** *(client done; left: `buy_item` / `place_item` on the server)*
 - Catalog, `buy_item`, inventory UI, `placement.js` (click an item, click a spot, snap to grid/surface).
 - Item ownership recorded from day one.
 
-**Phase 6 — Couples**
+**Phase 6 — Couples** *(client done: invite, cloud merge, couple house, auto-furnish, 24 h breakup; left: pooled inventory with owners on the server, choosing the location)*
 - Couple invite → they **choose one of their two locations** → a **big cloud** covers both plots → the ground there grows (neighbours shift along the row) → the standard couple house rises out of the cloud. The other plot is freed.
 - Pooled inventory, style-matching auto-furnish, 3× couple earning, shared name sign.
 - Breakup: request + 24 h cooldown, items returned to original owners.
 - *Done when:* merge and un-merge leave every item with the right person.
 
-**Phase 7 — Things to earn and play**
+**Phase 7 — Things to earn and play** *(client done: star catch, couple quiz, visits, daily caps; left: server-side payouts, comparing quiz answers)*
 - One quiz (e.g. couple quiz), one mini-game, visiting a friend's house. Each with caps.
 
 **Phase 8 — Polish and launch**
@@ -185,11 +185,12 @@ Each phase ends with something playable and testable.
 
 ## 7. Performance plan (must stay smooth on a mid-range phone)
 
-- Static geometry merged per room (done, ~230 draw calls for one house).
+- Static geometry merged per room (done, ~230 draw calls for one house before the scenery; re-measure on a phone).
 - With more houses: only the house you're in is fully detailed; others are **shells** (walls, roof, lit windows, no furniture) and cost ~10 calls each; swap detail in/out by distance.
 - Furniture items are **instanced** where repeated (books, stools, plants).
 - One real light per room, all others are fake glows; shadows baked once.
-- Adaptive pixel ratio (done); render only when something changes; pause when the tab is hidden.
+- Adaptive pixel ratio (done); 60 fps cap, 30 when idle, near-stop when hidden (done).
+- Flicker (z-fighting): checked with `__cc.debug.zfight()`; every material has a fixed polygon-offset priority as a safety net (done).
 - Network: send positions only while moving, quantised to small integers, ≤ 5 Hz; at most 12 players per world.
 - Target: 60 fps desktop, ≥ 30 fps on a mid-range phone, < 15 MB first load.
 
@@ -206,7 +207,7 @@ Each phase ends with something playable and testable.
 
 ## 9. Still open
 
-1. First shop items and prices (suggestion: a lamp 40, a rug 60, a plant 30, a new wall colour 80 Boxets).
+1. Real prices and balance (the catalogue uses 100 to 2,400 Boxets per tier; earning caps are 60 / 30 / 30 a day for the games).
 2. Maximum number of **couples** per world (each counts as 1 house, so up to 6).
 3. Who may remove a member from a world (currently: the creator).
 4. How big the grown plot is, and how neighbouring plots move when it grows.
