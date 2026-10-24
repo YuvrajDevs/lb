@@ -22,6 +22,7 @@ import Onboarding from './ui/Onboarding'
 import World from './ui/World'
 import DailyReward from './ui/DailyReward'
 import StarCatch from './ui/StarCatch'
+import Title from './ui/Title'
 import './ui/ui.css'
 
 const VIEWS = [
@@ -54,10 +55,13 @@ function App() {
   const [rotateNote, setRotateNote] = useState(true)
   const [ready, setReady] = useState(false) // the 3D world exists
   const [viewMenu, setViewMenu] = useState(false) // the camera picker under the compass
+  const [title, setTitle] = useState(true) // the title screen, shown once each time the game opens
   const viewPick = useRef(null)
 
   // a couple lives in the four-room house; everyone else in their starter home (rebuilt when that changes)
   const homeKind = s.couple.state === 'active' ? 'couple' : 'solo'
+  const titleRef = useRef(true)
+  titleRef.current = title
   const lastKind = useRef(homeKind)
   // a couple's breakup takes effect once its 24-hour wait is over
   useEffect(() => { store.checkBreakup(); const t = setInterval(() => store.checkBreakup(), 30000); return () => clearInterval(t) }, [])
@@ -98,6 +102,7 @@ function App() {
       },
       })
       game.current = g
+      if (titleRef.current) g.setView('title')
       if (!saved.settings.artLowered) store.setSetting('artLowered', true)
       setReady(true)
       if (debug) { window.__cc = g; window.__store = store }
@@ -116,7 +121,7 @@ function App() {
   useEffect(() => { game.current?.setReduceMotion(s.settings.reduceMotion) }, [s.settings.reduceMotion, ready])
   useEffect(() => { game.current?.setTimeOfDay(s.settings.time || 'night') }, [s.settings.time, ready])
   const editing = !!ed?.active
-  useEffect(() => { game.current?.setInputEnabled(!open && !editing && !!s.settings.onboarded) }, [open, editing, ready, s.settings.onboarded])
+  useEffect(() => { game.current?.setInputEnabled(!open && !editing && !title && !!s.settings.onboarded) }, [open, editing, ready, title, s.settings.onboarded])
   useEffect(() => { game.current?.setIdle(!!open && !editing) }, [open, editing, ready])
   // a minigame draws its own world: the home stops drawing meanwhile
   useEffect(() => { game.current?.setPaused(open === 'stars') }, [open, ready])
@@ -178,6 +183,20 @@ function App() {
   }, [])
 
   const close = useCallback(() => { setOpen(null); setTryOn({ skin: null, hat: null }) }, [])
+  // the title screen's menu
+  const firstTime = !s.settings.onboarded
+  const titleItems = [
+    { id: 'enter', label: firstTime ? 'Begin' : 'Continue', enter: true },
+    { id: 'guide', label: 'How to play', enter: true },
+    { id: 'settings', label: 'Settings' },
+  ]
+  const pickTitle = id => {
+    if (id === 'settings') { setOpen('settings'); return }
+    if (id === 'guide') store.setSetting('onboarded', false)
+    sfx('whoosh')
+    game.current?.setView('house') // the camera flies in from the title shot
+    setTimeout(() => setTitle(false), 650)
+  }
   const tryItem = useCallback((slot, tier) => setTryOn(t => ({ ...t, [slot]: tier })), [])
   const openShopAt = useCallback(cat => { setShopCat(cat); setOpen('shop') }, [])
 
@@ -207,6 +226,8 @@ function App() {
       {eyes && <div className="eye-vignette" />}
       {eyes && !open && <p className="hud look-tip">hold and drag to look · scroll out to leave</p>}
 
+      {title && ready && <Title items={titleItems} onPick={pickTitle} footnote="Offline · your home is saved on this device" />}
+      {!title && <>
       <header className="hud top-left">
         <h1>NeighBoxed</h1>
         <p>{view.room}</p>
@@ -249,6 +270,7 @@ function App() {
 
       {!editing && <Dock open={open} onOpen={id => (id === 'edit' ? startEdit() : setOpen(id))} giftReady={store.canClaim()} />}
       {editing && <Editor game={game.current} ed={ed} onExit={stopEdit} onOpenShop={() => setOpen('shop')} onReset={resetArea} onAuto={autoArea} />}
+      </>}
 
       {open === 'shop' && <Shop onClose={close} onTry={tryItem} initial={shopCat} key={shopCat} />}
       {open === 'inventory' && <Inventory onClose={close} />}
@@ -257,6 +279,8 @@ function App() {
       {open === 'daily' && <DailyReward onClose={close} />}
       {open === 'settings' && <Settings onClose={close} debug={debug} />}
       {open === 'stars' && <StarCatch onClose={close} skin={skin} hat={hat} />}
+
+      {!title && <>
 
       {rotateNote && !open && !editing && (
         <div className="rotate-note" role="note">
@@ -280,7 +304,8 @@ function App() {
         </div>
       )}
 
-      {ready && !s.settings.onboarded && <Onboarding onDone={() => store.setSetting('onboarded', true)} />}
+      </>}
+      {ready && !title && !s.settings.onboarded && <Onboarding onDone={() => store.setSetting('onboarded', true)} />}
       <Toasts />
     </div>
   )

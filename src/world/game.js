@@ -27,6 +27,7 @@ const CLOSE_EL = 0.2
 const CLOSE_DIST = 6.5
 const STREET_AZ = 0.14
 const STREET_EL = 0.2 // from out over the sea, looking up the cliff at the house
+const TITLE_AZ = -1.15, TITLE_EL = 0.08 // the title screen's camera: low along the cliff top, the sea to the right
 const FOV = 35
 const DOOR_Z = 1.9 // every doorway between side-by-side rooms sits here
 const PLOT_FRONT = 3.6 + 0.3 + 5.2 // where the garden's front fence (and its gate) runs
@@ -292,7 +293,7 @@ export function createGame(container, opts = {}) {
   }
   const shownMode = () => (view.mode === 'room' && view.mul.room > mulMax * 0.9 ? 'house' : view.mode === 'street' && view.focusZ != null ? 'playground' : view.mode)
   const editing = () => view.mode === 'edit'
-  const closedIn = () => view.mode === 'eyes' || view.mode === 'street' || (editing() && view.editArea === 'garden') // outside or first person: the house is closed, no cutaway
+  const closedIn = () => view.mode === 'eyes' || view.mode === 'street' || view.mode === 'title' || (editing() && view.editArea === 'garden') // outside or first person: the house is closed, no cutaway
 
   function report() {
     const info = { mode: shownMode(), az: view.az, room: roomAt(me).name, stairs: stairPrompt() }
@@ -312,8 +313,22 @@ export function createGame(container, opts = {}) {
       report()
       return
     }
+    // the title screen: a slow cinematic drift past the house from out over the sea, the house on the left
+    // (the menu sits on the right); leaving it, the camera flies in from there to wherever you go next
+    if (name === 'title') {
+      view.mode = 'title'
+      neighbours.visible = false // just your home against the night for the title shot
+      view.override = null
+      view.focusX = 0; view.focusZ = null
+      me.path = []
+      active = camera
+      me.cube.setVisible(true)
+      report()
+      return
+    }
     const eyes = name === 'eyes'
-    const wasStreet = view.mode === 'street'
+    const wasStreet = view.mode === 'street' || view.mode === 'title'
+    neighbours.visible = true
     view.override = null
     if (name === 'house') { view.mode = 'room'; view.mul.room = mulMax; view.elGoal = DEFAULT_EL }
     else if (name === 'room') { view.mode = 'room'; view.mul.room = 1; view.elGoal = DEFAULT_EL }
@@ -913,6 +928,10 @@ export function createGame(container, opts = {}) {
     } else {
       if (view.mode === 'close') {
         goalTarget.set(me.pos.x, me.pos.y + FLOAT + 0.4, me.pos.z)
+      } else if (view.mode === 'title') {
+        view.azGoal = TITLE_AZ + Math.sin(t * 0.05) * 0.16
+        view.elGoal = TITLE_EL + Math.sin(t * 0.07) * 0.025
+        goalTarget.set(2, houseCenter.y + 2.2, 7)
       } else if (view.mode === 'street') {
         goalTarget.set(view.focusX || 0, view.focusZ != null ? 0 : 4.6, view.focusZ ?? 3.0)
       } else if (view.mode === 'edit') {
@@ -925,6 +944,7 @@ export function createGame(container, opts = {}) {
       }
       camTarget.lerp(goalTarget, k)
       const goalDist = view.mode === 'close' ? CLOSE_DIST * view.mul.close
+        : view.mode === 'title' ? houseDist * 1.15
         : view.mode === 'street' ? (view.focusZ != null ? 30 : houseDist * 1.05) * view.mul.street
         : view.mode === 'edit' ? (view.editArea === 'garden' ? houseDist * 0.62 : roomDist * 0.98) * view.mul.edit
         : roomDist * view.mul.room
