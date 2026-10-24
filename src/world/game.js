@@ -50,11 +50,13 @@ const smooth = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b - a),
 const levelOf = y => (y > FH * 0.5 ? 1 : 0)
 
 export function createGame(container, opts = {}) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' })
-  let maxPR = Math.min(window.devicePixelRatio, 2)
+  // (no antialiasing on the canvas itself: everything is drawn through the glow pipeline, which smooths edges once,
+  //  in its own render target; doing it twice cost a lot of power for nothing)
+  const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'default' })
+  let maxPR = Math.min(window.devicePixelRatio, 1.25)
   let pr = maxPR
   // adaptive resolution never drops below the screen's own pixels (on a sharp screen, not below 1.5x): that is what looked blurry
-  const MIN_PR = Math.max(1, window.devicePixelRatio >= 2 ? 1.25 : window.devicePixelRatio)
+  const MIN_PR = 1
   let minPR = Math.min(maxPR, MIN_PR)
   renderer.setPixelRatio(pr)
   renderer.shadowMap.enabled = true
@@ -154,8 +156,8 @@ export function createGame(container, opts = {}) {
   scene.add(house.group, house.lights)
   // the cliff, the sea in front and the magical land behind
   // the time of day: 'night', 'evening', or 'auto' (evening from 5 to 8 pm on your own clock, night otherwise)
-  const resolveTime = t => (t === 'auto' ? ((h => (h >= 17 && h < 20 ? 'evening' : 'night'))(new Date().getHours())) : t || 'night')
-  let timeSetting = opts.time || 'night'
+  const resolveTime = t => (t === 'auto' ? ((h => (h >= 17 && h < 20 ? 'evening' : 'night'))(new Date().getHours())) : t || 'evening')
+  let timeSetting = opts.time || 'evening'
   let timeNow = resolveTime(timeSetting)
   const scenery = buildScenery(timeNow)
   bake(scenery.statics)
@@ -279,6 +281,7 @@ export function createGame(container, opts = {}) {
   // same place on every screen, whoever's home sits in the middle there. The playground is shared: everyone's
   // playground is the one behind the home in the middle of their own screen.
   const peers = createPeers(scene)
+  const peersMoving = () => peers.moving()
   peers.attachMe(me.cube)
   const plotX = new Map(streetPlots(street, plot().x).map(p => [p.member.id ?? 'me', p.x]))
   const inPlayground = (x, z) => z < PLAYGROUND.zNear - 0.6 && Math.abs(x) < PLAYGROUND.x + 1
@@ -784,7 +787,8 @@ export function createGame(container, opts = {}) {
   let last = performance.now()
   let elapsed = 0
   let avgMs = 1 // frame time relative to the budget
-  let fpsCap = 60
+  // frame budget per quality: [while something moves, when all is still]. A calm game looks just as calm at 24.
+  let fpsCap = 45, fpsCalm = 24
   let lastInput = performance.now()
   const touched = () => { lastInput = performance.now() }
   ;['pointerdown', 'pointermove', 'wheel'].forEach(n => renderer.domElement.addEventListener(n, touched, { passive: true }))
@@ -831,8 +835,8 @@ export function createGame(container, opts = {}) {
     if (paused) { last = nowMs; return }
     // frame budget: never faster than the cap (a 120 Hz screen would otherwise draw everything twice as often),
     // half speed once nobody has touched anything for a few seconds, and barely at all in a background window
-    const calm = nowMs - lastInput > 4000 && !keys.size && !me.path.length
-    const targetMs = document.hidden ? 1000 / 4 : !document.hasFocus() ? 1000 / 20 : calm ? 1000 / 30 : 1000 / fpsCap
+    const calm = nowMs - lastInput > 2500 && !keys.size && !me.path.length && !peersMoving()
+    const targetMs = document.hidden ? 1000 / 2 : !document.hasFocus() ? 1000 / 8 : calm ? 1000 / fpsCalm : 1000 / fpsCap
     if (nowMs - last < targetMs - 2) return
     const dt = Math.min((nowMs - last) / 1000, 0.05)
     const slowness = (nowMs - last) / targetMs // 1 = on budget
@@ -1199,14 +1203,15 @@ export function createGame(container, opts = {}) {
       shadowFrames = 3
     },
     setQuality(q) {
-      const cap = { low: 1, medium: 1.5, high: 2 }[q] || 2
+      const cap = { low: 1, medium: 1.25, high: 2 }[q] || 1.25
       maxPR = Math.min(window.devicePixelRatio, cap)
       minPR = Math.min(MIN_PR, maxPR)
       pr = q === 'high' ? maxPR : Math.min(pr, maxPR)
       bloomOn = q !== 'low' // the glow is the most expensive part: the battery-saver setting drops it
-      fpsCap = q === 'low' ? 30 : 60
+      fpsCap = { low: 30, medium: 45, high: 60 }[q] || 45
+      fpsCalm = { low: 15, medium: 24, high: 30 }[q] || 24
       // edge smoothing for the glow pipeline: 4x is lovely but heavy, 2x is plenty at 1.5x sharpness
-      const samples = { low: 0, medium: 2, high: 4 }[q] ?? 2
+      const samples = { low: 0, medium: 4, high: 4 }[q] ?? 4 // (the only edge smoothing there is now)
       ;[composer.renderTarget1, composer.renderTarget2].forEach(rt => { if (rt.samples !== samples) { rt.samples = samples; rt.dispose() } })
       avgMs = 1
       renderer.setPixelRatio(pr)

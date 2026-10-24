@@ -289,7 +289,7 @@ function buildMotes(scene, count) {
 export function createStarfall(container, opts = {}) {
   const calm = !!opts.reduceMotion
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75))
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5))
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.1

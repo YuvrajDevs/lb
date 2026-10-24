@@ -65,11 +65,11 @@ export default function Settings({ onClose, debug, onAccount }) {
           </div>
           <p className="soft">{QUALITY.find(q => q[0] === s.settings.quality)[2]} The game also lowers sharpness by itself if it starts to stutter.</p>
           <div className="row">
-            <span><b>Time of day</b><small>Night under the moon, a pink-and-orange evening, or follow your own clock</small></span>
+            <span><b>Time of day</b><small>A pink-and-orange sunset, night under the moon, or follow your own clock</small></span>
           </div>
           <div className="seg" role="radiogroup" aria-label="Time of day">
-            {[['night', 'Night'], ['evening', 'Evening'], ['auto', 'My clock']].map(([id, label]) => (
-              <button key={id} role="radio" aria-checked={(s.settings.time || 'night') === id} className={(s.settings.time || 'night') === id ? 'on' : ''} onClick={() => set('time', id)}>{label}</button>
+            {[['evening', 'Sunset'], ['night', 'Night'], ['auto', 'My clock']].map(([id, label]) => (
+              <button key={id} role="radio" aria-checked={(s.settings.time || 'evening') === id} className={(s.settings.time || 'evening') === id ? 'on' : ''} onClick={() => set('time', id)}>{label}</button>
             ))}
           </div>
           <Toggle label="Reduce motion" hint="The camera cuts instead of swooping; the scenery drifts slower" value={s.settings.reduceMotion} onChange={v => set('reduceMotion', v)} />

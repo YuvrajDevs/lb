@@ -93,6 +93,7 @@ function App() {
       if (!alive) return
       g = createGame(mount.current, {
       onView: setView,
+      time: saved.settings.time || 'evening',
       layout: v ? v.layout : saved.layout,
       style: v ? v.style : saved.style,
       fence: fenceId ? ITEM_BY_ID[fenceId].tier : 0,
@@ -140,7 +141,7 @@ function App() {
   useEffect(() => { game.current?.setName(visiting ? visiting.plot.house : s.profile.house) }, [s.profile.house, ready, visiting])
   useEffect(() => { game.current?.setQuality(s.settings.quality) }, [s.settings.quality, ready])
   useEffect(() => { game.current?.setReduceMotion(s.settings.reduceMotion) }, [s.settings.reduceMotion, ready])
-  useEffect(() => { game.current?.setTimeOfDay(s.settings.time || 'night') }, [s.settings.time, ready])
+  useEffect(() => { game.current?.setTimeOfDay(s.settings.time || 'evening') }, [s.settings.time, ready])
   const editing = !!ed?.active
   useEffect(() => { game.current?.setInputEnabled(!open && !editing && !title && !!s.settings.onboarded) }, [open, editing, ready, title, s.settings.onboarded])
   useEffect(() => { game.current?.setIdle(!!open && !editing) }, [open, editing, ready])
@@ -186,6 +187,14 @@ function App() {
       }, () => { /* offline for a moment: the next beat catches up */ })
     }, STEP * 1000)
     return () => { evs.forEach(e => window.removeEventListener(e, mark)); clearInterval(t) }
+  }, [])
+
+  // a drag in the game is always a look-around or a furniture move, never the browser dragging a picture of the
+  // page (Firefox would otherwise float a ghost of the screen under the cursor)
+  useEffect(() => {
+    const stop = e => { if (!e.target.closest?.('input, textarea')) e.preventDefault() }
+    window.addEventListener('dragstart', stop)
+    return () => window.removeEventListener('dragstart', stop)
   }, [])
 
   // your account: signs you back in if you were, and loads it into the store

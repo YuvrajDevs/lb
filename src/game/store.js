@@ -34,7 +34,7 @@ function fresh() {
     joined: t,
     claimedDays: [], // day numbers already claimed
     today: t, // overridable with the dev "next day" button
-    settings: { quality: 'medium', perfV: 2, music: true, sfx: true, chat: true, names: true, hints: true, reduceMotion: false },
+    settings: { quality: 'medium', perfV: 3, time: 'evening', timeV: 2, music: true, sfx: true, chat: true, names: true, hints: true, reduceMotion: false },
     world: {
       name: "Sera's block",
       slots: WORLD_BASE_SLOTS,
@@ -69,6 +69,8 @@ function load() {
       const saved = { ...fresh(), ...JSON.parse(raw), toasts: [] }
       // older saves defaulted to the heaviest setting, which ran laptops hot: move them to balanced once
       if (!saved.settings.perfV) saved.settings = { ...saved.settings, quality: 'medium', perfV: 2 }
+      // sunset became the standard time of day (once; you can still pick night in Settings)
+      if (saved.settings.timeV !== 2) saved.settings = { ...saved.settings, time: 'evening', timeV: 2 }
       // the date was saved on the first visit and never moved on, so new days never arrived: catch up to today
       // (a date ahead of today stays, so the dev "next day" button keeps working)
       if (!saved.today || saved.today < today()) saved.today = today()

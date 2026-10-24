@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { D, H, T, W, HX, HZ, std, box, cyl, sphere } from './kit.js'
 import { bake } from './bake.js'
-import { glow, pool, cone, wash } from './fx.js'
+import { glow, pool, cone } from './fx.js'
 import { buildStudy } from './rooms/study.js'
 import { buildBedroom, STAIR_HOLE } from './rooms/bedroom.js'
 import { buildKitchen } from './rooms/kitchen.js'
@@ -263,10 +263,12 @@ export function buildHouse(opts = {}) {
 
   // name sign on two posts, lit by its own street lamp (kept separate so it can be re-texted: setName('X & Y'))
   const SX = P.signX, SZ = PLOT.zFront - 0.6
-  const signMat = new THREE.MeshStandardMaterial({ map: signTexture('Sera & DeM'), roughness: 0.8, emissive: '#7a5a3c', emissiveIntensity: 0.55 })
+  // (the name is painted on the front face only; the edges and the back are plain wood)
+  const signMat = new THREE.MeshStandardMaterial({ map: signTexture(opts.name || ''), roughness: 0.8, emissive: '#7a5a3c', emissiveIntensity: 0.55 })
   signMat.emissiveMap = signMat.map
+  const signWood = std('#6b4a30')
   const defaultSign = new THREE.Group()
-  const sign = new THREE.Mesh(new THREE.BoxGeometry(3.8, 1.1, 0.14), signMat)
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(3.8, 1.1, 0.14), [signWood, signWood, signWood, signWood, signMat, signWood])
   sign.position.set(SX, -0.5 + 1.25, SZ)
   sign.userData.keep = true
   sign.castShadow = true
@@ -274,7 +276,7 @@ export function buildHouse(opts = {}) {
   ;[SX - 1.6, SX + 1.6].forEach(x => box(defaultSign, [0.16, 1.2, 0.16], [x, -0.5, SZ], '#6b4a30'))
   group.add(defaultSign)
   let itemSign = null
-  let signText = 'Sera & DeM'
+  let signText = opts.name || ''
   // lamp post with an arm reaching over the board and a cone of light falling on it
   const PX = SX - 2.9
   cyl(street, 0.07, 3.0, [PX, -0.5, SZ], '#2f3138', {}, 8)
@@ -284,8 +286,7 @@ export function buildHouse(opts = {}) {
   lampHead.userData.keep = true
   street.add(lampHead)
   glow(street, [SX, 2.3, SZ], '#ffd27a', 2.8, 0.7)
-  cone(street, [SX, 2.3, SZ + 0.1], '#ffd27a', 2.6, 1.9, 0.22)
-  wash(street, [SX, 1.25, SZ + 0.09], 3.7, 1.05, '#ffcf8a', 0.26)
+  cone(street, [SX, 2.3, SZ + 0.1], '#ffd27a', 2.6, 1.9, 0.16)
   pool(street, [SX, -0.5, SZ + 0.9], '#ffd27a', 2.6, 0.3)
   const setName = text => {
     signText = text

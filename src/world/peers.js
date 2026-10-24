@@ -151,6 +151,8 @@ export function createPeers(scene) {
     /** your own cube gets bubbles and emotes too (no name tag: you know who you are) */
     attachMe(cube) { mine = { cube, bubble: null, bubbleT: 0, emote: null, emoteT: 0 } },
     ids: () => [...peers.keys()],
+    /** is anyone walking (the world draws at full speed while they do) */
+    moving: () => [...peers.values()].some(p => p.moving && p.seen),
     update(t, dt) {
       const k = 1 - Math.exp(-dt * 10)
       peers.forEach(p => {

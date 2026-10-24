@@ -175,7 +175,9 @@ export function signs(t, g, text = 'Sera & DeM') {
   const w = 2.2 + (t > 6 ? 0.3 : 0)
   const mat = new THREE.MeshStandardMaterial({ map: signTexture(text, t), roughness: t === 7 ? 0.2 : 0.8, emissive: '#ffffff', emissiveMap: null, emissiveIntensity: 0 })
   if (t === 6 || t === 10 || t === 9) { mat.emissiveMap = mat.map; mat.emissive = new THREE.Color(t === 6 ? '#ff7ae0' : t === 10 ? '#5fffd0' : '#ffd25a'); mat.emissiveIntensity = t === 9 ? 0.35 : 0.9 }
-  const board = new THREE.Mesh(new THREE.BoxGeometry(w, w * 0.31, 0.12), mat)
+  // (the name only on the front face; the edges and the back are the board's own colour)
+  const edge = new THREE.MeshStandardMaterial({ color: t === 7 ? '#e8e2d6' : '#5a4030', roughness: 0.8 })
+  const board = new THREE.Mesh(new THREE.BoxGeometry(w, w * 0.31, 0.12), [edge, edge, edge, edge, mat, edge])
   board.position.set(0, 0.95 + w * 0.15, 0)
   g.add(board)
   if (t <= 3) { [-w / 2 + 0.15, w / 2 - 0.15].forEach(x => box(g, [0.14, 1.0, 0.14], [x, 0, 0], '#6b4a30')) }

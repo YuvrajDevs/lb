@@ -1,4 +1,4 @@
-// Tiny synthesised sound: UI blips and a slow generative background tune. No audio files, nothing to download.
+// Tiny synthesised sound: soft UI sounds, a slow and quiet pad of low chords, and the sea. No audio files.
 
 let ctx = null
 let sfxBus = null
@@ -8,7 +8,14 @@ let timer = null
 let on = { music: true, sfx: true }
 let started = false
 
-const NOTES = [261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 587.33, 659.25] // C major pentatonic-ish
+// the music: four warm chords, voiced low and close, each one swelling in and fading out over ~10 seconds
+// (Fmaj7, Am7, Cmaj7, G6; Hz)
+const CHORDS = [
+  [87.31, 174.61, 220.0, 261.63, 329.63],
+  [110.0, 164.81, 196.0, 261.63, 329.63],
+  [65.41, 130.81, 196.0, 246.94, 329.63],
+  [98.0, 146.83, 196.0, 246.94, 329.63],
+]
 
 function ensure() {
   if (!ctx) {
@@ -19,7 +26,9 @@ function ensure() {
     master.gain.value = 0.9
     master.connect(ctx.destination)
     sfxBus = ctx.createGain(); sfxBus.gain.value = 0.35; sfxBus.connect(master)
-    musicBus = ctx.createGain(); musicBus.gain.value = 0.16; musicBus.connect(master)
+    // the music goes through a gentle low-pass, so nothing in it is ever bright or sharp
+    const soft = ctx.createBiquadFilter(); soft.type = 'lowpass'; soft.frequency.value = 900; soft.Q.value = 0.3
+    musicBus = ctx.createGain(); musicBus.gain.value = 0.11; musicBus.connect(soft); soft.connect(master)
     delay = ctx.createDelay(1.5); delay.delayTime.value = 0.46
     const fb = ctx.createGain(); fb.gain.value = 0.38
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800
@@ -92,22 +101,31 @@ export function sfx(name) {
   SOUNDS[name]?.()
 }
 
+let chord = 0
 function music() {
   if (!on.music || !ctx) return
-  const f = NOTES[Math.floor(Math.random() * NOTES.length)] * (Math.random() > 0.8 ? 0.5 : 1)
-  const dur = 2.8 + Math.random() * 1.4
   const c = ctx
-  const t0 = c.currentTime
-  const o = c.createOscillator()
-  const g = c.createGain()
-  o.type = 'triangle'
-  o.frequency.value = f
-  g.gain.setValueAtTime(0.0001, t0)
-  g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.5)
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur)
-  o.connect(g); g.connect(musicBus); g.connect(delay)
-  o.start(t0); o.stop(t0 + dur + 0.1)
-  timer = setTimeout(music, 1500 + Math.random() * 2200)
+  const t0 = c.currentTime + 0.05
+  const notes = CHORDS[chord++ % CHORDS.length]
+  const dur = 11
+  notes.forEach((f, i) => {
+    // two sines a hair apart per note: a slow, soft shimmer instead of a hard tone
+    [f, f * 1.003].forEach(freq => {
+      const o = c.createOscillator()
+      const g = c.createGain()
+      o.type = 'sine'
+      o.frequency.value = freq
+      const peak = (i === 0 ? 0.22 : 0.12) / 2
+      g.gain.setValueAtTime(0.0001, t0)
+      g.gain.linearRampToValueAtTime(peak, t0 + 4)
+      g.gain.setValueAtTime(peak, t0 + dur - 4.5)
+      g.gain.linearRampToValueAtTime(0.0001, t0 + dur)
+      o.connect(g); g.connect(musicBus)
+      if (i === notes.length - 1) g.connect(delay) // just the top note echoes, softly
+      o.start(t0); o.stop(t0 + dur + 0.1)
+    })
+  })
+  timer = setTimeout(music, (dur - 3) * 1000) // chords overlap as one fades and the next swells in
 }
 
 function syncMusic() {
@@ -130,17 +148,22 @@ function syncSea() {
   if (!sea) {
     if (!noiseBuf) noise(0.01, { gain: 0.0001 })
     const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 480
     const g = ctx.createGain(); g.gain.value = 0
-    const swell = ctx.createGain(); swell.gain.value = 1
+    // waves: a slow swell (one every ~9 s) with a slower rise and fall on top, so it never sounds like a loop
+    const swell = ctx.createGain(); swell.gain.value = 0.9
     const lfo = ctx.createOscillator(); lfo.frequency.value = 0.11
-    const depth = ctx.createGain(); depth.gain.value = 0.45
+    const depth = ctx.createGain(); depth.gain.value = 0.5
+    const lfo2 = ctx.createOscillator(); lfo2.frequency.value = 0.037
+    const depth2 = ctx.createGain(); depth2.gain.value = 0.25
     lfo.connect(depth); depth.connect(swell.gain)
-    src.connect(lp); lp.connect(swell); swell.connect(g); g.connect(sfxBus)
-    src.start(); lfo.start()
+    lfo2.connect(depth2); depth2.connect(swell.gain)
+    src.connect(lp); lp.connect(swell); swell.connect(g); g.connect(ctx.destination)
+    src.start(); lfo.start(); lfo2.start()
     sea = { g }
   }
-  sea.g.gain.setTargetAtTime(on.sfx && started ? 0.06 * seaNear : 0, ctx.currentTime, 0.8)
+  // (part of the ambience: it plays with the music or the sound effects, whichever is on)
+  sea.g.gain.setTargetAtTime((on.sfx || on.music) && started ? 0.05 * seaNear : 0, ctx.currentTime, 0.8)
 }
 /** how close the sea is (0..1): the waves get louder outside */
 export function setSeaNear(v) { seaNear = Math.max(0.15, Math.min(1, v)); if (sea) syncSea() }

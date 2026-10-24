@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Icon } from './icons'
 import { EMOTE_LIST } from '../world/peers'
 
-// Talking and emotes, bottom right. The log folds away to the last few lines; Enter (or T) opens it to type.
+// Talking and emotes, bottom right. The log folds away to the last few lines; Enter (or T) opens it to type, and it
+// folds again once you send, click anywhere else, or press Escape.
 // Every line also shows as a bubble over the speaker's head. Hover a line to report it.
 
 const EMOJI = { wave: '👋', heart: '💗', hug: '🤗', laugh: '😄', dance: '💃', sleep: '💤', star: '✨' }
@@ -13,6 +14,15 @@ export default function Chat({ log, onSend, onEmote, onReport, meId, people }) {
   const [wheel, setWheel] = useState(false)
   const input = useRef(null)
   const list = useRef(null)
+  const box = useRef(null)
+  const close = () => { setOpen(false); setWheel(false); input.current?.blur() }
+  // a click anywhere outside the chat folds it away
+  useEffect(() => {
+    if (!open && !wheel) return
+    const away = e => { if (!box.current?.contains(e.target)) close() }
+    window.addEventListener('pointerdown', away)
+    return () => window.removeEventListener('pointerdown', away)
+  }, [open, wheel])
 
   // Enter or T opens the chat (when nothing else has the keyboard); Escape closes it
   useEffect(() => {
@@ -29,15 +39,19 @@ export default function Chat({ log, onSend, onEmote, onReport, meId, people }) {
   const send = e => {
     e.preventDefault()
     const t = text.trim()
-    if (!t) { setOpen(false); input.current?.blur(); return }
-    onSend(t)
     setText('')
+    close()
+    if (t) onSend(t)
   }
-  const shown = open ? log : log.slice(-4)
+  // folded, only what was said in the last few seconds stays on screen
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 2000); return () => clearInterval(t) }, [])
+  const fresh = m => now - (Date.parse(m.at) || 0) < 10000
+  const shown = open ? log : log.slice(-4).filter(fresh)
   const here = people.length
 
   return (
-    <div className={`chat ${open ? 'open' : ''}`}>
+    <div className={`chat ${open ? 'open' : ''}`} ref={box}>
       {shown.length > 0 && (
         <ol className="chat-log" ref={list} aria-live="polite">
           {shown.map(m => (
@@ -52,8 +66,9 @@ export default function Chat({ log, onSend, onEmote, onReport, meId, people }) {
         {open ? (
           <form onSubmit={send}>
             <input ref={input} value={text} maxLength={300} placeholder={here > 1 ? `Say something to the ${here - 1} here…` : 'Say something…'}
-              onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); e.currentTarget.blur() } }} />
+              onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') close() }} />
             <button className="icon-btn" aria-label="Send"><Icon name="chevron" size={16} /></button>
+            <button type="button" className="icon-btn" aria-label="Close the chat" onClick={close}><Icon name="close" size={14} /></button>
           </form>
         ) : (
           <button className="chat-open" onClick={() => { setOpen(true); setTimeout(() => input.current?.focus(), 0) }}>
