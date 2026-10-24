@@ -69,6 +69,16 @@ function home(group, x, member, k) {
   return half
 }
 
+/** how far the neighbours' plots reach to the left and right ([left, right] x), so the cliff walk can run that far */
+export function neighbourSpan(members, myHalf) {
+  let right = myHalf, left = -myHalf, r = myHalf + 1.2, l = -26
+  members.forEach((m, k) => {
+    const half = m.kind === 'couple' ? 12.8 : 9.3
+    if (k % 2 === 0) { right = r + half * 2; r += half * 2 + 1.2 } else { left = l - half * 2; l -= half * 2 + 1.2 }
+  })
+  return [left, right]
+}
+
 /**
  * Lays the neighbours out along the cliff: to the right first, then to the left beyond the stream.
  *   members: the world's other homes [{ house, kind, online }], myHalf: half-width of your own plot

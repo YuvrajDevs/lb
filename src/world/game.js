@@ -8,7 +8,7 @@ import { makeEnvironment } from './env.js'
 import { buildScenery, applyPalette, FOG_COLOR, FOG_NEAR, FOG_FAR, CLIFF_Z } from './scenery.js'
 import { bake } from './bake.js'
 import { setCurtain } from './switches.js'
-import { buildNeighbours } from './neighbours.js'
+import { buildNeighbours, neighbourSpan } from './neighbours.js'
 import { setSeaNear } from '../game/audio.js'
 import { findZFighting, settleCoplanar } from './zfight.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
@@ -144,7 +144,8 @@ export function createGame(container, opts = {}) {
     if (opts.layout) opts.onLayoutFix?.(id, layout[id])
   })
   if (!opts.layout) opts.onLayoutInit?.(layout)
-  const house = buildHouse({ layout, style: opts.style, fence: opts.fence, sign: opts.sign, switches: opts.switches })
+  const walkSpan = neighbourSpan(opts.neighbours || [], plot().x) // how far the cliff walk reaches either side
+  const house = buildHouse({ layout, style: opts.style, fence: opts.fence, sign: opts.sign, switches: opts.switches, walk: walkSpan })
   scene.add(house.group, house.lights)
   // the cliff, the sea in front and the magical land behind
   // the time of day: 'night', 'evening', or 'auto' (evening from 5 to 8 pm on your own clock, night otherwise)
@@ -363,7 +364,7 @@ export function createGame(container, opts = {}) {
   const GRID = 0.25
   function findPath(fromV, toV, level) {
     const P = plot()
-    const minX = -P.x - 1, maxX = P.x + 1, minZ = -HZ - 1, maxZ = level === 0 ? CLIFF_Z : HZ + 2
+    const minX = Math.min(-P.x, walkSpan[0]) - 1, maxX = Math.max(P.x, walkSpan[1]) + 1, minZ = -HZ - 1, maxZ = level === 0 ? CLIFF_Z : HZ + 2
     const nx = Math.ceil((maxX - minX) / GRID), nz = Math.ceil((maxZ - minZ) / GRID)
     const idx = (i, j) => j * nx + i
     const cx = x => Math.round((x - minX) / GRID), cz = z => Math.round((z - minZ) / GRID)
@@ -442,7 +443,7 @@ export function createGame(container, opts = {}) {
     const outsideClick = ground && hit.z > HZ + 0.6
     const P = plot()
     const dest = outsideClick
-      ? new THREE.Vector3(THREE.MathUtils.clamp(hit.x, -P.x + 0.6, P.x - 0.6), me.pos.y, Math.min(hit.z, CLIFF_Z - 1.4))
+      ? new THREE.Vector3(THREE.MathUtils.clamp(hit.x, (hit.z > PLOT_FRONT ? walkSpan[0] : -P.x) + 0.6, (hit.z > PLOT_FRONT ? walkSpan[1] : P.x) - 0.6), me.pos.y, Math.min(hit.z, CLIFF_Z - 1.4))
       : new THREE.Vector3(
         THREE.MathUtils.clamp(hit.x, (solo ? -HX : -COL) + 0.6, (solo ? HX : COL) - 0.6),
         me.pos.y,

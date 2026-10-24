@@ -188,11 +188,6 @@ export function buildHouse(opts = {}) {
     cone(street, [lx, 2.7, PLOT.zFront + 1.9], '#ffcc66', 3.0, 1.6, 0.16)
     pool(street, [lx, -0.48, PLOT.zFront + 1.9], '#ffcc66', 3.0, 0.3) // on top of the path, not inside it
   })
-  ;[-13.5, 13.5].forEach(x => {
-    box(street, [0.4, 1.8, 0.4], [x, -0.5, PLOT.zFront + 1.9], '#6a4a38')
-    box(street, [2.0, 1.7, 2.0], [x, 1.2, PLOT.zFront + 1.9], '#2f6a54')
-    box(street, [1.3, 1.0, 1.3], [x, 2.7, PLOT.zFront + 1.9], '#3b7a62')
-  })
 
   const fence = '#f2eadb'
   const post = (x, z, h = 0.6) => box(defaultFence, [0.13, h, 0.13], [x, -0.5, z], fence)
@@ -289,12 +284,15 @@ export function buildHouse(opts = {}) {
   gc.push({ minX: -PLOT.x, maxX: -gate, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw }) // front fence, with the gate gap
   gc.push({ minX: gate, maxX: PLOT.x, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw })
   // out of the gate: the cliff walk, closed off by the railing at the edge and by the fog at the ends
-  const WALK = PLOT.x // the walk outside is only as wide as the garden fence
-  gc.push({ minX: -WALK, maxX: WALK, minZ: CLIFF_Z - 0.7 - fw, maxZ: CLIFF_Z + 2 })
-  gc.push({ minX: -WALK - 2, maxX: -WALK, minZ: PLOT.zFront - 2, maxZ: CLIFF_Z })
-  gc.push({ minX: WALK, maxX: WALK + 2, minZ: PLOT.zFront - 2, maxZ: CLIFF_Z })
+  // the walk outside runs as far as the outermost fence in the world: your own, or your neighbours' either side
+  const [walkL, walkR] = opts.walk || [-PLOT.x, PLOT.x]
+  gc.push({ minX: walkL, maxX: walkR, minZ: CLIFF_Z - 0.7 - fw, maxZ: CLIFF_Z + 2 })
+  gc.push({ minX: walkL - 2, maxX: walkL, minZ: PLOT.zFront - 2, maxZ: CLIFF_Z })
+  gc.push({ minX: walkR, maxX: walkR + 2, minZ: PLOT.zFront - 2, maxZ: CLIFF_Z })
+  // beyond your own plot, the fence line along the walk is closed (neighbours' gardens, and the stream between)
+  if (walkL < -PLOT.x) gc.push({ minX: walkL, maxX: -PLOT.x, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw })
+  if (walkR > PLOT.x) gc.push({ minX: PLOT.x, maxX: walkR, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw })
   ;[-9.5, 9.5].forEach(x => gc.push({ minX: x - 0.15, maxX: x + 0.15, minZ: PLOT.zFront + 1.75, maxZ: PLOT.zFront + 2.05 })) // lamp posts
-  ;[-13.5, 13.5].forEach(x => gc.push({ minX: x - 1.0, maxX: x + 1.0, minZ: PLOT.zFront + 0.9, maxZ: PLOT.zFront + 2.9 })) // trees
   gc.push({ minX: SX - 1.95, maxX: SX + 1.95, minZ: SZ - 0.25, maxZ: SZ + 0.25 })
   gc.push({ minX: PX - 0.2, maxX: PX + 0.2, minZ: SZ - 0.2, maxZ: SZ + 0.2 })
   BUSHES.forEach(([x, z, r]) => gc.push({ minX: x - r - 0.1, maxX: x + r + 0.1, minZ: z - r - 0.1, maxZ: z + r + 0.6 }))
