@@ -27,6 +27,7 @@ export default function StarCatch({ onClose, skin, hat }) {
     const rating = ratingOf(pct)
     // (signed in, the server turns the score into Boxets, within today's cap)
     const give = stats.score > 0 ? await store.earn('stars', stats.score * STAR_PAY, null, true, stats.score) : 0
+    store.questEvent('stars', stats.caught)
     const prev = store.get().settings.starBest || {}
     const order = 'SABCD'
     // your bests, counting this round

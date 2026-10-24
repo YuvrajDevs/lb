@@ -107,6 +107,7 @@ function App() {
       neighbours: visiting ? saved.world.members.map(m => ({ ...m, you: m.id === visiting.plot.id })) : saved.world.members,
       spawn: visiting ? 'gate' : undefined,
       onGate: setGatePlot,
+      onReach: place => store.questEvent(place), // 'cliff' or 'playground'
       lowerArt: !saved.settings.artLowered, // a one-off: hang the pictures at eye height
       onSwitch: v ? noop : store.setSwitch,
       onEditor: setEd,
@@ -181,7 +182,7 @@ function App() {
       beatIn = 60
       srv.heartbeat().then(r => {
         store.patchOnline({ boxets: r.boxets, active: { sec: r.sec } })
-        if (r.paid > 0) { sfx('claim'); store.notify(`+${r.paid} Boxets for ${WINDOW_MIN} minutes of play`, 'good') }
+        if (r.paid > 0) { sfx('claim'); store.notify(`+${r.paid} Boxets for ${WINDOW_MIN} minutes of play`, 'good'); store.questEvent('payout') }
       }, () => { /* offline for a moment: the next beat catches up */ })
     }, STEP * 1000)
     return () => { evs.forEach(e => window.removeEventListener(e, mark)); clearInterval(t) }
@@ -203,6 +204,7 @@ function App() {
       setVisiting({ plot, home })
       const given = await srv.visitHome(plot.ids?.[0] || plot.id).catch(() => 0)
       store.notify(`Welcome to ${plot.house}${given ? ` · +${given} Boxets for visiting` : ''}`, 'good')
+      store.questEvent('visit')
     } catch (e) { store.notify(e.message, 'warn') }
   }
   const goHome = () => { sfx('door'); setVisiting(null) }
@@ -251,9 +253,10 @@ function App() {
       const msg = await sendChat(worldNow, meLive, text)
       setChatLog(l => [...l.slice(-80), msg])
       game.current?.say('me', text)
+      store.questEvent('chat')
     } catch (e) { store.notify(e.message, 'warn') }
   }
-  const emote = kind => { game.current?.emote('me', kind); if (liveId.current) sendEmote(liveId.current, kind) }
+  const emote = kind => { game.current?.emote('me', kind); if (liveId.current) sendEmote(liveId.current, kind); store.questEvent('emote') }
   useEffect(() => { startAccount() }, [])
 
   // sound
@@ -299,7 +302,7 @@ function App() {
     game.current?.setView('house') // the camera flies in from the title shot
     setTimeout(() => setTitle(false), 650)
   }
-  const tryItem = useCallback((slot, tier) => setTryOn(t => ({ ...t, [slot]: tier })), [])
+  const tryItem = useCallback((slot, tier) => { setTryOn(t => ({ ...t, [slot]: tier })); if (tier != null) store.questEvent('tryon') }, [])
   const openShopAt = useCallback(cat => { setShopCat(cat); setOpen('shop') }, [])
 
   const AREA_OF = { home: 'home', study: 'study', bedroom: 'bedroom', kitchen: 'kitchen', 'living room': 'living' }
@@ -321,6 +324,7 @@ function App() {
   const rate = windowEarning({ onlineActive: 1, withPartner: false })
   const minsLeft = Math.max(1, Math.ceil(WINDOW_MIN - (s.active?.sec || 0) / 60))
   const eyes = view.mode === 'eyes'
+  const quests = store.quests()
 
   return (
     <div className={`stage ${editing ? 'editing' : ''}`}>
@@ -341,6 +345,10 @@ function App() {
             <i><i style={{ transform: `scaleX(${(s.active?.sec || 0) / (WINDOW_MIN * 60)})` }} /></i>
             +{rate} in {minsLeft} min
           </span>
+        </button>
+        <button className="quest-pips" onClick={() => setOpen('daily')} aria-label={`Today's quests: ${quests.claimed.length} of ${quests.ids.length} done`}>
+          {quests.ids.map(id => <i key={id} className={quests.claimed.includes(id) ? 'on' : ''} />)}
+          <span>Quests</span>
         </button>
       </header>
 

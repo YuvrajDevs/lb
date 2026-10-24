@@ -628,3 +628,21 @@ h4.sub { margin: 26px 0 10px; font: 700 10.5px var(--words); letter-spacing: .24
 /* visiting someone: a quiet line at the top */
 .visiting { left: 50%; top: max(18px, env(safe-area-inset-top)); transform: translateX(-50%); display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-radius: 99px; background: var(--glass-flat); border: 1px solid var(--rule); font: 400 12px var(--words); letter-spacing: .08em; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 .visiting b { font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+
+/* ---------- daily quests ---------- */
+.quests { display: grid; gap: 2px; }
+.quest { position: relative; display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.quest b { display: block; font: 600 13.5px/1.35 var(--words); letter-spacing: .02em; }
+.quest small { display: block; margin-top: 3px; font: 400 11.5px var(--nums); color: var(--ink-2); }
+.quest em { display: inline-flex; align-items: center; gap: 4px; font: 500 14px var(--nums); font-style: normal; color: var(--gold); }
+.quest-mark { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--rule-2); color: #2a1a08; }
+.quest.done .quest-mark { background: var(--good); border-color: var(--good); }
+.quest.done b { color: var(--ink-2); text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.35); }
+.quest.done em { color: var(--good); }
+.quest-bar { position: absolute; left: 38px; right: 0; bottom: -1px; height: 1px; background: transparent; }
+.quest-bar > i { position: absolute; inset: 0; transform-origin: left; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+.quest-pips { display: flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; color: var(--ink-2); cursor: pointer; }
+.quest-pips i { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--ink-2); }
+.quest-pips i.on { background: var(--good); border-color: var(--good); box-shadow: 0 0 8px var(--good); }
+.quest-pips span { margin-left: 3px; font: 600 10px var(--words); letter-spacing: .16em; text-transform: uppercase; }
+.quest-pips:hover { color: var(--ink); }

@@ -6,7 +6,7 @@ export const PARTNERSHIP_CAP = 3 // multiplier cap
 export const COUPLE_MULT = 3
 export const DAILY_CAP = 600
 /** the most each way of earning can give in one day (on top of the daily gift) */
-export const EARN_CAPS = { stars: 60, quiz: 30, visit: 30 }
+export const EARN_CAPS = { stars: 60, quiz: 30, visit: 30, quest: 90 }
 /** Star catch pays this many Boxets per point scored */
 export const STAR_PAY = 2
 /** how much of `amount` may still be paid today, given what was already earned */

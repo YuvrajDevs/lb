@@ -1,6 +1,7 @@
 import { ITEM_BY_ID, CAT_BY_ID } from './catalog.js'
 import { dailyReward, milestoneOf, dayNumber, toDateStr, nextSlotPrice, WORLD_BASE_SLOTS, MILESTONE_ITEMS, earnable, EARN_CAPS, WINDOW_MIN } from './economy.js'
 import { starterOwned } from './defaults.js'
+import { QUESTS, QUEST_PAY, QUEST_BONUS, pickLocal, advance, finished } from './quests.js'
 import { sfx } from './audio.js'
 
 // The game's state, in one small store. As a guest it is saved on this device (localStorage) and the rules in
@@ -126,6 +127,7 @@ export const store = {
     set({ boxets: state.boxets - it.price, owned: { ...state.owned, [id]: (state.owned[id] || 0) + 1 } })
     sfx('buy')
     toast(`Bought ${it.name}`, 'good')
+    setTimeout(() => store.questEvent('buy'), 0)
     // signed in, the server has the last word (it checks the price and your balance itself)
     if (server) server.buy(id).then(boxets => set({ boxets }), e => { set(before); fail(e) })
     return true
@@ -147,6 +149,7 @@ export const store = {
     if (undoStack.length > 40) undoStack.shift()
     redoStack = []
     set({ layout: { ...state.layout, [areaId]: list } })
+    store.questEvent('place')
   },
   canUndo: () => undoStack.length > 0,
   canRedo: () => redoStack.length > 0,
@@ -177,7 +180,7 @@ export const store = {
     store.setArea(areaId, out)
   },
   /** a lamp switched or curtains drawn: not an edit, so no undo step */
-  setSwitch(uid, value) { set({ switches: { ...state.switches, [uid]: value } }) },
+  setSwitch(uid, value) { set({ switches: { ...state.switches, [uid]: value } }); store.questEvent('switch') },
   applyStyle(areaId, kind, tier) {
     set({ style: { ...state.style, [areaId]: { ...(state.style[areaId] || {}), [kind]: tier || null } } })
   },
@@ -280,6 +283,7 @@ export const store = {
     set({ active: { sec: s } })
     const give = store.earn('time', rate, null, true)
     if (give > 0) { sfx('claim'); toast(`+${give} Boxets for ${WINDOW_MIN} minutes of play`, 'good') } else toast("You've earned all you can today. See you tomorrow!", 'info')
+    store.questEvent('payout')
     return give
   },
 
@@ -316,6 +320,41 @@ export const store = {
       world: { ...state.world, members: state.world.members.map(m => (m.you ? { ...m, kind: 'solo', house } : m)) },
     })
     toast('Your couple has ended. You are back in your own home, with your own things.', 'info')
+  },
+
+  // ---- daily quests (see quests.js) ----
+  /** today's three quests, with progress (a new day brings new ones) */
+  quests() {
+    // (read-only: it is saved the first time something counts; signed in, the account brings today's set)
+    const q = state.quests
+    if (q?.date === state.today && q.ids?.length) return q
+    if (server && q?.ids?.length) return q
+    return { date: state.today, ids: pickLocal(state.today), progress: {}, claimed: [] }
+  },
+  /** something happened that a quest may count (see QUESTS for the events) */
+  questEvent(event, n = 1) {
+    const q = store.quests()
+    const next = advance(q, event, n)
+    if (next === q) return
+    set({ quests: next })
+    finished(next).forEach(id => store.claimQuest(id))
+  },
+  claimQuest(id) {
+    const q = store.quests()
+    if (q.claimed.includes(id)) return
+    const claimed = [...q.claimed, id]
+    set({ quests: { ...q, claimed } })
+    sfx('claim')
+    if (server) {
+      server.questClaim(id).then(r => {
+        set({ boxets: r.boxets })
+        toast(r.all ? `All three quests done! +${r.given} Boxets` : `Quest done: ${QUESTS[id].text}. +${r.given} Boxets`, 'good')
+      }, e => { set({ quests: { ...store.quests(), claimed: store.quests().claimed.filter(x => x !== id) } }); fail(e) })
+      return
+    }
+    const all = claimed.length === q.ids.length
+    const give = store.earn('quest', QUEST_PAY + (all ? QUEST_BONUS : 0), null, true)
+    toast(all ? `All three quests done! +${give} Boxets` : `Quest done: ${QUESTS[id].text}. +${give} Boxets`, 'good')
   },
 
   // ---- your account (called by net/account.js) ----

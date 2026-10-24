@@ -109,11 +109,16 @@ async function loadAll(profile, guest) {
     Object.entries(theirs).forEach(([k, n]) => { owned[k] = (owned[k] || 0) + n })
   }
 
-  const [claims, earnings, world] = await Promise.all([
+  const [claims, earnings, world, questIds, questDone] = await Promise.all([
     many(supabase.from('claims').select('day').eq('user_id', uid)),
     many(supabase.from('earnings').select('source, amount').eq('user_id', uid).eq('day', today)),
     loadWorld(uid, couple?.world),
+    rpc('my_quests'),
+    many(supabase.from('quest_claims').select('quest').eq('user_id', uid).eq('day', today)),
   ])
+  // (progress is counted on this device; keep today's if it is the same set)
+  const cached = store.get().quests
+  const quests = { date: today, ids: questIds || [], claimed: questDone.map(q => q.quest), progress: cached?.date === today && String(cached.ids) === String(questIds) ? cached.progress : {} }
   const by = Object.fromEntries(earnings.map(e => [e.source, e.amount]))
   return {
     profile: { name: profile.name, house: profile.house_name, tag: profile.tag, id: uid },
@@ -126,6 +131,7 @@ async function loadAll(profile, guest) {
     joined: profile.joined,
     today,
     claimedDays: claims.map(c => c.day),
+    quests,
     earned: { date: today, total: earnings.reduce((n, e) => n + e.amount, 0), by, visited: [] },
     couple: couple
       ? { state: 'active', partner: couple.partner_name, partnerId: couple.partner, since: couple.since, endsAt: couple.ends_at ? Date.parse(couple.ends_at) : null }
@@ -262,6 +268,7 @@ export const server = {
   claim: () => rpc('claim_daily'),
   finishGame: (game, score) => rpc('finish_game', { p_game: game, p_score: score }),
   heartbeat: () => rpc('heartbeat', { p_world: worldId }),
+  questClaim: id => rpc('quest_claim', { p_quest: id }),
   setProfile(name, house) {
     clearTimeout(profileTimer)
     profileTimer = setTimeout(() => rpc('set_profile', { p_name: name, p_house: house, p_tz: tz() }).catch(e => store.notify(e.message, 'warn')), 800)

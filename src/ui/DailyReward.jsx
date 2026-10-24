@@ -1,4 +1,5 @@
 import { dailyReward, milestoneOf } from '../game/economy'
+import { QUESTS, QUEST_PAY, QUEST_BONUS } from '../game/quests'
 import { store } from '../game/store'
 import { useStore } from './useStore'
 import { Icon, Boxet } from './icons'
@@ -14,9 +15,30 @@ export default function DailyReward({ onClose }) {
   const days = Array.from({ length: 7 }, (_, i) => start + i)
   const nextMs = NEXT_MILESTONES.find(m => m >= day)
 
+  const q = store.quests()
+  const done = q.claimed.length
   return (
-    <Modal title="Daily gift" subtitle={`Day ${day} since you joined`} onClose={onClose}>
+    <Modal title="Today" subtitle={`Day ${day} since you joined`} onClose={onClose}>
       <div className="daily">
+        <section className="quests">
+          <h4 className="sub" style={{ marginTop: 0 }}>Today's quests · {done} of {q.ids.length}</h4>
+          {q.ids.map(id => {
+            const quest = QUESTS[id]
+            const n = q.progress[id] || 0
+            const ok = q.claimed.includes(id)
+            return (
+              <div key={id} className={`quest ${ok ? 'done' : ''}`}>
+                <i className="quest-mark">{ok ? <Icon name="check" size={14} /> : null}</i>
+                <span><b>{quest.text}</b>{quest.goal > 1 && !ok && <small>{n} of {quest.goal}</small>}</span>
+                <em><Boxet size={13} /> {QUEST_PAY}</em>
+                {quest.goal > 1 && !ok && <i className="quest-bar"><i style={{ transform: `scaleX(${n / quest.goal})` }} /></i>}
+              </div>
+            )
+          })}
+          <p className="soft small">All three: {QUEST_BONUS} more. New quests every day.</p>
+        </section>
+
+        <h4 className="sub" style={{ marginTop: 6 }}>Daily gift</h4>
         <div className="days">
           {days.map(d => {
             const claimed = s.claimedDays.includes(d)

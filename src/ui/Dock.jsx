@@ -5,7 +5,7 @@ const ITEMS = [
   ['wardrobe', 'wardrobe', 'Wardrobe'],
   ['edit', 'edit', 'Edit home'],
   ['world', 'world', 'World'],
-  ['daily', 'gift', 'Daily'],
+  ['daily', 'gift', 'Today'],
   ['settings', 'settings', 'Settings'],
 ]
 

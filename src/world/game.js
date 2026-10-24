@@ -298,6 +298,7 @@ export function createGame(container, opts = {}) {
   // standing at another home's front gate (to visit it, or, while visiting, to go home): its plot id
   const gates = streetPlots(street, plot().x).filter(p => !p.member.you).map(p => ({ id: p.member.id, x: p.x }))
   let atGate = null
+  let reached = null
   // arriving somewhere you are visiting: you start outside its garden gate, facing the house
   if (opts.spawn === 'gate') { me.pos.set(0, 0, PLOT_FRONT + 1.6); me.yaw = Math.PI }
 
@@ -948,6 +949,9 @@ export function createGame(container, opts = {}) {
       const z = NEIGHBOUR_PLOT_Z[1] + 0.9
       const g = levelOf(me.pos.y) === 0 && Math.abs(me.pos.z - z) < 2.2 ? gates.find(q => Math.abs(q.x - me.pos.x) < 2.4) : null
       if ((g?.id ?? null) !== atGate) { atGate = g?.id ?? null; opts.onGate?.(atGate) }
+      // places a quest may ask you to go: the cliff railing, the playground
+      const place = me.pos.z > CLIFF_Z - 2.4 ? 'cliff' : inPlayground(me.pos.x, me.pos.z) ? 'playground' : null
+      if (place !== reached) { reached = place; if (place) opts.onReach?.(place) }
     }
     // tell the others where you are: 8 times a second while moving, every 3 seconds when still
     if (opts.onMove) {
