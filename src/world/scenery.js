@@ -38,13 +38,53 @@ export const PALETTES = {
     deep: C(0.005, 0.012, 0.04), shallow: C(0.02, 0.04, 0.09), skyLo: C(0.05, 0.05, 0.13), skyHi: C(0.01, 0.015, 0.05),
     spec: C(0.85, 0.9, 1.0), crest: C(0.45, 0.5, 0.62), foam: C(0.55, 0.6, 0.75), mist: ['#6a74b8', '#5a6aa8'],
   },
-  evening: {
+  sunset: {
     sun: [0.18, 0.07, 1], fog: [0.24, 0.09, 0.19],
     top: C(0.06, 0.03, 0.16), mid: C(0.30, 0.10, 0.32), low: C(0.85, 0.36, 0.30),
     cloudA: C(0.62, 0.24, 0.40), cloudB: C(1.0, 0.58, 0.32), stars: 0.25,
     glowA: C(0.45, 0.225, 0.1), glowAk: 6, glowB: C(0.9, 0.65, 0.38), glowBk: 90, disc: C(3.0, 2.58, 1.86), discEdge: [0.9988, 0.9993],
     deep: C(0.03, 0.03, 0.10), shallow: C(0.10, 0.07, 0.20), skyLo: C(0.70, 0.30, 0.32), skyHi: C(0.22, 0.08, 0.26),
     spec: C(1.0, 0.62, 0.32), crest: C(0.8, 0.7, 0.78), foam: C(0.85, 0.7, 0.75), mist: ['#d8a0bc', '#b89ad8'],
+  },
+  dawn: {
+    sun: [0.25, 0.12, 1], fog: [0.35, 0.30, 0.45],
+    top: C(0.10, 0.12, 0.32), mid: C(0.45, 0.38, 0.62), low: C(0.98, 0.70, 0.62),
+    cloudA: C(0.75, 0.55, 0.70), cloudB: C(1.0, 0.82, 0.72), stars: 0.15,
+    glowA: C(0.5, 0.35, 0.3), glowAk: 6, glowB: C(1.0, 0.8, 0.65), glowBk: 90, disc: C(3.0, 2.7, 2.3), discEdge: [0.9988, 0.9993],
+    deep: C(0.04, 0.06, 0.15), shallow: C(0.15, 0.15, 0.30), skyLo: C(0.85, 0.65, 0.65), skyHi: C(0.35, 0.35, 0.6),
+    spec: C(1.0, 0.8, 0.65), crest: C(0.85, 0.8, 0.9), foam: C(0.95, 0.88, 0.92), mist: ['#e8c8d8', '#c8c0e8'],
+  },
+  morning: {
+    sun: [0.3, 0.55, 1], fog: [0.45, 0.58, 0.75],
+    top: C(0.12, 0.28, 0.62), mid: C(0.35, 0.55, 0.85), low: C(0.75, 0.85, 0.95),
+    cloudA: C(0.85, 0.88, 0.95), cloudB: C(1.0, 1.0, 1.0), stars: 0,
+    glowA: C(0.6, 0.6, 0.5), glowAk: 6, glowB: C(1.0, 0.95, 0.8), glowBk: 90, disc: C(3.0, 2.9, 2.6), discEdge: [0.9988, 0.9993],
+    deep: C(0.02, 0.10, 0.22), shallow: C(0.06, 0.25, 0.38), skyLo: C(0.7, 0.82, 0.95), skyHi: C(0.3, 0.5, 0.8),
+    spec: C(1.0, 0.95, 0.85), crest: C(0.85, 0.92, 1.0), foam: C(0.95, 0.97, 1.0), mist: ['#dfe8f5', '#c8d6ee'],
+  },
+  evening: {
+    sun: [0.35, 0.3, 1], fog: [0.55, 0.42, 0.30],
+    top: C(0.20, 0.30, 0.58), mid: C(0.55, 0.55, 0.62), low: C(1.0, 0.78, 0.48),
+    cloudA: C(0.95, 0.80, 0.6), cloudB: C(1.0, 0.92, 0.75), stars: 0,
+    glowA: C(0.7, 0.5, 0.25), glowAk: 6, glowB: C(1.0, 0.85, 0.55), glowBk: 90, disc: C(3.2, 2.9, 2.2), discEdge: [0.9988, 0.9993],
+    deep: C(0.03, 0.08, 0.18), shallow: C(0.10, 0.20, 0.30), skyLo: C(0.95, 0.78, 0.55), skyHi: C(0.35, 0.45, 0.7),
+    spec: C(1.0, 0.85, 0.55), crest: C(0.9, 0.88, 0.85), foam: C(1.0, 0.95, 0.88), mist: ['#f0d8b8', '#d8c8b0'],
+  },
+  rain: {
+    sun: [0.2, 0.5, 1], fog: [0.22, 0.25, 0.30],
+    top: C(0.12, 0.14, 0.18), mid: C(0.22, 0.25, 0.30), low: C(0.32, 0.35, 0.40),
+    cloudA: C(0.25, 0.27, 0.32), cloudB: C(0.45, 0.48, 0.52), stars: 0,
+    glowA: C(0.2, 0.22, 0.25), glowAk: 4, glowB: C(0.35, 0.38, 0.42), glowBk: 30, disc: C(0.6, 0.6, 0.62), discEdge: [0.999, 0.9995],
+    deep: C(0.02, 0.04, 0.06), shallow: C(0.06, 0.09, 0.12), skyLo: C(0.30, 0.33, 0.38), skyHi: C(0.15, 0.17, 0.22),
+    spec: C(0.5, 0.55, 0.6), crest: C(0.5, 0.55, 0.6), foam: C(0.65, 0.7, 0.75), mist: ['#8a96a8', '#7a8698'],
+  },
+  snow: {
+    sun: [0.2, 0.5, 1], fog: [0.70, 0.74, 0.82],
+    top: C(0.45, 0.52, 0.66), mid: C(0.70, 0.75, 0.85), low: C(0.88, 0.90, 0.95),
+    cloudA: C(0.85, 0.87, 0.92), cloudB: C(1.0, 1.0, 1.0), stars: 0,
+    glowA: C(0.6, 0.62, 0.7), glowAk: 4, glowB: C(0.9, 0.92, 0.98), glowBk: 40, disc: C(1.5, 1.5, 1.6), discEdge: [0.999, 0.9995],
+    deep: C(0.05, 0.08, 0.14), shallow: C(0.15, 0.2, 0.28), skyLo: C(0.8, 0.84, 0.9), skyHi: C(0.5, 0.58, 0.72),
+    spec: C(0.9, 0.92, 1.0), crest: C(0.85, 0.9, 1.0), foam: C(0.95, 0.97, 1.0), mist: ['#e6ecf5', '#d4dcea'],
   },
 }
 const skyU = {
@@ -57,7 +97,7 @@ const seaU = {
   uDeep: { value: new THREE.Vector3() }, uShallow: { value: new THREE.Vector3() }, uSkyLo: { value: new THREE.Vector3() }, uSkyHi: { value: new THREE.Vector3() },
   uSpec: { value: new THREE.Vector3() }, uCrest: { value: new THREE.Vector3() }, uFoam: { value: new THREE.Vector3() },
 }
-/** switch the sky, sea, fog and mist to a time of day ('night' | 'evening') */
+/** switch the sky, sea, fog and mist to a time of day (dawn, morning, evening, sunset, night) or weather (rain, snow) */
 export function applyPalette(name) {
   const p = PALETTES[name] || PALETTES.night
   SUN_DIR.set(...p.sun).normalize()
@@ -66,8 +106,37 @@ export function applyPalette(name) {
   skyU.uStars.value = p.stars; skyU.uGlowAk.value = p.glowAk; skyU.uGlowBk.value = p.glowBk; skyU.uDiscEdge.value.set(...p.discEdge)
   ;['deep', 'shallow', 'skyLo', 'skyHi', 'spec', 'crest', 'foam'].forEach(k => seaU['u' + k[0].toUpperCase() + k.slice(1)].value.copy(p[k]))
   mistMats.forEach((m, i) => m.color.set(p.mist[i % 3 ? 0 : 1]))
+  applyLand(name)
 }
 const mistMats = []
+
+// the land and trees change with the time of day too: [ground tint, how much of it, its glow, two leaf colours]
+// (night and sunset keep the violet storybook look the land was made with)
+const LAND = {
+  dawn: ['#8a7a9a', 0.45, 0.35, '#2e4a5a', '#3a5a66'],
+  morning: ['#6f9a5a', 0.7, 0.08, '#2f6a4a', '#3a7a52'],
+  evening: ['#8a8a52', 0.6, 0.12, '#3a5a3a', '#4a6a40'],
+  rain: ['#4a5a5a', 0.6, 0.1, '#2a4040', '#324a48'],
+  snow: ['#e8eef6', 0.8, 0.15, '#c8d6e0', '#dde6ee'],
+}
+const tinted = { land: null, base: null, leafA: null, leafB: null, leafColors: null }
+function applyLand(name) {
+  const l = LAND[name]
+  if (tinted.land) {
+    const col = tinted.land.geometry.attributes.color
+    const tint = new THREE.Color(l ? l[0] : '#000000')
+    const k = l ? l[1] : 0
+    for (let i = 0; i < col.count; i++) {
+      col.setXYZ(i, tinted.base[i * 3] * (1 - k) + tint.r * k, tinted.base[i * 3 + 1] * (1 - k) + tint.g * k, tinted.base[i * 3 + 2] * (1 - k) + tint.b * k)
+    }
+    col.needsUpdate = true
+    tinted.land.material.emissiveIntensity = l ? l[2] : 0.6
+  }
+  if (tinted.leafA) {
+    tinted.leafA.color.set(l ? l[3] : tinted.leafColors[0])
+    tinted.leafB.color.set(l ? l[4] : tinted.leafColors[1])
+  }
+}
 
 // ---------- small deterministic noise ----------
 const hash = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s) }
@@ -588,6 +657,8 @@ export function buildScenery(palette = 'night') {
   const sky = makeSky()
   const sea = makeOcean()
   const land = makeLand()
+  tinted.land = land
+  tinted.base = Float32Array.from(land.geometry.attributes.color.array)
   group.add(sky, sea, land, statics)
   makeCliff(statics)
 
@@ -595,6 +666,7 @@ export function buildScenery(palette = 'night') {
     trunk: flat('#4a3448'), leafA: flat('#24485a'), leafB: flat('#2d5a66'),
     lawn: flat('#3b4f6e'), rock: flat('#4b3c6e'),
   }
+  tinted.leafA = mats.leafA; tinted.leafB = mats.leafB; tinted.leafColors = ['#24485a', '#2d5a66']
   const stoneMats = [flat('#6c5a9a'), flat('#8a78bc'), flat('#54467e')]
   // (trees grow everywhere but the street itself, the playground clearing, the stream and the cliff walk: the empty
   //  land beside the homes is forest, and it gives way as the street grows with new neighbours)

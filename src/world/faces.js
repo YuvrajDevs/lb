@@ -65,7 +65,6 @@ const DRAW = {
     line(g, 14)
     g.beginPath(); g.moveTo(L[0] - 22, L[1] - 20); g.lineTo(L[0] + 14, L[1]); g.lineTo(L[0] - 22, L[1] + 20); g.stroke()
     g.beginPath(); g.moveTo(R[0] + 22, R[1] - 20); g.lineTo(R[0] - 14, R[1]); g.lineTo(R[0] + 22, R[1] + 20); g.stroke()
-    g.fillStyle = '#fff'; g.font = '800 28px sans-serif'; g.fillText('YAY!', 186, 50)
   },
   cry: g => {
     soft(g, () => [L, R].forEach(([x, y]) => { g.beginPath(); g.arc(x, y + 6, 26, Math.PI, 0); g.closePath(); g.fill() }))

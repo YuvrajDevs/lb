@@ -132,6 +132,7 @@ async function loadAll(profile) {
     joined: profile.joined,
     today,
     isNew,
+    settings: ownData.settings || {},
     claimedDays: claims.map(c => c.day),
     quests,
     earned: { date: today, total: earnings.reduce((n, e) => n + e.amount, 0), by, visited: [] },
@@ -149,9 +150,9 @@ async function loadWorld(uid, preferred) {
   if (!mine.length) return { id: null, name: 'No world', slots: 4, fund: 0, members: [], invites: [], list: [] }
   // the world you were in last (remembered on this device), unless told otherwise
   const has = id => id && mine.some(m => m.world_id === id)
-  const last = (() => { try { return localStorage.getItem(`nb:world:${uid}`) } catch { return null } })()
+  const last = ownData.settings?.lastWorld // (kept in your account)
   worldId = has(preferred) ? preferred : has(worldId) ? worldId : has(last) ? last : mine[0].world_id
-  try { localStorage.setItem(`nb:world:${uid}`, worldId) } catch { /* private mode */ }
+  if (last !== worldId) { ownData = { ...ownData, settings: { ...(ownData.settings || {}), lastWorld: worldId } }; saveSoon() }
   const [worlds, members, couples] = await Promise.all([
     many(supabase.from('worlds').select('id, name, creator, slots, fund, owner:profiles!worlds_creator_fkey(name)').in('id', mine.map(m => m.world_id))),
     // (in the order the creator arranged them along the street; anyone not placed yet, in the order they came)
@@ -274,13 +275,13 @@ function saveHome() {
     const house = { layout: s.layout, style: s.style, switches: s.switches, fence: s.equipped.fence, sign: s.equipped.sign, name: s.profile.house, access: s.access || [] }
     const coupleHouse = s.couple?.state === 'active'
     if (homeOwner === user.id) {
-      ownData = { ...ownData, [coupleHouse ? 'couple' : 'solo']: house, cube: { skin: s.equipped.skin, hat: s.equipped.hat } }
+      ownData = { ...ownData, [coupleHouse ? 'couple' : 'solo']: house, cube: { skin: s.equipped.skin, hat: s.equipped.hat }, settings: { ...s.settings, lastWorld: worldId } }
       homeData = ownData
       await supabase.from('homes').update({ data: ownData, updated_at: new Date().toISOString() }).eq('user_id', user.id)
     } else {
       // the shared house lives in your partner's row; your cube stays in yours
       homeData = { ...homeData, couple: house }
-      ownData = { ...ownData, cube: { skin: s.equipped.skin, hat: s.equipped.hat } }
+      ownData = { ...ownData, cube: { skin: s.equipped.skin, hat: s.equipped.hat }, settings: { ...s.settings, lastWorld: worldId } }
       await Promise.all([
         supabase.from('homes').update({ data: homeData, updated_at: new Date().toISOString() }).eq('user_id', homeOwner),
         supabase.from('homes').update({ data: ownData, updated_at: new Date().toISOString() }).eq('user_id', user.id),
@@ -288,6 +289,9 @@ function saveHome() {
     }
   }, 900)
 }
+
+/** save soon (after loading picked a world, say), if signed in */
+function saveSoon() { if (user && store.online()) saveHome() }
 
 let profileTimer = 0
 export const server = {

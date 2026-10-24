@@ -14,10 +14,12 @@ const testSave = typeof location !== 'undefined' && new URLSearchParams(location
 // Playing needs an account: signed out there is nothing saved on the device (the old guest save is erased).
 // The one exception is a developer's test save (?debug&save=name), which plays offline for testing.
 const GUEST_KEY = testSave ? `cc:v3:test:${testSave}` : null
-try { localStorage.removeItem('cc:v3') } catch { /* private mode */ }
+// (nothing of the game is kept in the browser: old copies are cleared away. Signed in, everything, your
+//  settings included, lives in your account. Only the sign-in itself is remembered, by Supabase.)
+try { Object.keys(localStorage).filter(k => k === 'cc:v3' || k.startsWith('cc:v3:u:') || k.startsWith('nb:world:')).forEach(k => localStorage.removeItem(k)) } catch { /* private mode */ }
 let KEY = GUEST_KEY
 let server = null // set while signed in (net/account.js)
-const HOME_KEYS = ['layout', 'style', 'switches', 'equipped', 'access'] // changing any of these saves your home
+const HOME_KEYS = ['layout', 'style', 'switches', 'equipped', 'access', 'settings'] // changing any of these saves your account's home
 const listeners = new Set()
 let undoStack = []
 let redoStack = []
@@ -37,7 +39,7 @@ function fresh() {
     joined: t,
     claimedDays: [], // day numbers already claimed
     today: t, // overridable with the dev "next day" button
-    settings: { quality: 'medium', perfV: 3, time: 'evening', timeV: 2, music: true, sfx: true, chat: true, names: true, hints: true, reduceMotion: false },
+    settings: { quality: 'medium', perfV: 3, time: 'sunset', timeV: 3, music: true, sfx: true, chat: true, names: true, hints: true, reduceMotion: false },
     world: {
       name: 'Your block',
       slots: WORLD_BASE_SLOTS,
@@ -56,14 +58,9 @@ function fresh() {
   }
 }
 
-// already signed in on this device? open on that account's copy right away (net/account.js then refreshes it)
-try {
-  const auth = Object.keys(localStorage).find(k => /^sb-.*-auth-token$/.test(k))
-  const uid = auth && JSON.parse(localStorage.getItem(auth))?.user?.id
-  if (uid && !testSave && localStorage.getItem(`cc:v3:u:${uid}`)) KEY = `cc:v3:u:${uid}`
-} catch { /* private mode */ }
 let state = load()
-if (KEY !== GUEST_KEY) state.net = { status: 'loading' }
+// already signed in on this device: the title says so while your account loads
+try { if (!testSave && Object.keys(localStorage).some(k => /^sb-.*-auth-token$/.test(k))) state.net = { status: 'loading' } } catch { /* private mode */ }
 
 function load() {
   if (!KEY) return fresh() // signed out: nothing on the device
@@ -74,7 +71,7 @@ function load() {
       // older saves defaulted to the heaviest setting, which ran laptops hot: move them to balanced once
       if (!saved.settings.perfV) saved.settings = { ...saved.settings, quality: 'medium', perfV: 2 }
       // sunset became the standard time of day (once; you can still pick night in Settings)
-      if (saved.settings.timeV !== 2) saved.settings = { ...saved.settings, time: 'evening', timeV: 2 }
+      if (saved.settings.timeV !== 3) saved.settings = { ...saved.settings, time: 'sunset', timeV: 3 }
       // the date was saved on the first visit and never moved on, so new days never arrived: catch up to today
       // (a date ahead of today stays, so the dev "next day" button keeps working)
       if (!saved.today || saved.today < today()) saved.today = today()
@@ -373,12 +370,15 @@ export const store = {
   /** can you play right now: signed in (or a developer's test save) */
   canPlay: () => !!server || !!testSave,
   /** signed in: the account's data takes over (settings stay this device's) */
-  goOnline(srv, snap, uid) {
+  goOnline(srv, snap) {
     server = null // (no saving back while loading)
-    KEY = `cc:v3:u:${uid}`
+    KEY = null // (nothing kept in the browser)
     undoStack = []; redoStack = []
     // (settings stay this device's; a brand-new account is welcomed: asked its name, then the guide)
-    const settings = snap.isNew ? { ...state.settings, arrived: false, onboarded: false } : state.settings
+    let base = { ...fresh().settings, ...(snap.settings || {}) }
+    // (what was called evening is now sunset; evening is the golden afternoon before it)
+    if (base.timeV !== 3) base = { ...base, time: !base.time || base.time === 'evening' ? 'sunset' : base.time, timeV: 3 }
+    const settings = snap.isNew ? { ...base, arrived: false, onboarded: false } : base
     state = { ...fresh(), ...snap, settings, toasts: state.toasts, net: state.net }
     server = srv
     persist()
@@ -387,11 +387,10 @@ export const store = {
   /** signed out (or the account deleted): nothing is left on screen but the title, and nothing on the device */
   goOffline() {
     server = null
-    try { if (KEY && KEY !== GUEST_KEY) localStorage.removeItem(KEY) } catch { /* private mode */ }
     KEY = GUEST_KEY
     undoStack = []; redoStack = []
     const toasts = state.toasts
-    state = { ...load(), toasts, settings: { ...state.settings } }
+    state = { ...load(), toasts }
     listeners.forEach(l => l())
   },
   /** news from the server (a top-up, a new friend, a partner's change): no save back */

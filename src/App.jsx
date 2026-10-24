@@ -54,7 +54,7 @@ function App() {
   const mount = useRef(null)
   const game = useRef(null)
   const s = useStore()
-  const [view, setView] = useState({ mode: 'room', az: 0, room: 'study', stairs: null })
+  const [view, setView] = useState({ mode: 'close', az: 0, room: 'home', stairs: null })
   const [open, setOpen] = useState(null)
   const [shopCat, setShopCat] = useState('beds')
   const [tryOn, setTryOn] = useState({ skin: null, hat: null })
@@ -74,7 +74,18 @@ function App() {
   const myKind = s.couple.state === 'active' ? 'couple' : 'solo'
   const homeKind = myKind
   // the street: who lives next door (the world is rebuilt when that changes, which is rare)
-  const street = s.world.members.filter(m => !m.you).map(m => `${m.id}:${m.kind}`).join('|')
+  // (every home in order, yours included: moving your own home along the street changes it too)
+  const street = s.world.members.map(m => `${m.you ? 'me' : m.id}:${m.kind}`).join('|')
+  // when the street changes (a home moved, someone moved in or out), a cloud drifts over while it is rebuilt
+  const [clouding, setClouding] = useState(false)
+  const lastStreet = useRef(street)
+  useEffect(() => {
+    if (lastStreet.current === street) return
+    lastStreet.current = street
+    setClouding(true)
+    const t = setTimeout(() => setClouding(false), 1800)
+    return () => clearTimeout(t)
+  }, [street])
   const isOnline = s.net?.status === 'online'
   const wasOnline = useRef(false)
   useEffect(() => {
@@ -107,7 +118,7 @@ function App() {
       if (!alive) return
       g = createGame(mount.current, {
       onView: setView,
-      time: saved.settings.time || 'evening',
+      time: saved.settings.time || 'sunset',
       layout: saved.layout,
       style: saved.style,
       fence: fenceId ? ITEM_BY_ID[fenceId].tier : 0,
@@ -161,7 +172,7 @@ function App() {
   useEffect(() => { game.current?.setName(s.profile.house) }, [s.profile.house, ready])
   useEffect(() => { game.current?.setQuality(s.settings.quality) }, [s.settings.quality, ready])
   useEffect(() => { game.current?.setReduceMotion(s.settings.reduceMotion) }, [s.settings.reduceMotion, ready])
-  useEffect(() => { game.current?.setTimeOfDay(s.settings.time || 'evening') }, [s.settings.time, ready])
+  useEffect(() => { game.current?.setTimeOfDay(s.settings.time || 'sunset') }, [s.settings.time, ready])
   const editing = !!ed?.active
   useEffect(() => { game.current?.setInputEnabled(!open && !editing && !cinematic && !!s.settings.onboarded) }, [open, editing, ready, cinematic, s.settings.onboarded])
   useEffect(() => { game.current?.setIdle(!!open && !editing) }, [open, editing, ready])
@@ -341,8 +352,9 @@ function App() {
   // the title screen's menu
   const firstTime = !s.settings.onboarded
   const signedIn = s.net?.status === 'online'
-  const moveIn = ({ name, house }) => {
+  const moveIn = ({ name, house, tag }) => {
     store.setName(name)
+    if (tag) store.patchOnline({ profile: { ...store.get().profile, tag } })
     store.setHouseName(house)
     store.setSetting('arrived', true)
     if (!arriving.current) { setWelcome(null); return }
@@ -365,7 +377,7 @@ function App() {
     if (id === 'settings' || id === 'account') { setOpen(id); return }
     if (id === 'guide') store.setSetting('onboarded', false)
     sfx('whoosh')
-    game.current?.setView('house') // the camera flies in from the title shot
+    game.current?.setView('close') // the camera flies in from the title shot, to just behind you
     setTimeout(() => setTitle(false), 650)
     // someone new (or still called by the old default name) is asked who they are first
     const p = store.get().profile
@@ -398,13 +410,14 @@ function App() {
   return (
     <div className={`stage ${editing ? 'editing' : ''}`}>
       <div ref={mount} className="world" />
+      {clouding && <div className="cloud-pass" aria-hidden="true"><i /><i /><i /><i /><i /></div>}
       {eyes && <div className="eye-vignette" />}
       {eyes && !open && <p className="hud look-tip">hold and drag to look · the eye button to leave</p>}
 
       {title && ready && <Title items={titleItems} onPick={pickTitle}
         worlds={signedIn ? s.world.list || [] : []} world={s.world.id}
         onWorld={id => store.server()?.switchWorld(id).catch(e => store.notify(e.message, 'warn'))} footnote={signedIn ? `Signed in · ${s.profile.name} ${s.profile.tag}` : s.net?.status === 'loading' ? 'Opening your account…' : 'Sign in to move in and play with friends'} />}
-      {welcome === 'name' && !title && <Welcome initialName={s.profile.name} onDone={moveIn} />}
+      {welcome === 'name' && !title && <Welcome initialName={arriving.current ? '' : s.profile.name} online={signedIn} onDone={moveIn} />}
       {!cinematic && <>
       <header className="hud top-left">
         <div className="hud-id">
@@ -485,7 +498,8 @@ function App() {
       {open === 'wardrobe' && <Wardrobe onClose={close} onOpenShop={openShopAt} />}
       {open === 'world' && <World onClose={close} onAccount={() => setOpen('account')} />}
       {open === 'daily' && <DailyReward onClose={close} />}
-      {open === 'settings' && <Settings onClose={close} debug={debug} onAccount={() => setOpen('account')} />}
+      {open === 'settings' && <Settings onClose={close} debug={debug} onAccount={() => setOpen('account')}
+        onMenu={title ? null : () => { close(); setTitle(true); game.current?.setView('title') }} />}
       {open === 'account' && <Account onClose={close} />}
       {joinCode && !open && ready && s.net?.status !== 'loading' && (
         <JoinPrompt code={joinCode} signedIn={signedIn} onClose={() => setJoinCode(null)} onSignIn={() => setOpen('account')} />

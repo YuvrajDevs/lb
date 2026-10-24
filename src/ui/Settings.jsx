@@ -30,7 +30,7 @@ function Toggle({ label, hint, value, onChange, disabled }) {
   )
 }
 
-export default function Settings({ onClose, debug, onAccount }) {
+export default function Settings({ onClose, debug, onAccount, onMenu }) {
   const s = useStore()
   const [name, setName] = useState(s.profile.name)
   // your name saves when you leave the field, and also when the window closes with the field still focused (Esc)
@@ -40,7 +40,7 @@ export default function Settings({ onClose, debug, onAccount }) {
   const set = (k, v) => store.setSetting(k, v)
 
   return (
-    <Modal title="Settings" onClose={onClose}>
+    <Modal title="Settings" onClose={onClose} right={onMenu && <button className="btn ghost" onClick={onMenu}>Back to the menu</button>}>
       <div className="settings">
         <section>
           <h3><Icon name="user" size={16} /> You</h3>
@@ -60,11 +60,11 @@ export default function Settings({ onClose, debug, onAccount }) {
           </div>
           <p className="soft">{QUALITY.find(q => q[0] === s.settings.quality)[2]} The game also lowers sharpness by itself if it starts to stutter.</p>
           <div className="row">
-            <span><b>Time of day</b><small>A pink-and-orange sunset, night under the moon, or follow your own clock</small></span>
+            <span><b>Time of day</b><small>From dawn to night, or rain and snowfall. My clock follows the time where you are.</small></span>
           </div>
-          <div className="seg" role="radiogroup" aria-label="Time of day">
-            {[['evening', 'Sunset'], ['night', 'Night'], ['auto', 'My clock']].map(([id, label]) => (
-              <button key={id} role="radio" aria-checked={(s.settings.time || 'evening') === id} className={(s.settings.time || 'evening') === id ? 'on' : ''} onClick={() => set('time', id)}>{label}</button>
+          <div className="chips" role="radiogroup" aria-label="Time of day">
+            {[['dawn', 'Dawn'], ['morning', 'Morning'], ['evening', 'Evening'], ['sunset', 'Sunset'], ['night', 'Night'], ['rain', 'Rain'], ['snow', 'Snowfall'], ['auto', 'My clock']].map(([id, label]) => (
+              <button key={id} role="radio" aria-checked={(s.settings.time || 'sunset') === id} className={`chip ${(s.settings.time || 'sunset') === id ? 'on' : ''}`} onClick={() => set('time', id)}>{label}</button>
             ))}
           </div>
           <Toggle label="Reduce motion" hint="The camera cuts instead of swooping; the scenery drifts slower" value={s.settings.reduceMotion} onChange={v => set('reduceMotion', v)} />

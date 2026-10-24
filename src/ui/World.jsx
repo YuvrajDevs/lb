@@ -221,8 +221,8 @@ function FriendsTab({ s }) {
         <button className="btn ghost" onClick={() => navigator.clipboard?.writeText(s.profile.tag).then(() => store.notify('Tag copied', 'good'))}><span className="tag">{s.profile.tag}</span> Copy</button>
       </div>
       <form className="invite" onSubmit={e => { e.preventDefault(); run('add', () => srv.addFriend(tag), 'Friend request sent').then(() => setTag('')) }}>
-        <input placeholder="Their tag, like mochi#1234" value={tag} maxLength={24} onChange={e => setTag(e.target.value)} />
-        <button className="btn primary" disabled={!/#\d{4}$/.test(tag.trim()) || busy === 'add'}>Add friend</button>
+        <input placeholder="Their username" value={tag} maxLength={24} onChange={e => setTag(e.target.value)} />
+        <button className="btn primary" disabled={tag.trim().length < 3 || busy === 'add'}>Add friend</button>
       </form>
 
       {incoming.length > 0 && <h4 className="sub">Wants to be friends</h4>}

@@ -486,10 +486,16 @@ export function buildHouse(opts = {}) {
     group, lights, rooms, colliders, frames, roof, roofBase, stairs, setName, streetProps: street,
     /** the outdoor light for a time of day: moonlit night, or a warm evening */
     setDaylight(time) {
-      const ev = time === 'evening'
-      hemi.color.set(ev ? '#c890c0' : '#5a6cb8'); hemi.groundColor.set(ev ? '#3a2656' : '#22203e'); hemi.intensity = ev ? 0.8 : 0.75
-      moon.color.set(ev ? '#ffa66e' : '#9fb4ff'); moon.intensity = ev ? 1.7 : 1.3
-      moon.position.set(4.5, 5.5 + (ev ? 7.5 : 9), 22)
+      // [sky, ground, sky strength, sun or moon colour, its strength, its height]
+      const L = {
+        night: ['#5a6cb8', '#22203e', 0.75, '#9fb4ff', 1.3, 9], sunset: ['#c890c0', '#3a2656', 0.8, '#ffa66e', 1.7, 7.5],
+        dawn: ['#b8a8d8', '#3a3050', 0.95, '#ffc0a0', 1.5, 6], morning: ['#c8dcff', '#5a6a50', 1.35, '#fff4e0', 2.2, 18],
+        evening: ['#e8d0b0', '#5a4a3a', 1.15, '#ffd090', 2.0, 11], rain: ['#8a96aa', '#30343c', 1.0, '#c0c8d8', 0.6, 15],
+        snow: ['#d8e2f2', '#8890a0', 1.3, '#eef2ff', 1.0, 15],
+      }[time] || ['#5a6cb8', '#22203e', 0.75, '#9fb4ff', 1.3, 9]
+      hemi.color.set(L[0]); hemi.groundColor.set(L[1]); hemi.intensity = L[2]
+      moon.color.set(L[3]); moon.intensity = L[4]
+      moon.position.set(4.5, 5.5 + L[5], 22)
     },
     furnish, setStyle, setFence, setSign, roomById, gardenPlaced,
     setSwitches(next) { switches = next },

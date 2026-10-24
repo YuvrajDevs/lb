@@ -690,3 +690,15 @@ h4.sub { margin: 26px 0 10px; font: 700 10.5px var(--words); letter-spacing: .24
 .slot.movable { cursor: grab; }
 .slot.movable:hover { border-color: var(--rule-2); }
 .slot.dragging { opacity: .4; }
+.welcome-field small.bad { color: var(--warn); }
+.welcome-field small.good { color: var(--good); }
+
+/* a cloud drifting over the world while the street is rebuilt */
+.cloud-pass { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; animation: cloudPass 1.8s ease forwards; }
+.cloud-pass i { position: absolute; width: 70vmax; height: 50vmax; border-radius: 50%; background: radial-gradient(closest-side, rgba(250, 240, 255, 0.98), rgba(236, 222, 250, 0.9) 55%, rgba(236, 222, 250, 0)); filter: blur(6px); }
+.cloud-pass i:nth-child(1) { left: -20vmax; top: -10vmax; }
+.cloud-pass i:nth-child(2) { left: 25vmax; top: -18vmax; }
+.cloud-pass i:nth-child(3) { left: -10vmax; top: 25vmax; }
+.cloud-pass i:nth-child(4) { left: 40vmax; top: 20vmax; }
+.cloud-pass i:nth-child(5) { left: 10vmax; top: 5vmax; }
+@keyframes cloudPass { 0% { opacity: 0; transform: scale(1.15); } 30%, 62% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.08); } }

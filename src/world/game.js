@@ -156,9 +156,10 @@ export function createGame(container, opts = {}) {
   const house = buildHouse({ layout, style: opts.style, fence: opts.fence, sign: opts.sign, switches: opts.switches, walk: walkSpan, name: opts.name })
   scene.add(house.group, house.lights)
   // the cliff, the sea in front and the magical land behind
-  // the time of day: 'night', 'evening', or 'auto' (evening from 5 to 8 pm on your own clock, night otherwise)
-  const resolveTime = t => (t === 'auto' ? ((h => (h >= 17 && h < 20 ? 'evening' : 'night'))(new Date().getHours())) : t || 'evening')
-  let timeSetting = opts.time || 'evening'
+  // the time of day: dawn, morning, evening, sunset, night, the weather (rain, snow), or 'auto': your own clock
+  const byHour = h => (h >= 5 && h < 7 ? 'dawn' : h >= 7 && h < 12 ? 'morning' : h >= 12 && h < 17 ? 'evening' : h >= 17 && h < 20 ? 'sunset' : 'night')
+  const resolveTime = t => (t === 'auto' ? byHour(new Date().getHours()) : t === 'evening-old' ? 'sunset' : t || 'sunset')
+  let timeSetting = opts.time || 'sunset'
   let timeNow = resolveTime(timeSetting)
   const scenery = buildScenery(timeNow)
   bake(scenery.statics)
@@ -234,7 +235,7 @@ export function createGame(container, opts = {}) {
   let active = camera
   const camTarget = new THREE.Vector3().copy(rooms[0].center)
   const view = {
-    mode: 'room', az: 0, azGoal: 0, el: DEFAULT_EL, elGoal: DEFAULT_EL,
+    mode: 'close', az: 0, azGoal: 0, el: CLOSE_EL, elGoal: CLOSE_EL, // (close-up, behind you, is where you start)
     dist: 16, pitch: 0, mul: { room: 1, close: 1, street: 1, edit: 1 }, override: null, editArea: null, inset: 0,
   }
   let roomDist = 16
@@ -313,6 +314,46 @@ export function createGame(container, opts = {}) {
   // Positions travel relative to the nearest home on the street (its plot id), so the same spot maps to the
   // same place on every screen, whoever's home sits in the middle there. The playground is shared: everyone's
   // playground is the one behind the home in the middle of their own screen.
+  // ---- the weather: rain streaks or drifting snow in a box that travels with you ----
+  const weather = (() => {
+    const N = 1800, BOX = [70, 30, 70]
+    const pos = new Float32Array(N * 3)
+    for (let i = 0; i < N; i++) { pos[i * 3] = (Math.random() - 0.5) * BOX[0]; pos[i * 3 + 1] = Math.random() * BOX[1]; pos[i * 3 + 2] = (Math.random() - 0.5) * BOX[2] }
+    // rain: short falling streaks (each drop a line); snow: soft round flakes
+    const rainGeo = new THREE.BufferGeometry()
+    const rp = new Float32Array(N * 6)
+    rainGeo.setAttribute('position', new THREE.BufferAttribute(rp, 3))
+    const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: '#b8c8e0', transparent: true, opacity: 0.45, depthWrite: false }))
+    const flake = (() => { const c = document.createElement('canvas'); c.width = c.height = 32; const g = c.getContext('2d'); const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(c) })()
+    const snowGeo = new THREE.BufferGeometry()
+    snowGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    const snow = new THREE.Points(snowGeo, new THREE.PointsMaterial({ map: flake, color: '#ffffff', size: 0.22, transparent: true, depthWrite: false, opacity: 0.9 }))
+    ;[rain, snow].forEach(o => { o.visible = false; o.frustumCulled = false; o.userData.keep = true; scene.add(o) })
+    let kind = null, t = 0
+    return {
+      set(time) { kind = time === 'rain' || time === 'snow' ? time : null; rain.visible = kind === 'rain'; snow.visible = kind === 'snow' },
+      update(dt, cx, cz) {
+        if (!kind) return
+        t += dt
+        const fall = kind === 'rain' ? 22 : 1.6
+        for (let i = 0; i < N; i++) {
+          let y = pos[i * 3 + 1] - fall * dt * (0.8 + (i % 5) * 0.08)
+          if (y < -1) y += BOX[1]
+          pos[i * 3 + 1] = y
+          if (kind === 'snow') pos[i * 3] += Math.sin(t * 0.7 + i) * dt * 0.4
+        }
+        rain.position.set(cx, 0, cz); snow.position.set(cx, 0, cz)
+        if (kind === 'rain') {
+          for (let i = 0; i < N; i++) {
+            const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2]
+            rp.set([x, y, z, x - 0.05, y + 0.6, z], i * 6)
+          }
+          rainGeo.attributes.position.needsUpdate = true
+        } else snowGeo.attributes.position.needsUpdate = true
+      },
+    }
+  })()
+
   const peers = createPeers(scene)
   const peersMoving = () => peers.moving()
   peers.attachMe(me.cube)
@@ -1025,6 +1066,7 @@ export function createGame(container, opts = {}) {
     // (during the rise, you rise with your home)
     if (merge && merge.t < 6) me.cube.group.position.y += house.group.position.y
     peers.update(t, dt)
+    weather.update(dt, me.pos.x, me.pos.z)
     {
       const z = NEIGHBOUR_PLOT_Z[1] + 0.9
       const g = levelOf(me.pos.y) === 0 && Math.abs(me.pos.z - z) < 2.2 ? gates.find(q => Math.abs(q.x - me.pos.x) < 2.4) : null
@@ -1322,7 +1364,7 @@ export function createGame(container, opts = {}) {
       setView('street')
       view.focusX = x
     },
-    /** 'night' | 'evening' | 'auto' */
+    /** 'dawn' | 'morning' | 'evening' | 'sunset' | 'night' | 'rain' | 'snow' | 'auto' */
     setTimeOfDay(t) {
       timeSetting = t
       const next = resolveTime(t)
@@ -1331,6 +1373,8 @@ export function createGame(container, opts = {}) {
       house.daylightSet = true
       applyPalette(timeNow)
       scene.fog.color.copy(FOG_COLOR) // (the fog keeps its own copy of the colour)
+      renderer.toneMappingExposure = { morning: 1.12, evening: 1.06, snow: 1.08, rain: 0.98 }[timeNow] || 1.02
+      weather.set(timeNow)
       house.setDaylight(timeNow)
       scene.environment?.dispose?.()
       scene.environment = makeEnvironment(renderer, timeNow)
