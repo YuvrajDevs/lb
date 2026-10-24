@@ -8,7 +8,7 @@ The game rules (houses, earning, worlds, couples) live in [`DESIGN.md`](DESIGN.m
 |---|---|
 | 1. Fix the loop | **Done.** Active-time earning, the 2 m back path, signpost and playground view, the playground out of the house shadow and lit, honest guide and README. |
 | 2. UI system | **Done.** One language for the HUD and every panel (night glass, hairline rules, Josefin Sans and Oswald), a Firewatch-style title screen, minigame screens like the reference score screen. |
-| 3. Accounts & cloud save | **Done.** Magic-link sign-in, `start_player`, your home saved to your account, guest home carried over (only what the account owns). Needs the Auth URL settings below before sign-in links work. |
+| 3. Accounts & cloud save | **Done.** Google sign-in (the only way in, so no email sender is needed), `start_player`, your home saved to your account, guest home carried over (only what the account owns). Needs the Google provider switched on in Supabase (see below). |
 | 4. Friends & worlds | **Done.** Tags, requests, remove, block, report; worlds, invite links and codes, join, leave, remove (creator), the fund and slots, delete account. |
 | 5. Together live | **Done:** presence, movement, chat with bubbles, emotes, visiting homes. **Left:** sitting together and the joint hug animation. |
 | 6. Server economy | **Done.** Buying, the daily gift, quests, minigame pay, visits and active-time earning (with the friends and partner multipliers) are server functions with daily caps. |
@@ -17,7 +17,7 @@ The game rules (houses, earning, worlds, couples) live in [`DESIGN.md`](DESIGN.m
 
 Also done beyond the plan: walk freely between homes and through small things (only fences, walls and neighbours' gardens stop you), a 3 m gap between plots, and the street the same on every screen.
 
-**To switch sign-in on** (Supabase dashboard → Authentication → URL Configuration): set *Site URL* to the address the game is played at (`http://localhost:5173` while testing, the real domain later) and add the same address to *Redirect URLs*. Without it the sign-in email's link lands on the wrong page.
+**To switch sign-in on:** Google Cloud console → an OAuth client (Web application) with the redirect URI `https://ecbodzfhvtdnrjcjwitc.supabase.co/auth/v1/callback`, then Supabase → Authentication → Sign In / Providers → Google, enabled with that client's ID and secret. Supabase's URL Configuration has the site's address as Site URL and in Redirect URLs.
 
 The sections below are the original plan.
 

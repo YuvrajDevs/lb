@@ -2,7 +2,7 @@
 
 A cosy little neighbourhood on a cliff by the sea, where friends and couples live as floating cubes in doll houses. You decorate your home, earn Boxets by spending time and playing together, and when two people become a couple their homes merge into one bigger house.
 
-Built with Vite, React and plain [Three.js](https://threejs.org), with [Supabase](https://supabase.com) for accounts, saving and live play. You can play straight away as a guest (saved on the device); signing in (a link by email, no password) keeps your home on your account and lets you play with friends. The plan is in [`docs/PLAN.md`](docs/PLAN.md), the rules in [`docs/DESIGN.md`](docs/DESIGN.md).
+Built with Vite, React and plain [Three.js](https://threejs.org), with [Supabase](https://supabase.com) for accounts, saving and live play. You can play straight away as a guest (saved on the device); signing in with Google keeps your home on your account and lets you play with friends. The plan is in [`docs/PLAN.md`](docs/PLAN.md), the rules in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ```
 npm install

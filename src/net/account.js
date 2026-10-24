@@ -17,11 +17,11 @@ let ownData = {} // your own home row's data (for your cube; and your solo home 
 let saveTimer = 0
 let worldId = null
 
-/** sign in with a magic link sent to `email`; the link brings you back here, signed in */
-export async function sendMagicLink(email) {
-  const { error } = await supabase.auth.signInWithOtp({
-    email: email.trim(),
-    options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true },
+/** sign in with Google: off to Google's page, then back here, signed in (an invite code waits on the device) */
+export async function signInWithGoogle() {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: location.origin + location.pathname, queryParams: { prompt: 'select_account' } },
   })
   if (error) throw new Error(error.message)
 }
@@ -56,7 +56,10 @@ async function connect(u) {
   store.setNet({ status: 'loading', email: u.email })
   try {
     const guest = store.guestSnapshot()
-    const profile = await rpc('start_player', { p_name: guest.profile.name, p_tz: tz() })
+    // a new account is named after the guest you played as, unless that was still the default: then your first name
+    const fromGoogle = (u.user_metadata?.given_name || u.user_metadata?.full_name || u.user_metadata?.name || '').split(' ')[0]
+    const name = guest.profile.name && guest.profile.name !== 'Sera' ? guest.profile.name : fromGoogle || 'Neighbour'
+    const profile = await rpc('start_player', { p_name: name, p_tz: tz() })
     const snap = await loadAll(profile, guest)
     store.goOnline(server, snap, u.id)
     listen()

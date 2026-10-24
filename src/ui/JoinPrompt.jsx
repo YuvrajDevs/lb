@@ -35,7 +35,7 @@ export default function JoinPrompt({ code, signedIn, onClose, onSignIn }) {
         {!signedIn && (
           <>
             <h3>Sign in to join</h3>
-            <p className="soft">Someone invited you to live next door to them. Sign in (it takes a minute, no password) and we'll take you there.</p>
+            <p className="soft">Someone invited you to live next door to them. Sign in with Google and we'll take you straight there.</p>
             <button className="btn primary big" onClick={onSignIn}>Sign in</button>
           </>
         )}

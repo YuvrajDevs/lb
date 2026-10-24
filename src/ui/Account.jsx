@@ -2,11 +2,11 @@ import { useState } from 'react'
 import Modal from './Modal'
 import { useStore } from './useStore'
 import { store } from '../game/store'
-import { sendMagicLink, signOut, deleteAccount } from '../net/account'
+import { signInWithGoogle, signOut, deleteAccount } from '../net/account'
 import { Icon } from './icons'
 
-// Your account. As a guest: sign in with a link sent to your email (no password), which keeps your home safe and
-// lets you play with friends. Signed in: who you are (your tag is how friends find you), sign out, or delete
+// Your account. As a guest: sign in with Google (no password to make up), which keeps your home safe and lets you
+// play with friends. Signed in: who you are (your tag is how friends find you), sign out, or delete
 // everything for good.
 
 export default function Account({ onClose }) {
@@ -20,45 +20,27 @@ export default function Account({ onClose }) {
 }
 
 function SignIn({ status, error }) {
-  const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
-  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
-  const send = async e => {
-    e.preventDefault()
-    if (!valid || busy) return
+  const go = async () => {
     setBusy(true); setErr(null)
-    try { await sendMagicLink(email); setSent(email.trim()) } catch (x) { setErr(x.message) }
-    setBusy(false)
+    try { await signInWithGoogle() } catch (x) { setErr(x.message); setBusy(false) } // (on success the page goes to Google)
   }
   if (status === 'loading') return <p className="soft">Opening your account…</p>
-  if (sent) {
-    return (
-      <div className="account">
-        <div className="account-art"><Icon name="check" size={30} /></div>
-        <h3>Check your email</h3>
-        <p className="soft">We sent a sign-in link to <b>{sent}</b>. Open it on this device and you'll come straight back here, signed in. Your home comes with you.</p>
-        <button className="link" onClick={() => setSent(null)}>Use a different email</button>
-      </div>
-    )
-  }
   return (
-    <form className="account" onSubmit={send}>
+    <div className="account">
       <ul className="account-perks">
         <li><Icon name="world" /><span><b>Play together</b>Friends and your partner in your world, live.</span></li>
-        <li><Icon name="heart" /><span><b>Keep your home safe</b>On every device you sign in on.</span></li>
+        <li><Icon name="heart" /><span><b>Keep your home safe</b>On every device you sign in on. Your guest home comes with you.</span></li>
         <li><Icon name="bolt" /><span><b>Earn more</b>Up to 3× with friends, 3× more with your partner.</span></li>
       </ul>
-      <label className="field">
-        <span>Your email</span>
-        <input type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
-        <small>No password: we email you a link that signs you in.</small>
-      </label>
       {(err || error) && <p className="account-err">{err || error}</p>}
-      <button className="btn primary big" disabled={!valid || busy}>{busy ? 'Sending…' : 'Send me a sign-in link'}</button>
-      <p className="soft small">By signing in you agree to play kindly. You must be 13 or older.</p>
-    </form>
+      <button className="btn google big" disabled={busy} onClick={go}>
+        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" /><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" /><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" /><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" /></svg>
+        {busy ? 'Opening Google…' : 'Continue with Google'}
+      </button>
+      <p className="soft small">We only use your Google account to sign you in: your name in the game is yours to choose. By signing in you agree to play kindly, and you must be 13 or older.</p>
+    </div>
   )
 }
 
