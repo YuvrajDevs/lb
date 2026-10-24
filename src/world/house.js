@@ -176,17 +176,18 @@ export function buildHouse(opts = {}) {
   for (let x = -110; x <= 110; x += 2) box(street, [0.14, 0.95, 0.14], [x, -0.55, edgeZ], '#d8d0e8')
   box(street, [220, 0.1, 0.1], [0, 0.4, edgeZ], '#f2eadb')
   box(street, [220, 0.06, 0.06], [0, 0.0, edgeZ], '#f2eadb')
+  // street lamps stand at the land-side edge of the walk, their arms reaching out over it towards the sea
+  const postZ = PLOT.zFront + 0.55, headZ = postZ + 0.85
   ;[-9.5, 9.5].forEach(x => {
-    cyl(street, 0.08, 3.4, [x, -0.5, PLOT.zFront + 1.9], '#2f3138', {}, 8)
-    box(street, [0.9, 0.08, 0.08], [x + (x < 0 ? 0.45 : -0.45), 2.85, PLOT.zFront + 1.9], '#2f3138')
-    const lx = x + (x < 0 ? 0.85 : -0.85)
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.18, 0.4), new THREE.MeshBasicMaterial({ color: '#ffe2a8', toneMapped: false }))
-    head.position.set(lx, 2.78, PLOT.zFront + 1.9)
+    cyl(street, 0.08, 3.4, [x, -0.5, postZ], '#2f3138', {}, 8)
+    box(street, [0.08, 0.08, 0.9], [x, 2.85, postZ + 0.45], '#2f3138')
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.18, 0.5), new THREE.MeshBasicMaterial({ color: '#ffe2a8', toneMapped: false }))
+    head.position.set(x, 2.78, headZ)
     head.userData.keep = true
     street.add(head)
-    glow(street, [lx, 2.75, PLOT.zFront + 1.9], '#ffcc66', 2.4, 0.6)
-    cone(street, [lx, 2.7, PLOT.zFront + 1.9], '#ffcc66', 3.0, 1.6, 0.16)
-    pool(street, [lx, -0.48, PLOT.zFront + 1.9], '#ffcc66', 3.0, 0.3) // on top of the path, not inside it
+    glow(street, [x, 2.75, headZ], '#ffcc66', 2.4, 0.6)
+    cone(street, [x, 2.7, headZ], '#ffcc66', 3.0, 1.6, 0.16)
+    pool(street, [x, -0.48, headZ], '#ffcc66', 3.0, 0.3) // on top of the path, not inside it
   })
 
   const fence = '#f2eadb'
@@ -292,7 +293,7 @@ export function buildHouse(opts = {}) {
   // beyond your own plot, the fence line along the walk is closed (neighbours' gardens, and the stream between)
   if (walkL < -PLOT.x) gc.push({ minX: walkL, maxX: -PLOT.x, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw })
   if (walkR > PLOT.x) gc.push({ minX: PLOT.x, maxX: walkR, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw })
-  ;[-9.5, 9.5].forEach(x => gc.push({ minX: x - 0.15, maxX: x + 0.15, minZ: PLOT.zFront + 1.75, maxZ: PLOT.zFront + 2.05 })) // lamp posts
+  ;[-9.5, 9.5].forEach(x => gc.push({ minX: x - 0.15, maxX: x + 0.15, minZ: PLOT.zFront + 0.4, maxZ: PLOT.zFront + 0.7 })) // lamp posts, at the edge of the walk
   gc.push({ minX: SX - 1.95, maxX: SX + 1.95, minZ: SZ - 0.25, maxZ: SZ + 0.25 })
   gc.push({ minX: PX - 0.2, maxX: PX + 0.2, minZ: SZ - 0.2, maxZ: SZ + 0.2 })
   BUSHES.forEach(([x, z, r]) => gc.push({ minX: x - r - 0.1, maxX: x + r + 0.1, minZ: z - r - 0.1, maxZ: z + r + 0.6 }))
