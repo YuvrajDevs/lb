@@ -5,8 +5,8 @@ import { createCube, FLOAT } from './cube.js'
 // chat and a little emote above them. Updates arrive about 8 times a second; in between, each cube glides
 // smoothly towards where it was last seen, so movement looks continuous rather than jumpy.
 
-const EMOTES = { wave: '👋', heart: '💗', hug: '🤗', laugh: '😄', dance: '💃', sleep: '💤', star: '✨' }
-export const EMOTE_LIST = Object.keys(EMOTES)
+import { EXPRESSIONS } from './faces.js'
+export const EMOTE_LIST = EXPRESSIONS // (expressions: the cube's own face changes, see faces.js)
 
 function textSprite(draw, w, h, scale) {
   const c = document.createElement('canvas')
@@ -60,12 +60,6 @@ const bubble = text => textSprite((g, w, h) => {
   shown.forEach((l, i) => g.fillText(l, w / 2, top + 18 + lh * i + lh / 2))
 }, 640, 256, 1.45)
 
-const emoji = e => textSprite((g, w, h) => {
-  g.font = '96px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'
-  g.textAlign = 'center'; g.textBaseline = 'middle'
-  g.fillText(e, w / 2, h / 2 + 6)
-}, 128, 128, 0.7)
-
 /** one cube with its tag; `a` is anything with pos / yaw / moving, so your own cube can show bubbles too */
 function attach(scene, cube, name) {
   const tag = nameTag(name)
@@ -87,12 +81,8 @@ export function createPeers(scene) {
     p.bubbleT = 6 + Math.min(6, text.length / 12)
   }
   function emote(p, kind) {
-    if (!EMOTES[kind]) return
-    if (p.emote) { p.cube.group.remove(p.emote); p.emote.material.map.dispose(); p.emote.material.dispose() }
-    p.emote = emoji(EMOTES[kind])
-    p.emote.position.y = FLOAT + 1.5
-    p.cube.group.add(p.emote)
-    p.emoteT = 2.6
+    if (!EXPRESSIONS.includes(kind)) return
+    p.cube.express(kind)
   }
   function age(p, dt) {
     if (p.bubble && (p.bubbleT -= dt) <= 0) { p.cube.group.remove(p.bubble); p.bubble = null }

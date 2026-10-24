@@ -14,7 +14,23 @@ export function Mark({ size = 64 }) {
   )
 }
 
-export default function Title({ items, onPick, footnote }) {
+/** which world to go into: ◀ its name ▶ (yours is Your World; the others are named after their owner) */
+function WorldPicker({ worlds, current, onSwitch }) {
+  const i = Math.max(0, worlds.findIndex(w => w.id === current))
+  const step = d => onSwitch(worlds[(i + d + worlds.length) % worlds.length].id)
+  return (
+    <div className="world-pick" aria-label="Choose a world">
+      <button aria-label="Previous world" onClick={() => step(-1)}>◀</button>
+      <div className="world-pick-name" key={worlds[i].id}>
+        <span>{worlds[i].name}</span>
+        <i>{worlds.map(w => <b key={w.id} className={w.id === current ? 'on' : ''} />)}</i>
+      </div>
+      <button aria-label="Next world" onClick={() => step(1)}>▶</button>
+    </div>
+  )
+}
+
+export default function Title({ items, onPick, footnote, worlds = [], world, onWorld }) {
   const [k, setK] = useState(0)
   const [leaving, setLeaving] = useState(false)
 
@@ -22,6 +38,11 @@ export default function Title({ items, onPick, footnote }) {
     const onKey = e => {
       // (not while a panel is open over the title, like Settings, or typing in a field)
       if (leaving || document.querySelector('.scrim') || e.target.closest?.('input, textarea')) return
+      if (worlds.length > 1 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault()
+        const i = Math.max(0, worlds.findIndex(w => w.id === world))
+        onWorld(worlds[(i + (e.key === 'ArrowLeft' ? -1 : 1) + worlds.length) % worlds.length].id)
+      }
       if (e.key === 'ArrowDown' || e.key === 's') { e.preventDefault(); setK(i => (i + 1) % items.length) }
       if (e.key === 'ArrowUp' || e.key === 'w') { e.preventDefault(); setK(i => (i - 1 + items.length) % items.length) }
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(items[k]) }
@@ -45,6 +66,7 @@ export default function Title({ items, onPick, footnote }) {
           <Mark size={70} />
           <h1>Neigh<span>Boxed</span></h1>
         </div>
+        {worlds.length > 1 && <WorldPicker worlds={worlds} current={world} onSwitch={onWorld} />}
         <nav aria-label="Main menu">
           {items.map((it, i) => (
             <button key={it.id} className={i === k ? 'on' : ''} onMouseEnter={() => setK(i)} onFocus={() => setK(i)} onClick={() => choose(it)}>

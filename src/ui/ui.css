@@ -668,3 +668,22 @@ h4.sub { margin: 26px 0 10px; font: 700 10.5px var(--words); letter-spacing: .24
 .welcome-field input { font-size: 20px !important; padding: 10px 0 !important; }
 .welcome-field small { font: 400 12px var(--words); color: var(--ink-3); }
 .mg-menu button:disabled { opacity: .35; cursor: not-allowed; }
+
+/* the world picker on the title screen: ◀ name ▶ */
+.world-pick { display: flex; align-items: center; gap: 18px; margin-top: -8px; animation: titleRise 1.4s cubic-bezier(.2, .8, .2, 1) .35s both; }
+.world-pick button { width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.4); background: rgba(10, 6, 26, 0.25); color: #fff; font-size: 11px; cursor: pointer; transition: border-color .2s, background .2s; }
+.world-pick button:hover { border-color: #fff; background: rgba(10, 6, 26, 0.5); }
+.world-pick-name { min-width: 190px; display: flex; flex-direction: column; align-items: center; gap: 8px; animation: fade .35s ease; }
+.world-pick-name span { font: 600 15px 'Josefin Sans', sans-serif; letter-spacing: .22em; text-transform: uppercase; color: #ffd9a0; }
+.world-pick-name i { display: flex; gap: 6px; }
+.world-pick-name b { width: 6px; height: 6px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.6); }
+.world-pick-name b.on { background: #fff; }
+
+/* the joystick (touch screens only) */
+.joystick { position: absolute; z-index: 6; left: 22px; bottom: 96px; display: none; width: 124px; height: 124px; border-radius: 50%; border: 1px solid var(--rule-2); background: radial-gradient(circle, rgba(10, 6, 26, 0.15), rgba(10, 6, 26, 0.45)); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); touch-action: none; }
+.joystick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px; border-radius: 50%; background: rgba(255, 255, 255, 0.85); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); transition: transform .12s var(--ease); }
+.joystick.on i { transition: none; background: #fff; }
+@media (pointer: coarse) { .joystick { display: block; } .stage.editing .joystick { display: none; } }
+.face-btn img { width: 24px; height: 24px; display: block; }
+.emote-row { flex-wrap: wrap; justify-content: flex-end; max-width: 250px; border-radius: 18px; }
+.emote-row button img { width: 32px; height: 32px; display: block; margin: auto; }

@@ -10,6 +10,7 @@ import { store } from './game/store'
 import { startAccount } from './net/account'
 import { onLive, joinLive, leaveLive, track, sendMove, sendEmote, sendChat, chatHistory, sendKnock, sendAllow } from './net/live'
 import Chat from './ui/Chat'
+import Joystick from './ui/Joystick'
 import { windowEarning, WINDOW_MIN } from './game/economy'
 import { useStore } from './ui/useStore'
 import { Boxet, Icon } from './ui/icons'
@@ -36,7 +37,7 @@ const VIEWS = [
   ['room', 'room'],
   ['close', 'close-up'],
   ['eyes', 'my eyes'],
-  ['street', 'street'],
+  ['street', 'outside'],
   ['playground', 'playground'],
 ]
 const HINTS = {
@@ -44,7 +45,7 @@ const HINTS = {
   room: 'WASD or click the floor to move · scroll in to get close, out for the whole house · click lamps and curtains',
   close: 'WASD or click the floor to move · scroll in to see through your eyes, out for the room',
   eyes: 'W/S walk · A/D step aside · drag to look · click lamps and curtains · scroll out to leave',
-  street: 'drag or Q/E to walk around the house · scroll in to come back to the house',
+  street: 'a bird\'s-eye view that follows you · click anywhere to walk there · scroll in to come back',
   playground: 'click anywhere to walk there · walk up to a glowing station to play · scroll in to come back',
 }
 const debug = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug')
@@ -64,7 +65,7 @@ function App() {
   const [title, setTitle] = useState(true) // the title screen, shown once each time the game opens
   // a new player's welcome: 'name' (who's moving in), 'rising' (the home rises from the cloud), 'guide'
   const [welcome, setWelcome] = useState(null)
-  const arriving = useRef(!store.get().settings.arrived && !store.get().settings.onboarded) // brand new: the cloud waits
+  const arriving = useRef(!store.get().settings.arrived && !store.get().settings.onboarded) // brand new: asked their name first
   // the title, the welcome and the house rising are moments of their own: no HUD over them
   const cinematic = title || welcome === 'name' || welcome === 'rising'
   const viewPick = useRef(null)
@@ -86,7 +87,7 @@ function App() {
     const saved = store.get()
     setHomeKind(homeKind)
     // two homes becoming one: the new house rises out of a big cloud
-    const intro = arriving.current ? 'arrival' : lastKind.current === 'solo' && homeKind === 'couple' ? 'merge' : null
+    const intro = lastKind.current === 'solo' && homeKind === 'couple' ? 'merge' : null
     lastKind.current = homeKind
     const fenceId = saved.equipped.fence, signId = saved.equipped.sign
     const boot = async () => {
@@ -335,10 +336,7 @@ function App() {
     store.setSetting('arrived', true)
     if (!arriving.current) { setWelcome(null); return }
     arriving.current = false
-    game.current?.setView('house')
-    game.current?.arrive() // the cloud parts and the home rises, with you in it
-    setWelcome('rising')
-    setTimeout(() => setWelcome('guide'), 6400)
+    setWelcome('guide') // then straight in, with the guide
   }
   const titleItems = [
     { id: 'enter', label: firstTime ? 'Begin' : 'Continue', enter: true },
@@ -350,7 +348,7 @@ function App() {
     if (id === 'settings' || id === 'account') { setOpen(id); return }
     if (id === 'guide') store.setSetting('onboarded', false)
     sfx('whoosh')
-    game.current?.setView(arriving.current ? 'street' : 'house') // the camera flies in from the title shot (a newcomer's: to the cloud)
+    game.current?.setView('house') // the camera flies in from the title shot
     setTimeout(() => setTitle(false), 650)
     // someone new (or still called by the old default name) is asked who they are first
     const p = store.get().profile
@@ -386,7 +384,9 @@ function App() {
       {eyes && <div className="eye-vignette" />}
       {eyes && !open && <p className="hud look-tip">hold and drag to look · scroll out to leave</p>}
 
-      {title && ready && <Title items={titleItems} onPick={pickTitle} footnote={signedIn ? `Signed in · ${s.profile.name} ${s.profile.tag}` : s.net?.status === 'loading' ? 'Opening your account…' : 'Guest · your home is saved on this device'} />}
+      {title && ready && <Title items={titleItems} onPick={pickTitle}
+        worlds={signedIn ? s.world.list || [] : []} world={s.world.id}
+        onWorld={id => store.server()?.switchWorld(id).catch(e => store.notify(e.message, 'warn'))} footnote={signedIn ? `Signed in · ${s.profile.name} ${s.profile.tag}` : s.net?.status === 'loading' ? 'Opening your account…' : 'Guest · your home is saved on this device'} />}
       {welcome === 'name' && !title && <Welcome initialName={s.profile.name === 'Sera' ? '' : s.profile.name} onDone={moveIn} />}
       {!cinematic && <>
       <header className="hud top-left">
@@ -485,18 +485,7 @@ function App() {
       )}
 
       {!editing && !open && (
-        <div className="pad" aria-label="Move">
-          {[['u', '▲', 'w', 'arrowup'], ['l', '◀', 'a', 'arrowleft'], ['d', '▼', 's', 'arrowdown'], ['r', '▶', 'd', 'arrowright']].map(([cls, label, key]) => (
-            <button
-              key={cls}
-              className={cls}
-              aria-label={`Move ${cls}`}
-              onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); game.current?.setKey(key, true) }}
-              onPointerUp={() => game.current?.setKey(key, false)}
-              onPointerCancel={() => game.current?.setKey(key, false)}
-            >{label}</button>
-          ))}
-        </div>
+        <Joystick onMove={(x, y) => game.current?.setStick(x, y)} />
       )}
 
       </>}

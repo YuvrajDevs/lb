@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from './icons'
-import { EMOTE_LIST } from '../world/peers'
+import { EXPRESSIONS, EXPRESSION_LABEL, faceIcon } from '../world/faces'
 
 // Talking and emotes, bottom right. The log folds away to the last few lines; Enter (or T) opens it to type, and it
 // folds again once you send, click anywhere else, or press Escape.
 // Every line also shows as a bubble over the speaker's head. Hover a line to report it.
 
-const EMOJI = { wave: '👋', heart: '💗', hug: '🤗', laugh: '😄', dance: '💃', sleep: '💤', star: '✨' }
+// little pictures of each expression on a pink cube (drawn once)
+let icons = null
+const iconsOf = () => (icons ||= Object.fromEntries(EXPRESSIONS.map(k => [k, faceIcon(k)])))
 
 export default function Chat({ log, onSend, onEmote, onReport, meId, people }) {
   const [open, setOpen] = useState(false)
@@ -75,13 +77,17 @@ export default function Chat({ log, onSend, onEmote, onReport, meId, people }) {
             <Icon name="chat" size={16} /> Chat <small>{here > 1 ? `${here} here` : 'just you'}</small>
           </button>
         )}
-        <button className={`icon-btn ${wheel ? 'on' : ''}`} aria-label="Emotes" aria-expanded={wheel} onClick={() => setWheel(w => !w)}>
-          <span className="emoji">😊</span>
+        <button className={`icon-btn face-btn ${wheel ? 'on' : ''}`} aria-label="Expressions" aria-expanded={wheel} onClick={() => setWheel(w => !w)}>
+          <img src={iconsOf().happy} alt="" draggable="false" />
         </button>
       </div>
       {wheel && (
         <div className="emote-row" role="menu">
-          {EMOTE_LIST.map(k => <button key={k} role="menuitem" aria-label={k} onClick={() => { onEmote(k); setWheel(false) }}>{EMOJI[k]}</button>)}
+          {EXPRESSIONS.map(k => (
+            <button key={k} role="menuitem" title={EXPRESSION_LABEL[k]} aria-label={EXPRESSION_LABEL[k]} onClick={() => { onEmote(k); setWheel(false) }}>
+              <img src={iconsOf()[k]} alt="" draggable="false" />
+            </button>
+          ))}
         </div>
       )}
     </div>

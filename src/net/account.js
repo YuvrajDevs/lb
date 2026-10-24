@@ -115,7 +115,7 @@ async function loadAll(profile, guest) {
   const [claims, earnings, world, questIds, questDone] = await Promise.all([
     many(supabase.from('claims').select('day').eq('user_id', uid)),
     many(supabase.from('earnings').select('source, amount').eq('user_id', uid).eq('day', today)),
-    loadWorld(uid, couple?.world),
+    loadWorld(uid, null),
     rpc('my_quests'),
     many(supabase.from('quest_claims').select('quest').eq('user_id', uid).eq('day', today)),
   ])
@@ -150,9 +150,13 @@ async function loadAll(profile, guest) {
 async function loadWorld(uid, preferred) {
   const mine = await many(supabase.from('world_members').select('world_id, joined_at').eq('user_id', uid).order('joined_at'))
   if (!mine.length) return { id: null, name: 'No world', slots: 4, fund: 0, members: [], invites: [], list: [] }
-  worldId = preferred && mine.some(m => m.world_id === preferred) ? preferred : (worldId && mine.some(m => m.world_id === worldId) ? worldId : mine[0].world_id)
+  // the world you were in last (remembered on this device), unless told otherwise
+  const has = id => id && mine.some(m => m.world_id === id)
+  const last = (() => { try { return localStorage.getItem(`nb:world:${uid}`) } catch { return null } })()
+  worldId = has(preferred) ? preferred : has(worldId) ? worldId : has(last) ? last : mine[0].world_id
+  try { localStorage.setItem(`nb:world:${uid}`, worldId) } catch { /* private mode */ }
   const [worlds, members, couples] = await Promise.all([
-    many(supabase.from('worlds').select('id, name, creator, slots, fund').in('id', mine.map(m => m.world_id))),
+    many(supabase.from('worlds').select('id, name, creator, slots, fund, owner:profiles!worlds_creator_fkey(name)').in('id', mine.map(m => m.world_id))),
     many(supabase.from('world_members').select('user_id, joined_at, profiles(name, tag, house_name, last_seen)').eq('world_id', worldId).order('joined_at')),
     many(supabase.from('couples').select('user_a, user_b').eq('world_id', worldId)),
   ])
@@ -179,7 +183,10 @@ async function loadWorld(uid, preferred) {
   return {
     id: w.id, name: w.name, slots: w.slots, fund: w.fund, creator: w.creator,
     people, members: plots, invites: [],
-    list: worlds.map(x => ({ id: x.id, name: x.name })),
+    // (named after whose world it is: yours is simply Your World)
+    list: mine.map(m => worlds.find(x => x.id === m.world_id)).filter(Boolean)
+      .map(x => ({ id: x.id, name: x.creator === uid ? 'Your World' : `${x.owner?.name || 'A friend'}'s World`, mine: x.creator === uid }))
+      .sort((a, b) => b.mine - a.mine),
   }
 }
 
@@ -216,7 +223,7 @@ async function loadSocial(uid) {
 async function refresh(parts = ['world', 'social']) {
   if (!user) return
   const patch = {}
-  if (parts.includes('world')) patch.world = await loadWorld(user.id, store.get().couple?.state === 'active' ? null : worldId)
+  if (parts.includes('world')) patch.world = await loadWorld(user.id, worldId)
   if (parts.includes('social')) Object.assign(patch, await loadSocial(user.id))
   store.patchOnline(patch)
 }
@@ -311,7 +318,7 @@ export const server = {
   leaveWorld: async id => { await rpc('world_leave', { p_world: id }); if (id === worldId) worldId = null; await reloadAll() },
   removeMember: async id => { await rpc('world_remove', { p_world: worldId, p_user: id }); await refresh(['world']) },
   renameWorld: async name => { await rpc('world_rename', { p_world: worldId, p_name: name }); await refresh(['world']) },
-  switchWorld: async id => { worldId = id; await refresh(['world']) },
+  switchWorld: async id => { worldId = id; await refresh(['world']) }, // (remembered as your last world)
   addToFund: async n => { await rpc('fund_add', { p_world: worldId, p_amount: n }); await refresh(['world']) },
   buySlot: async () => { await rpc('slot_buy', { p_world: worldId }); await refresh(['world']) },
   // visiting: a neighbour's home (their plot from world.members) as they furnished it

@@ -26,7 +26,7 @@ const SPEED = 3.6
 const TURN = 2.2 // rad/s in eyes view
 const DEFAULT_EL = 0.05
 const CLOSE_EL = 0.2
-const CLOSE_DIST = 6.5
+const CLOSE_DIST = 9.5 // close-up: you, from a little way behind
 const STREET_AZ = 0.14
 const STREET_EL = 0.2 // from out over the sea, looking up the cliff at the house
 const TITLE_AZ = -1.15, TITLE_EL = 0.08 // the title screen's camera: low along the cliff top, the sea to the right
@@ -426,6 +426,7 @@ export function createGame(container, opts = {}) {
 
   // ---- input ----
   const keys = new Set()
+  const stick = { x: 0, y: 0, m: 0 } // the joystick: x right, y forward, m how far (0..1)
   let inputOn = true
   let idle = false
   let paused = false
@@ -593,7 +594,8 @@ export function createGame(container, opts = {}) {
     if (editing()) { drag = null; return }
     // a plain click uses a lamp or curtain if there is one under the pointer; otherwise it walks there
     // (outside views keep the house closed, but from the playground view you can still walk around the playground)
-    if (drag && !drag.moved && e.type === 'pointerup' && !interactAt(e) && !stationAt(e) && (!closedIn() || shownMode() === 'playground')) clickMove(e)
+    // (every view walks you where you tap, except first person, where tapping looks and uses)
+    if (drag && !drag.moved && e.type === 'pointerup' && !interactAt(e) && !stationAt(e) && view.mode !== 'eyes' && view.mode !== 'title') clickMove(e)
     drag = null
   }
 
@@ -944,6 +946,15 @@ export function createGame(container, opts = {}) {
       if (rightK) dir.add(rt)
       if (leftK) dir.sub(rt)
     }
+    // the on-screen joystick (phones): a direction and how far it is pushed, relative to the camera
+    if (stick.m > 0.12 && !eyes) {
+      const up = new THREE.Vector3(-Math.sin(view.az), 0, -Math.cos(view.az))
+      const rt = new THREE.Vector3(Math.cos(view.az), 0, -Math.sin(view.az))
+      dir.copy(up).multiplyScalar(stick.y).addScaledVector(rt, stick.x)
+    } else if (stick.m > 0.12 && eyes) {
+      me.yaw -= stick.x * TURN * dt
+      dir.set(Math.sin(me.yaw) * stick.y, 0, Math.cos(me.yaw) * stick.y)
+    }
     const steering = dir.lengthSq() > 0
     if (steering) {
       me.path = []
@@ -1052,7 +1063,9 @@ export function createGame(container, opts = {}) {
         view.elGoal = TITLE_EL + Math.sin(t * 0.07) * 0.025
         goalTarget.set(2, houseCenter.y + 2.2, 7)
       } else if (view.mode === 'street') {
-        goalTarget.set(view.focusX || 0, view.focusZ != null ? 0 : 4.6, view.focusZ ?? 3.0)
+        // the playground view looks at the playground; Outside (bird's eye) follows you wherever you go
+        if (view.focusZ != null) goalTarget.set(view.focusX || 0, 0, view.focusZ)
+        else goalTarget.set(me.pos.x, me.pos.y + 2.5, me.pos.z)
       } else if (view.mode === 'edit') {
         if (view.editArea === 'garden') goalTarget.set(0, 0.4, 6.4)
         else { const er = rooms.find(r => r.id === view.editArea); goalTarget.set(er.ox, er.oy + 1.1, 0.2) }
@@ -1215,6 +1228,8 @@ export function createGame(container, opts = {}) {
     setKey(k, on) { if (on && inputOn) keys.add(k); else keys.delete(k) },
     /** true while a window covers the world: render it at a quarter of the speed */
     setIdle(b) { idle = b },
+    /** the joystick: x to the right, y forwards, each -1..1 */
+    setStick(x, y) { stick.x = x; stick.y = y; stick.m = Math.min(1, Math.hypot(x, y)); if (stick.m > 0.12) lastInput = performance.now() },
     /** a new player is ready: the house rises out of the cloud (see intro 'arrival') */
     arrive() { if (merge) { merge.hold = false; opts.onSfx?.('whoosh') } },
     // ---- the neighbours' homes ----

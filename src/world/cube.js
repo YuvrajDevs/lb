@@ -1,12 +1,12 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { DEFAULT_SKIN, skinSpec, buildHat } from './skins.js'
+import { faceTexture } from './faces.js'
 
 const SIZE = 0.9
 export const FLOAT = 1.3 // gap between floor and the cube's underside: it hovers a little above chair height
 const bodyGeo = new RoundedBoxGeometry(SIZE, SIZE, SIZE, 5, 0.14)
-const eyeGeo = new THREE.CircleGeometry(0.1, 28)
-const eyeMat = new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false })
+const faceGeo = new THREE.PlaneGeometry(0.78, 0.78)
 
 function blobTexture() {
   const c = document.createElement('canvas')
@@ -36,12 +36,15 @@ export function createCube(color) {
   body.receiveShadow = true
   pivot.add(body)
 
-  const eyes = [-1, 1].map(s => {
-    const e = new THREE.Mesh(eyeGeo, eyeMat)
-    e.position.set(s * 0.19, 0.07, SIZE / 2 + 0.012) // clear of the face, or the two flicker from afar
-    body.add(e)
-    return e
-  })
+  // the face: soft white features on a see-through square just in front of the cube (see faces.js)
+  const faceMat = new THREE.MeshBasicMaterial({ map: faceTexture('neutral'), transparent: true, depthWrite: false, toneMapped: false })
+  const face = new THREE.Mesh(faceGeo, faceMat)
+  face.position.set(0, 0.02, SIZE / 2 + 0.012) // clear of the cube, or the two flicker from afar
+  face.renderOrder = 2
+  face.userData.keep = true
+  body.add(face)
+  let expression = null, expressionLeft = 0, spin = 0
+  const showFace = kind => { const t = faceTexture(kind); if (faceMat.map !== t) { faceMat.map = t; faceMat.needsUpdate = true } }
 
   // hats sit on a little pivot on top of the body
   const hatPivot = new THREE.Group()
@@ -79,6 +82,12 @@ export function createCube(color) {
       buildHat(tier, h)
       hatPivot.add(h)
     },
+    /** show an expression for a few seconds (excited also spins) */
+    express(kind) {
+      expression = kind
+      expressionLeft = kind === 'sleepy' ? 6 : 4
+      if (kind === 'excited') spin = 1.1
+    },
     update(t, dt, moving) {
       phase += dt * (moving ? 4.2 : 1.6)
       const bob = Math.sin(phase) * (moving ? 0.05 : 0.07)
@@ -88,9 +97,11 @@ export function createCube(color) {
       const s = 1 - bob * 0.5
       blob.scale.setScalar(s)
 
+      // an expression lasts a few seconds; otherwise the normal face, blinking now and then
+      if (expression && (expressionLeft -= dt) <= 0) expression = null
+      if (spin > 0) { spin = Math.max(0, spin - dt); pivot.rotation.y = (1 - spin / 1.1) ** 0.6 * Math.PI * 4 } else pivot.rotation.y = 0
       const k = t - blinkAt
-      const closed = k > 0 && k < 0.12
-      eyes.forEach(e => (e.scale.y = closed ? 0.1 : 1))
+      showFace(expression || (k > 0 && k < 0.12 ? 'blink' : 'neutral'))
       if (k > 0.12) blinkAt = t + 2 + Math.random() * 4
     },
   }
