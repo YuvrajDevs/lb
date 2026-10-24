@@ -1,4 +1,4 @@
-# LoveBloxed — design and build plan
+# LoveBoxed — design and build plan
 
 A cosy 3D neighbourhood for friends and couples. Everyone has a house, earns Boxets by spending time and playing together, and spends them on rooms, furniture and skins. Web first (Three.js), app later (Capacitor wrapper).
 
