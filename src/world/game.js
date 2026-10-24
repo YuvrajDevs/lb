@@ -791,7 +791,7 @@ export function createGame(container, opts = {}) {
       if (toTarget.length() < 0.15) me.path.shift()
       else dir.copy(toTarget).normalize()
     }
-    const run = keys.has(' ') ? 1.8 : 1 // hold Space to run
+    const run = keys.has('shift') ? 2 : keys.has(' ') ? 1.8 : 1 // hold Shift (2x) or Space to run
     const iMoved = dir.lengthSq() > 0 && walk(me, dir, dt, (eyes ? SPEED * 0.8 : SPEED) * run, !eyes || !steering)
     if (me.path.length && dir.lengthSq() > 0 && !iMoved) me.path = []
     me.moving = iMoved

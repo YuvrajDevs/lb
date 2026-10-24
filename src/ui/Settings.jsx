@@ -15,7 +15,7 @@ const KEYS = [
   ['Q / E', 'Spin the view'],
   ['Scroll', 'Zoom: eyes · close-up · room · house · street'],
   ['Click a lamp or curtain', 'Switch it off and on · open and shut'],
-  ['Hold Space', 'Run'],
+  ['Hold Shift or Space', 'Run (Shift is twice as fast)'],
   ['Drag (my eyes)', 'Look around · scroll out to leave'],
   ['Esc', 'Close any window'],
 ]
