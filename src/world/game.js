@@ -311,6 +311,7 @@ export function createGame(container, opts = {}) {
     else if (eyes) view.mode = 'eyes'
     else return
     if (wasStreet && name !== 'street') { view.azGoal = 0 }
+    view.focusX = 0
     me.path = []
     active = eyes ? eyeCam : camera
     me.cube.setVisible(!eyes)
@@ -858,7 +859,7 @@ export function createGame(container, opts = {}) {
       if (view.mode === 'close') {
         goalTarget.set(me.pos.x, me.pos.y + FLOAT + 0.4, me.pos.z)
       } else if (view.mode === 'street') {
-        goalTarget.set(0, 4.6, 3.0)
+        goalTarget.set(view.focusX || 0, 4.6, 3.0)
       } else if (view.mode === 'edit') {
         if (view.editArea === 'garden') goalTarget.set(0, 0.4, 6.4)
         else { const er = rooms.find(r => r.id === view.editArea); goalTarget.set(er.ox, er.oy + 1.1, 0.2) }
@@ -1031,6 +1032,13 @@ export function createGame(container, opts = {}) {
     /** 'low' | 'medium' | 'high': caps the render sharpness */
     /** the Reduce motion setting */
     setReduceMotion(b) { calmMotion = !!b },
+    /** fly over to a neighbour's home (k: their place in the world's member list, not counting you) */
+    visit(k) {
+      const x = neighbours.userData.spots?.[k]
+      if (x == null) return
+      setView('street')
+      view.focusX = x
+    },
     /** 'night' | 'evening' | 'auto' */
     setTimeOfDay(t) {
       timeSetting = t

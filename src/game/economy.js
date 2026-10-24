@@ -5,6 +5,14 @@ export const WINDOW_MIN = 30
 export const PARTNERSHIP_CAP = 3 // multiplier cap
 export const COUPLE_MULT = 3
 export const DAILY_CAP = 600
+/** the most each way of earning can give in one day (on top of the daily gift) */
+export const EARN_CAPS = { stars: 60, quiz: 30, visit: 30 }
+/** how much of `amount` may still be paid today, given what was already earned */
+export function earnable(source, amount, earned) {
+  const bySource = Math.max(0, (EARN_CAPS[source] ?? DAILY_CAP) - (earned.by[source] || 0))
+  const total = Math.max(0, DAILY_CAP - earned.total)
+  return Math.max(0, Math.min(amount, bySource, total))
+}
 
 export const WORLD_BASE_SLOTS = 4
 export const WORLD_MAX_SLOTS = 6

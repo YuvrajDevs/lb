@@ -495,3 +495,16 @@ body, button, input { font-family: 'Oswald', system-ui, sans-serif; }
 @media (max-width: 760px) and (orientation: portrait) {
   .top-right .views.menu { position: static; transform: none; max-width: none; overflow: visible; }
 }
+
+/* ---------- Play: star catch, couple quiz, visits ---------- */
+.game-head { display: flex; justify-content: space-between; margin: 10px 0 8px; font-size: 13px; color: var(--muted); }
+.sky-field { position: relative; height: 320px; border-radius: 14px; overflow: hidden; background: radial-gradient(ellipse at 70% 20%, #2a2f6a, #0b0d26 70%); touch-action: none; user-select: none; }
+.falling-star { position: absolute; transform: translate(-50%, -50%); border: 0; background: none; color: #ffd46b; font-size: 26px; cursor: pointer; text-shadow: 0 0 12px rgba(255, 212, 107, 0.9); padding: 6px; }
+.falling-star.big { font-size: 40px; color: #fff1b0; }
+.game-cover { position: absolute; inset: 0; display: grid; place-content: center; gap: 10px; text-align: center; background: rgba(5, 6, 20, 0.55); padding: 20px; }
+.quiz h3 { margin: 8px 0 12px; }
+.quiz-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.visits { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
+.visits li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); }
+.visits li > span:nth-child(2) { flex: 1; display: grid; }
+.visits small { color: var(--muted); }

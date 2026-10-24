@@ -20,6 +20,7 @@ import Wardrobe from './ui/Wardrobe'
 import Settings from './ui/Settings'
 import World from './ui/World'
 import DailyReward from './ui/DailyReward'
+import Play from './ui/Play'
 import './ui/ui.css'
 
 const VIEWS = [
@@ -228,6 +229,7 @@ function App() {
       {open === 'wardrobe' && <Wardrobe onClose={close} onOpenShop={openShopAt} />}
       {open === 'world' && <World onClose={close} />}
       {open === 'daily' && <DailyReward onClose={close} />}
+      {open === 'play' && <Play onClose={close} onVisit={k => game.current?.visit(k)} />}
       {open === 'settings' && <Settings onClose={close} debug={debug} />}
 
       {rotateNote && !open && !editing && (

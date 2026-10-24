@@ -76,10 +76,12 @@ function home(group, x, member, k) {
 export function buildNeighbours(members, myHalf) {
   const group = new THREE.Group()
   let right = myHalf + 1.2, left = -26 // (the stream and its bridge lie between your plot and the left side)
+  const spots = []
   members.forEach((m, k) => {
     const half = m.kind === 'couple' ? 12.8 : 9.3
-    if (k % 2 === 0) { home(group, right + half, m, k); right += half * 2 + 1.2 } else { home(group, left - half, m, k); left -= half * 2 + 1.2 }
+    if (k % 2 === 0) { home(group, right + half, m, k); spots.push(right + half); right += half * 2 + 1.2 } else { home(group, left - half, m, k); spots.push(left - half); left -= half * 2 + 1.2 }
   })
+  group.userData.spots = spots // each neighbour's plot centre (x), in the same order as `members`
   bake(group)
   return group
 }

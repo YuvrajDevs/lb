@@ -1,5 +1,5 @@
 import { ITEM_BY_ID, CAT_BY_ID } from './catalog.js'
-import { dailyReward, milestoneOf, dayNumber, toDateStr, nextSlotPrice, WORLD_BASE_SLOTS, MILESTONE_ITEMS } from './economy.js'
+import { dailyReward, milestoneOf, dayNumber, toDateStr, nextSlotPrice, WORLD_BASE_SLOTS, MILESTONE_ITEMS, earnable, EARN_CAPS } from './economy.js'
 import { starterOwned } from './defaults.js'
 import { sfx } from './audio.js'
 
@@ -215,6 +215,19 @@ export const store = {
     if (state.world.fund < price) return toast('The world fund needs more Boxets', 'warn')
     set({ world: { ...state.world, fund: state.world.fund - price, slots: state.world.slots + 1 } })
     toast('A new house slot is open!', 'good')
+  },
+
+  // ---- earning from games and visits (each capped per day; see economy.js) ----
+  earnedToday() { return state.earned?.date === state.today ? state.earned : { date: state.today, total: 0, by: {}, visited: [] } },
+  leftToday: source => Math.max(0, (EARN_CAPS[source] || 0) - (store.earnedToday().by[source] || 0)),
+  /** pay out for a game or a visit; returns how many Boxets were actually given */
+  earn(source, amount, note) {
+    const e = store.earnedToday()
+    const give = earnable(source, amount, e)
+    const next = { ...e, total: e.total + give, by: { ...e.by, [source]: (e.by[source] || 0) + give }, visited: note ? [...(e.visited || []), note] : e.visited || [] }
+    set({ boxets: state.boxets + give, earned: next })
+    if (give > 0) { sfx('claim'); toast(`+${give} Boxets`, 'good') } else toast("That's all you can earn from this today", 'info')
+    return give
   },
 
   // ---- couple (mock, until the server exists): an invite the other person accepts, and a breakup with a wait ----
