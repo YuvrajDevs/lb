@@ -30,7 +30,7 @@ function Toggle({ label, hint, value, onChange, disabled }) {
   )
 }
 
-export default function Settings({ onClose, debug }) {
+export default function Settings({ onClose, debug, onAccount }) {
   const s = useStore()
   const [name, setName] = useState(s.profile.name)
   const [house, setHouse] = useState(s.profile.house)
@@ -96,11 +96,12 @@ export default function Settings({ onClose, debug }) {
 
         <section>
           <h3><Icon name="info" size={16} /> Account</h3>
-          <div className="row"><span><b>Signed in as</b><small>{s.profile.name} (guest, saved on this device)</small></span><button className="btn ghost" disabled>Sign in soon</button></div>
-          <p className="soft">Accounts arrive with online play. Until then your progress lives in this browser.</p>
+          {s.net?.status === 'online'
+            ? <div className="row"><span><b>{s.profile.name} <span className="tag">{s.profile.tag}</span></b><small>Signed in as {s.net.email}</small></span><button className="btn ghost" onClick={onAccount}>Account</button></div>
+            : <div className="row"><span><b>Playing as a guest</b><small>Saved on this device only. Sign in to keep it safe and play with friends.</small></span><button className="btn primary" onClick={onAccount}>Sign in</button></div>}
         </section>
 
-        {debug && (
+        {debug && !store.online() && (
           <section className="dev">
             <h3><Icon name="bolt" size={16} /> Developer</h3>
             <div className="btn-row">

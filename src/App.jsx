@@ -7,6 +7,7 @@ import { autoFurnish } from './world/autofurnish'
 import { setAudio, startOnFirstGesture, sfx } from './game/audio'
 import { ITEM_BY_ID } from './game/catalog'
 import { store } from './game/store'
+import { startAccount } from './net/account'
 import { windowEarning, WINDOW_MIN } from './game/economy'
 import { useStore } from './ui/useStore'
 import { Boxet, Icon } from './ui/icons'
@@ -20,6 +21,8 @@ import Wardrobe from './ui/Wardrobe'
 import Settings from './ui/Settings'
 import Onboarding from './ui/Onboarding'
 import World from './ui/World'
+import Account from './ui/Account'
+import JoinPrompt, { takeJoinFromUrl, pendingJoin } from './ui/JoinPrompt'
 import DailyReward from './ui/DailyReward'
 import StarCatch from './ui/StarCatch'
 import Title, { Mark } from './ui/Title'
@@ -60,6 +63,8 @@ function App() {
 
   // a couple lives in the four-room house; everyone else in their starter home (rebuilt when that changes)
   const homeKind = s.couple.state === 'active' ? 'couple' : 'solo'
+  // the street: who lives next door (the world is rebuilt when that changes, which is rare)
+  const street = s.world.members.filter(m => !m.you).map(m => `${m.id}:${m.kind}`).join('|')
   const titleRef = useRef(true)
   titleRef.current = title
   const lastKind = useRef(homeKind)
@@ -109,7 +114,7 @@ function App() {
     }
     boot()
     return () => { alive = false; g?.dispose(); game.current = null; setReady(false); setEd(null) }
-  }, [homeKind])
+  }, [homeKind, street])
 
   // keep the 3D world in sync with the app state
   const skin = tryOn.skin ?? store.equippedTier('skin')
@@ -149,12 +154,27 @@ function App() {
     const evs = ['pointerdown', 'keydown', 'wheel', 'touchstart']
     evs.forEach(e => window.addEventListener(e, mark, { passive: true }))
     const STEP = 15
+    let beatIn = 0
     const t = setInterval(() => {
       if (document.visibilityState !== 'visible' || Date.now() - lastInput.current > 120000 || !store.get().settings.onboarded) return
-      store.addActive(STEP, windowEarning({ onlineActive: 1, withPartner: false }))
+      const srv = store.server()
+      if (!srv) { store.addActive(STEP, windowEarning({ onlineActive: 1, withPartner: false })); return }
+      // signed in: the server counts active time (a beat a minute) and pays, with friends and your partner online
+      store.patchOnline({ active: { sec: Math.min((store.get().active?.sec || 0) + STEP, WINDOW_MIN * 60) } })
+      beatIn -= STEP
+      if (beatIn > 0) return
+      beatIn = 60
+      srv.heartbeat().then(r => {
+        store.patchOnline({ boxets: r.boxets, active: { sec: r.sec } })
+        if (r.paid > 0) { sfx('claim'); store.notify(`+${r.paid} Boxets for ${WINDOW_MIN} minutes of play`, 'good') }
+      }, () => { /* offline for a moment: the next beat catches up */ })
     }, STEP * 1000)
     return () => { evs.forEach(e => window.removeEventListener(e, mark)); clearInterval(t) }
   }, [])
+
+  // your account: signs you back in if you were, and loads it into the store
+  const [joinCode, setJoinCode] = useState(() => { takeJoinFromUrl(); return pendingJoin() })
+  useEffect(() => { startAccount() }, [])
 
   // sound
   useEffect(() => { startOnFirstGesture() }, [])
@@ -185,13 +205,15 @@ function App() {
   const close = useCallback(() => { setOpen(null); setTryOn({ skin: null, hat: null }) }, [])
   // the title screen's menu
   const firstTime = !s.settings.onboarded
+  const signedIn = s.net?.status === 'online'
   const titleItems = [
     { id: 'enter', label: firstTime ? 'Begin' : 'Continue', enter: true },
+    { id: 'account', label: signedIn ? 'Account' : 'Sign in' },
     { id: 'guide', label: 'How to play', enter: true },
     { id: 'settings', label: 'Settings' },
   ]
   const pickTitle = id => {
-    if (id === 'settings') { setOpen('settings'); return }
+    if (id === 'settings' || id === 'account') { setOpen(id); return }
     if (id === 'guide') store.setSetting('onboarded', false)
     sfx('whoosh')
     game.current?.setView('house') // the camera flies in from the title shot
@@ -226,7 +248,7 @@ function App() {
       {eyes && <div className="eye-vignette" />}
       {eyes && !open && <p className="hud look-tip">hold and drag to look · scroll out to leave</p>}
 
-      {title && ready && <Title items={titleItems} onPick={pickTitle} footnote="Offline · your home is saved on this device" />}
+      {title && ready && <Title items={titleItems} onPick={pickTitle} footnote={signedIn ? `Signed in · ${s.profile.name} ${s.profile.tag}` : s.net?.status === 'loading' ? 'Opening your account…' : 'Guest · your home is saved on this device'} />}
       {!title && <>
       <header className="hud top-left">
         <div className="hud-id">
@@ -280,9 +302,13 @@ function App() {
       {open === 'shop' && <Shop onClose={close} onTry={tryItem} initial={shopCat} key={shopCat} />}
       {open === 'inventory' && <Inventory onClose={close} />}
       {open === 'wardrobe' && <Wardrobe onClose={close} onOpenShop={openShopAt} />}
-      {open === 'world' && <World onClose={close} />}
+      {open === 'world' && <World onClose={close} onAccount={() => setOpen('account')} />}
       {open === 'daily' && <DailyReward onClose={close} />}
-      {open === 'settings' && <Settings onClose={close} debug={debug} />}
+      {open === 'settings' && <Settings onClose={close} debug={debug} onAccount={() => setOpen('account')} />}
+      {open === 'account' && <Account onClose={close} />}
+      {joinCode && !open && ready && s.net?.status !== 'loading' && (
+        <JoinPrompt code={joinCode} signedIn={signedIn} onClose={() => setJoinCode(null)} onSignIn={() => setOpen('account')} />
+      )}
       {open === 'stars' && <StarCatch onClose={close} skin={skin} hat={hat} />}
 
       {!title && <>

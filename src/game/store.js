@@ -3,12 +3,17 @@ import { dailyReward, milestoneOf, dayNumber, toDateStr, nextSlotPrice, WORLD_BA
 import { starterOwned } from './defaults.js'
 import { sfx } from './audio.js'
 
-// A tiny local store (localStorage) that stands in for the server until accounts exist.
-// All money rules live in economy.js; every action here is one the server will own later.
+// The game's state, in one small store. As a guest it is saved on this device (localStorage) and the rules in
+// economy.js run here. Signed in, the server owns money and ownership: buying, the daily gift and earnings go
+// through `server` (see net/account.js, which loads your account into this store), and your home is saved to
+// your account as you change it. A copy is kept on the device either way, so the game opens instantly.
 
 // ?debug&save=name keeps a separate save, so testing never touches the real one
 const testSave = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug') && new URLSearchParams(location.search).get('save')
-const KEY = testSave ? `cc:v3:test:${testSave}` : 'cc:v3'
+const GUEST_KEY = testSave ? `cc:v3:test:${testSave}` : 'cc:v3'
+let KEY = GUEST_KEY
+let server = null // set while signed in (net/account.js)
+const HOME_KEYS = ['layout', 'style', 'switches', 'equipped'] // changing any of these saves your home
 const listeners = new Set()
 let undoStack = []
 let redoStack = []
@@ -32,21 +37,29 @@ function fresh() {
     world: {
       name: "Sera's block",
       slots: WORLD_BASE_SLOTS,
-      fund: 120,
-      members: [
-        { id: 'me', name: 'Sera', house: "Sera's home", online: true, kind: 'solo', you: true },
-        { id: 'm1', name: 'Mochi', house: "Mochi's nook", online: true, kind: 'solo' },
-        { id: 'm2', name: 'Alex', house: "Alex's den", online: false, kind: 'solo' },
-      ],
-      invites: [{ id: 'i1', name: 'Juno', dir: 'out' }],
+      fund: 0,
+      // on your own until you sign in and invite people (the online world replaces this)
+      members: [{ id: 'me', name: 'Sera', house: "Sera's home", online: true, kind: 'solo', you: true }],
+      invites: [],
     },
     // a new player starts on their own, in the starter home; becoming a couple moves them into the big house
     couple: { partner: null, since: null, state: 'none' },
+    friends: [],
+    coupleRequests: [],
+    blocked: [],
+    net: { status: 'guest' }, // guest | loading | online | error
     toasts: [],
   }
 }
 
+// already signed in on this device? open on that account's copy right away (net/account.js then refreshes it)
+try {
+  const auth = Object.keys(localStorage).find(k => /^sb-.*-auth-token$/.test(k))
+  const uid = auth && JSON.parse(localStorage.getItem(auth))?.user?.id
+  if (uid && !testSave && localStorage.getItem(`cc:v3:u:${uid}`)) KEY = `cc:v3:u:${uid}`
+} catch { /* private mode */ }
 let state = load()
+if (KEY !== GUEST_KEY) state.net = { status: 'loading' }
 
 function load() {
   try {
@@ -58,6 +71,10 @@ function load() {
       // the date was saved on the first visit and never moved on, so new days never arrived: catch up to today
       // (a date ahead of today stays, so the dev "next day" button keeps working)
       if (!saved.today || saved.today < today()) saved.today = today()
+      // early saves came with made-up neighbours (Mochi, Alex) and a made-up invite: a guest's world is just them
+      if (saved.world?.members?.some(m => m.id === 'm1' || m.id === 'm2')) {
+        saved.world = { ...saved.world, members: saved.world.members.filter(m => m.you), invites: [] }
+      }
       return saved
     }
   } catch { /* private mode */ }
@@ -65,14 +82,16 @@ function load() {
 }
 
 function persist() {
-  try { localStorage.setItem(KEY, JSON.stringify({ ...state, toasts: [] })) } catch { /* private mode */ }
+  try { localStorage.setItem(KEY, JSON.stringify({ ...state, toasts: [], net: undefined })) } catch { /* private mode */ }
 }
 
 function set(patch) {
   state = { ...state, ...patch }
   persist()
+  if (server && HOME_KEYS.some(k => k in patch)) server.saveHome()
   listeners.forEach(l => l())
 }
+const fail = e => toast(e.message || String(e), 'warn')
 
 let toastId = 1
 function toast(text, kind = 'info') {
@@ -94,6 +113,7 @@ export const store = {
   canBuy(id) {
     const it = ITEM_BY_ID[id]
     if (!it) return { ok: false, reason: 'Unknown item' }
+    if (state.net?.status === 'loading') return { ok: false, reason: 'Connecting to your account…' }
     if (it.kind === 'unique' && state.owned[id]) return { ok: false, reason: 'Owned' }
     if (state.boxets < it.price) return { ok: false, reason: 'Not enough Boxets' }
     return { ok: true }
@@ -102,9 +122,12 @@ export const store = {
     const r = store.canBuy(id)
     const it = ITEM_BY_ID[id]
     if (!r.ok) { if (it) toast(r.reason, 'warn'); return false }
+    const before = { boxets: state.boxets, owned: state.owned }
     set({ boxets: state.boxets - it.price, owned: { ...state.owned, [id]: (state.owned[id] || 0) + 1 } })
     sfx('buy')
     toast(`Bought ${it.name}`, 'good')
+    // signed in, the server has the last word (it checks the price and your balance itself)
+    if (server) server.buy(id).then(boxets => set({ boxets }), e => { set(before); fail(e) })
     return true
   },
 
@@ -179,9 +202,11 @@ export const store = {
     // milestone days also give the cosmetic they promise
     const gift = ms && MILESTONE_ITEMS[day]
     const owned = gift && !(ITEM_BY_ID[gift].kind === 'unique' && state.owned[gift]) ? { ...state.owned, [gift]: (state.owned[gift] || 0) + 1 } : state.owned
+    const before = { boxets: state.boxets, claimedDays: state.claimedDays, owned: state.owned }
     set({ boxets: state.boxets + amount, claimedDays: [...state.claimedDays, day], owned })
     sfx('claim')
     toast(`+${amount} Boxets${ms ? ` and ${ms}!` : ''}`, 'good')
+    if (server) server.claim().then(r => set({ boxets: r.boxets }), e => { set(before); fail(e) })
     return { amount, ms }
   },
 
@@ -189,8 +214,12 @@ export const store = {
   setHouseName(name) {
     const n = name.trim().slice(0, 24) || state.profile.house
     set({ profile: { ...state.profile, house: n } })
+    server?.setProfile(state.profile.name, n)
   },
-  setName(name) { set({ profile: { ...state.profile, name: name.trim().slice(0, 16) || state.profile.name } }) },
+  setName(name) {
+    set({ profile: { ...state.profile, name: name.trim().slice(0, 16) || state.profile.name } })
+    server?.setProfile(state.profile.name, state.profile.house)
+  },
   setSetting(k, v) { set({ settings: { ...state.settings, [k]: v } }) },
 
   // ---- world (mock, until the server exists) ----
@@ -220,8 +249,16 @@ export const store = {
   // ---- earning from games and visits (each capped per day; see economy.js) ----
   earnedToday() { return state.earned?.date === state.today ? state.earned : { date: state.today, total: 0, by: {}, visited: [] } },
   leftToday: source => Math.max(0, (EARN_CAPS[source] || 0) - (store.earnedToday().by[source] || 0)),
-  /** pay out for a game, a visit or active time; returns how many Boxets were actually given */
-  earn(source, amount, note, quiet = false) {
+  /** pay out for a game, a visit or active time; returns how many Boxets were actually given (signed in: a promise
+   *  of it, since the server decides; games send their score, which the server turns into Boxets) */
+  earn(source, amount, note, quiet = false, score = null) {
+    if (server && score != null) {
+      return server.finishGame(source, score).then(r => {
+        const e = store.earnedToday()
+        set({ boxets: r.boxets, earned: { ...e, total: e.total + r.given, by: { ...e.by, [source]: (e.by[source] || 0) + r.given } } })
+        return r.given
+      }, e => { fail(e); return 0 })
+    }
     const e = store.earnedToday()
     const give = earnable(source, amount, e)
     const next = { ...e, total: e.total + give, by: { ...e.by, [source]: (e.by[source] || 0) + give }, visited: note ? [...(e.visited || []), note] : e.visited || [] }
@@ -264,12 +301,14 @@ export const store = {
   requestBreakup() {
     if (state.couple.state !== 'active') return
     set({ couple: { ...state.couple, endsAt: Date.now() + 24 * 3600 * 1000 } })
+    server?.requestBreakup().catch(fail)
     toast('Request sent. Your homes separate in 24 hours unless one of you cancels.', 'info')
   },
-  cancelBreakup() { set({ couple: { ...state.couple, endsAt: null } }); toast('Still together', 'good') },
+  cancelBreakup() { set({ couple: { ...state.couple, endsAt: null } }); toast('Still together', 'good'); server?.cancelBreakup().catch(fail) },
   /** called now and then: once the wait is over, the couple ends and each goes back to their own home */
   checkBreakup(now = Date.now()) {
     if (state.couple.state !== 'active' || !state.couple.endsAt || now < state.couple.endsAt) return
+    if (server) { server.checkCouple().catch(fail); return } // the server ends it and the account reloads
     const house = `${state.profile.name}'s home`
     set({
       couple: { partner: null, since: null, state: 'none', endsAt: null },
@@ -277,6 +316,44 @@ export const store = {
       world: { ...state.world, members: state.world.members.map(m => (m.you ? { ...m, kind: 'solo', house } : m)) },
     })
     toast('Your couple has ended. You are back in your own home, with your own things.', 'info')
+  },
+
+  // ---- your account (called by net/account.js) ----
+  online: () => !!server,
+  server: () => server,
+  setNet(net) { set({ net }) },
+  /** the guest's own save on this device (what a new account starts from) */
+  guestSnapshot() {
+    if (!server) return state
+    try { const raw = localStorage.getItem(GUEST_KEY); if (raw) return { ...fresh(), ...JSON.parse(raw) } } catch { /* private mode */ }
+    return fresh()
+  },
+  /** signed in: the account's data takes over (settings stay this device's) */
+  goOnline(srv, snap, uid) {
+    server = null // (no saving back while loading)
+    KEY = `cc:v3:u:${uid}`
+    undoStack = []; redoStack = []
+    const settings = state.settings
+    state = { ...fresh(), ...snap, settings, toasts: state.toasts, net: state.net }
+    server = srv
+    persist()
+    listeners.forEach(l => l())
+  },
+  /** signed out: back to the guest save on this device */
+  goOffline() {
+    server = null
+    KEY = GUEST_KEY
+    undoStack = []; redoStack = []
+    const toasts = state.toasts
+    state = { ...load(), toasts }
+    listeners.forEach(l => l())
+  },
+  /** news from the server (a top-up, a new friend, a partner's change): no save back */
+  patchOnline(patch) {
+    const srv = server
+    server = null
+    set(patch)
+    server = srv
   },
 
   // ---- dev helpers (only reachable with ?debug) ----

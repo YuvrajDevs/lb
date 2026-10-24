@@ -22,10 +22,11 @@ export default function StarCatch({ onClose, skin, hat }) {
   const left = store.leftToday('stars')
   const best = store.get().settings.starBest || {}
 
-  const finish = useCallback(stats => {
+  const finish = useCallback(async stats => {
     const pct = stats.spawned ? stats.caught / stats.spawned : 0
     const rating = ratingOf(pct)
-    const give = stats.score > 0 ? store.earn('stars', stats.score * STAR_PAY, null, true) : 0
+    // (signed in, the server turns the score into Boxets, within today's cap)
+    const give = stats.score > 0 ? await store.earn('stars', stats.score * STAR_PAY, null, true, stats.score) : 0
     const prev = store.get().settings.starBest || {}
     const order = 'SABCD'
     // your bests, counting this round

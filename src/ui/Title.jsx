@@ -20,7 +20,8 @@ export default function Title({ items, onPick, footnote }) {
 
   useEffect(() => {
     const onKey = e => {
-      if (leaving) return
+      // (not while a panel is open over the title, like Settings, or typing in a field)
+      if (leaving || document.querySelector('.scrim') || e.target.closest?.('input, textarea')) return
       if (e.key === 'ArrowDown' || e.key === 's') { e.preventDefault(); setK(i => (i + 1) % items.length) }
       if (e.key === 'ArrowUp' || e.key === 'w') { e.preventDefault(); setK(i => (i - 1 + items.length) % items.length) }
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(items[k]) }
