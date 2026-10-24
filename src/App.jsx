@@ -64,9 +64,13 @@ function App() {
   const viewPick = useRef(null)
 
   // a couple lives in the four-room house; everyone else in their starter home (rebuilt when that changes)
-  const homeKind = s.couple.state === 'active' ? 'couple' : 'solo'
+  const myKind = s.couple.state === 'active' ? 'couple' : 'solo'
+  // visiting a neighbour: their house (as they furnished it) is the one in the middle, and yours is next door
+  const [visiting, setVisiting] = useState(null) // { plot, home }
+  const homeKind = visiting ? visiting.plot.kind : myKind
   // the street: who lives next door (the world is rebuilt when that changes, which is rare)
   const street = s.world.members.filter(m => !m.you).map(m => `${m.id}:${m.kind}`).join('|')
+  const isOnline = s.net?.status === 'online'
   const titleRef = useRef(true)
   titleRef.current = title
   const lastKind = useRef(homeKind)
@@ -78,26 +82,33 @@ function App() {
     const saved = store.get()
     setHomeKind(homeKind)
     // two homes becoming one: the new house rises out of a big cloud
-    const intro = lastKind.current === 'solo' && homeKind === 'couple' ? 'merge' : null
-    lastKind.current = homeKind
+    const intro = !visiting && lastKind.current === 'solo' && homeKind === 'couple' ? 'merge' : null
+    if (!visiting) lastKind.current = homeKind
+    const v = visiting?.home
+    const fenceId = v ? v.fence : saved.equipped.fence, signId = v ? v.sign : saved.equipped.sign
+    const noop = () => {}
     const boot = async () => {
       // canvas text (signs, name plates) needs Oswald loaded before it is drawn
       try { await Promise.all([document.fonts.load('600 40px Oswald'), document.fonts.load('400 40px Oswald')]) } catch { /* the fallback font is fine */ }
       if (!alive) return
       g = createGame(mount.current, {
       onView: setView,
-      layout: saved.layout,
-      style: saved.style,
-      fence: saved.equipped.fence ? ITEM_BY_ID[saved.equipped.fence].tier : 0,
-      sign: saved.equipped.sign ? ITEM_BY_ID[saved.equipped.sign].tier : 0,
-      onLayoutInit: store.initLayout,
-      onLayoutChange: (id, list) => store.setArea(id, list),
-      onLayoutFix: store.fixArea,
-      switches: saved.switches,
+      layout: v ? v.layout : saved.layout,
+      style: v ? v.style : saved.style,
+      fence: fenceId ? ITEM_BY_ID[fenceId].tier : 0,
+      sign: signId ? ITEM_BY_ID[signId].tier : 0,
+      // (a home you are visiting is only looked at: nothing you do there changes it)
+      onLayoutInit: v ? noop : store.initLayout,
+      onLayoutChange: v ? noop : (id, list) => store.setArea(id, list),
+      onLayoutFix: v ? noop : store.fixArea,
+      switches: v ? v.switches : saved.switches,
       intro,
-      neighbours: saved.world.members, // the whole street, you included
+      // the whole street, you included (`you` marks the home in the middle: yours, or the one you are visiting)
+      neighbours: visiting ? saved.world.members.map(m => ({ ...m, you: m.id === visiting.plot.id })) : saved.world.members,
+      spawn: visiting ? 'gate' : undefined,
+      onGate: setGatePlot,
       lowerArt: !saved.settings.artLowered, // a one-off: hang the pictures at eye height
-      onSwitch: store.setSwitch,
+      onSwitch: v ? noop : store.setSwitch,
       onEditor: setEd,
       onBlocked: reason => store.notify(reason, 'warn'),
       onSfx: sfx,
@@ -118,14 +129,14 @@ function App() {
     }
     boot()
     return () => { alive = false; g?.dispose(); game.current = null; setReady(false); setEd(null) }
-  }, [homeKind, street, s.net?.status === 'online'])
+  }, [homeKind, street, isOnline, visiting])
 
   // keep the 3D world in sync with the app state
   const skin = tryOn.skin ?? store.equippedTier('skin')
   const hat = tryOn.hat ?? store.equippedTier('hat')
   useEffect(() => { game.current?.setSkin(skin) }, [skin, ready])
   useEffect(() => { game.current?.setHat(hat) }, [hat, ready])
-  useEffect(() => { game.current?.setName(s.profile.house) }, [s.profile.house, ready])
+  useEffect(() => { game.current?.setName(visiting ? visiting.plot.house : s.profile.house) }, [s.profile.house, ready, visiting])
   useEffect(() => { game.current?.setQuality(s.settings.quality) }, [s.settings.quality, ready])
   useEffect(() => { game.current?.setReduceMotion(s.settings.reduceMotion) }, [s.settings.reduceMotion, ready])
   useEffect(() => { game.current?.setTimeOfDay(s.settings.time || 'night') }, [s.settings.time, ready])
@@ -136,12 +147,12 @@ function App() {
   useEffect(() => { game.current?.setPaused(open === 'stars') }, [open, ready])
 
   // what the home looks like follows the saved state (this also handles undo, redo and reset)
-  useEffect(() => { if (s.layout) game.current?.setLayout(s.layout) }, [s.layout, ready])
-  useEffect(() => { (game.current?.roomIds || []).forEach(id => game.current?.setStyle(id, s.style[id])) }, [s.style, ready])
+  useEffect(() => { if (s.layout && !visiting) game.current?.setLayout(s.layout) }, [s.layout, ready, visiting])
+  useEffect(() => { if (!visiting) (game.current?.roomIds || []).forEach(id => game.current?.setStyle(id, s.style[id])) }, [s.style, ready, visiting])
   const fenceTier = s.equipped.fence ? ITEM_BY_ID[s.equipped.fence].tier : 0
   const signTier = s.equipped.sign ? ITEM_BY_ID[s.equipped.sign].tier : 0
-  useEffect(() => { game.current?.setFence(fenceTier) }, [fenceTier, ready])
-  useEffect(() => { game.current?.setSign(signTier) }, [signTier, ready])
+  useEffect(() => { if (!visiting) game.current?.setFence(fenceTier) }, [fenceTier, ready, visiting])
+  useEffect(() => { if (!visiting) game.current?.setSign(signTier) }, [signTier, ready, visiting])
 
   // the camera picker closes when you click anywhere else
   useEffect(() => {
@@ -178,6 +189,25 @@ function App() {
 
   // your account: signs you back in if you were, and loads it into the store
   const [joinCode, setJoinCode] = useState(() => { takeJoinFromUrl(); return pendingJoin() })
+
+  // ---- visiting: knock at a neighbour's gate (or Visit in the World panel), go home from your own ----
+  const [gatePlot, setGatePlot] = useState(null) // the plot id of the gate you are standing at
+  const plotById = id => s.world.members.find(m => m.id === id)
+  const visit = async plot => {
+    const srv = store.server()
+    if (!srv || !plot) return
+    if (plot.you) { setVisiting(null); return }
+    try {
+      const home = await srv.loadHome(plot)
+      sfx('door')
+      setVisiting({ plot, home })
+      const given = await srv.visitHome(plot.ids?.[0] || plot.id).catch(() => 0)
+      store.notify(`Welcome to ${plot.house}${given ? ` · +${given} Boxets for visiting` : ''}`, 'good')
+    } catch (e) { store.notify(e.message, 'warn') }
+  }
+  const goHome = () => { sfx('door'); setVisiting(null) }
+  // leaving your world (or it changing) ends a visit
+  useEffect(() => { if (visiting && !s.world.members.some(m => m.id === visiting.plot.id)) setVisiting(null) }, [s.world.members, visiting])
 
   // ---- together, live: who is in your world right now, where they are, what they say ----
   const [here, setHere] = useState([])
@@ -303,7 +333,7 @@ function App() {
       <header className="hud top-left">
         <div className="hud-id">
           <Mark size={30} />
-          <div><h1>NeighBoxed</h1><p>{view.room === 'home' ? s.profile.house : view.room}</p></div>
+          <div><h1>NeighBoxed</h1><p>{visiting ? `at ${visiting.plot.house}` : view.room === 'home' ? s.profile.house : view.room}</p></div>
         </div>
         <button className="purse" onClick={() => setOpen('shop')} aria-label={`${s.boxets} Boxets. Open the shop`}>
           <span className="purse-num"><Boxet size={20} /> {s.boxets.toLocaleString()}</span>
@@ -337,6 +367,15 @@ function App() {
         )}
       </aside>
 
+      {gatePlot && !open && !editing && plotById(gatePlot) && (
+        plotById(gatePlot).you
+          ? <button className="hud stairs" onClick={goHome}>Go home</button>
+          : <button className="hud stairs" onClick={() => visit(plotById(gatePlot))}>Visit {plotById(gatePlot).house}</button>
+      )}
+      {visiting && !open && !editing && !gatePlot && (
+        <div className="hud visiting"><span>Visiting <b>{visiting.plot.house}</b></span><button className="link" onClick={goHome}>Go home</button></div>
+      )}
+
       {view.stairs && !open && !editing && (
         <button className="hud stairs" onClick={() => game.current?.takeStairs()}>
           {view.stairs === 'up' ? '▲ go upstairs' : '▼ go downstairs'}
@@ -345,7 +384,7 @@ function App() {
 
       {s.settings.hints && !open && !editing && <p className="hud hint">{HINTS[view.mode]}</p>}
 
-      {!editing && <Dock open={open} onOpen={id => (id === 'edit' ? startEdit() : setOpen(id))} giftReady={store.canClaim()} />}
+      {!editing && <Dock open={open} onOpen={id => (id === 'edit' ? (visiting ? store.notify('You can only edit your own home', 'info') : startEdit()) : setOpen(id))} giftReady={store.canClaim()} />}
       {!editing && !open && signedInNow && worldNow && (
         <Chat log={chatLog} onSend={say} onEmote={emote} meId={s.profile.id} people={here}
           onReport={m => store.server()?.report(m.from, 'Something they said in chat', m.id).then(() => store.notify(`Reported. Thank you.`, 'good'), e => store.notify(e.message, 'warn'))} />
@@ -356,7 +395,7 @@ function App() {
       {open === 'shop' && <Shop onClose={close} onTry={tryItem} initial={shopCat} key={shopCat} />}
       {open === 'inventory' && <Inventory onClose={close} />}
       {open === 'wardrobe' && <Wardrobe onClose={close} onOpenShop={openShopAt} />}
-      {open === 'world' && <World onClose={close} onAccount={() => setOpen('account')} />}
+      {open === 'world' && <World onClose={close} onAccount={() => setOpen('account')} onVisit={p => { close(); visit(p) }} visitingId={visiting?.plot.id} />}
       {open === 'daily' && <DailyReward onClose={close} />}
       {open === 'settings' && <Settings onClose={close} debug={debug} onAccount={() => setOpen('account')} />}
       {open === 'account' && <Account onClose={close} />}

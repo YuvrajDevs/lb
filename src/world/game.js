@@ -8,7 +8,7 @@ import { makeEnvironment } from './env.js'
 import { buildScenery, applyPalette, setStreet, FOG_COLOR, FOG_NEAR, FOG_FAR, CLIFF_Z } from './scenery.js'
 import { bake } from './bake.js'
 import { setCurtain } from './switches.js'
-import { buildNeighbours, neighbourSpan, neighbourPlots, streetPlots } from './neighbours.js'
+import { buildNeighbours, neighbourSpan, neighbourPlots, streetPlots, NEIGHBOUR_PLOT_Z } from './neighbours.js'
 import { createPeers } from './peers.js'
 import { setSeaNear } from '../game/audio.js'
 import { findZFighting, settleCoplanar } from './zfight.js'
@@ -295,6 +295,11 @@ export function createGame(container, opts = {}) {
     return px == null ? null : [px + m.x, m.y, m.z]
   }
   let sentAt = 0, sent = null
+  // standing at another home's front gate (to visit it, or, while visiting, to go home): its plot id
+  const gates = streetPlots(street, plot().x).filter(p => !p.member.you).map(p => ({ id: p.member.id, x: p.x }))
+  let atGate = null
+  // arriving somewhere you are visiting: you start outside its garden gate, facing the house
+  if (opts.spawn === 'gate') { me.pos.set(0, 0, PLOT_FRONT + 1.6); me.yaw = Math.PI }
 
   // the room someone is in (or nearest to, out in the garden) on their storey
   const roomAt = a => {
@@ -939,6 +944,11 @@ export function createGame(container, opts = {}) {
       a.cube.update(t, dt, a.moving)
     })
     peers.update(t, dt)
+    {
+      const z = NEIGHBOUR_PLOT_Z[1] + 0.9
+      const g = levelOf(me.pos.y) === 0 && Math.abs(me.pos.z - z) < 2.2 ? gates.find(q => Math.abs(q.x - me.pos.x) < 2.4) : null
+      if ((g?.id ?? null) !== atGate) { atGate = g?.id ?? null; opts.onGate?.(atGate) }
+    }
     // tell the others where you are: 8 times a second while moving, every 3 seconds when still
     if (opts.onMove) {
       const moved = !sent || Math.abs(sent.x - me.pos.x) + Math.abs(sent.z - me.pos.z) + Math.abs(sent.y - me.pos.y) > 0.02 || Math.abs(sent.yaw - me.yaw) > 0.05

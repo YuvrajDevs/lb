@@ -284,6 +284,18 @@ export const server = {
   switchWorld: async id => { worldId = id; await refresh(['world']) },
   addToFund: async n => { await rpc('fund_add', { p_world: worldId, p_amount: n }); await refresh(['world']) },
   buySlot: async () => { await rpc('slot_buy', { p_world: worldId }); await refresh(['world']) },
+  // visiting: a neighbour's home (their plot from world.members) as they furnished it
+  async loadHome(plot) {
+    const owner = plot.kind === 'couple' ? [...plot.ids].sort()[0] : plot.id
+    const row = await one(supabase.from('homes').select('data').eq('user_id', owner).single())
+    const h = (plot.kind === 'couple' ? row?.data?.couple : row?.data?.solo) || {}
+    return { layout: h.layout || null, style: h.style || {}, switches: h.switches || {}, fence: h.fence ?? null, sign: h.sign ?? null }
+  },
+  visitHome: async hostId => {
+    const r = await rpc('visit_home', { p_host: hostId })
+    store.patchOnline({ boxets: r.boxets })
+    return r.given
+  },
   // couples
   askPartner: async id => { await rpc('couple_request', { p_user: id }); await refresh(['social']) },
   answerPartner: async (id, yes) => { await rpc('couple_respond', { p_user: id, p_accept: yes }); if (yes) await reloadAll(); else await refresh(['social']) },

@@ -624,3 +624,7 @@ h4.sub { margin: 26px 0 10px; font: 700 10.5px var(--words); letter-spacing: .24
 .emote-row button { width: 38px; height: 38px; border: 0; border-radius: 50%; background: none; cursor: pointer; font-size: 21px; transition: transform .15s var(--ease), background .15s; }
 .emote-row button:hover { background: var(--fill-2); transform: scale(1.18); }
 @media (max-width: 760px) { .chat { bottom: 82px; right: 10px; width: min(300px, calc(100vw - 20px)); } }
+
+/* visiting someone: a quiet line at the top */
+.visiting { left: 50%; top: max(18px, env(safe-area-inset-top)); transform: translateX(-50%); display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-radius: 99px; background: var(--glass-flat); border: 1px solid var(--rule); font: 400 12px var(--words); letter-spacing: .08em; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.visiting b { font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
