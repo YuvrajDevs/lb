@@ -14,7 +14,6 @@ import { WINDOWS, PLOTS, getHomeKind, gardenArea } from '../game/areas.js'
 import { furnishArea, paintTexture, floorTex } from './furnish.js'
 import { CLIFF_Z, streamX } from './scenery.js'
 import { buildPlayground } from './playground.js'
-import { NEIGHBOUR_PLOT_Z } from './neighbours.js'
 import { PLAYGROUND } from '../game/areas.js'
 
 export { H }
@@ -46,6 +45,9 @@ function signTexture(text) {
  * one room on a smaller plot. All static geometry is merged (see bake.js): a few hundred draw calls at most.
  */
 export function buildHouse(opts = {}) {
+  // role 'neighbour': someone else's home along the street, the same house but lighter to draw: no real lights
+  // (its lamps glow), and none of what is shared (the cliff walk, the playground, the edges of the world)
+  const neighbour = opts.role === 'neighbour'
   const group = new THREE.Group()
   const solo = getHomeKind() === 'solo'
   const P = PLOTS[getHomeKind()]
@@ -76,12 +78,15 @@ export function buildHouse(opts = {}) {
     sh.frames.forEach(f => frames.push(f))
     const placed = new THREE.Group() // everything the player has put in this room
     sh.root.add(placed)
-    const light = new THREE.PointLight('#ffd9a0', 14, 10, 2)
-    sh.root.add(light)
-    // a soft warm fill from the open front, so furniture facing the room is not left in cool shade
-    const fill = new THREE.PointLight('#ffd58a', 5.5, 9, 2)
-    fill.position.set(0, 3.0, 1.4) // well inside the room: close to the front wall it left a bright spot on it
-    sh.root.add(fill)
+    let light = null, fill = null
+    if (!neighbour) {
+      light = new THREE.PointLight('#ffd9a0', 14, 10, 2)
+      sh.root.add(light)
+      // a soft warm fill from the open front, so furniture facing the room is not left in cool shade
+      fill = new THREE.PointLight('#ffd58a', 5.5, 9, 2)
+      fill.position.set(0, 3.0, 1.4) // well inside the room: close to the front wall it left a bright spot on it
+      sh.root.add(fill)
+    }
     return {
       id: s.id, name: s.name, col: s.col, row: s.row, level, ox, oy, sh, placed, light, fill, furnished: null, top: s.row === topRow,
       walls: sh.walls, ceiling: sh.ceiling, door: sh.door, doorX: sh.doorX,
@@ -155,43 +160,45 @@ export function buildHouse(opts = {}) {
   glow(street, [P.doorX, 3.3, 4.2], '#ffcc66', 2.6, 0.5)
   pool(street, [P.doorX, -0.5, 5.2], '#ffcc66', 2.2, 0.28)
 
-  // the cliff walk: a wet, glossy stone path that mirrors the lamps, and a low railing at the edge of the drop to the sea
-  const wet = new THREE.MeshPhysicalMaterial({ color: '#3a3558', roughness: 0.16, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.08 })
-  // the glowing stream crosses the walk on its way to the waterfall: the paving stops either side and a wide
-  // wooden deck carries the walk over the water, running all the way from the land to the cliff edge so the
-  // stream slips out of sight beneath it and reappears as the waterfall
-  const dz0 = PLOT.zFront - 0.6, dz1 = CLIFF_Z - 0.75 // the deck's land end and cliff end
-  const sxs = []
-  for (let z = dz0; z <= dz1 + 0.01; z += 0.5) sxs.push(streamX(z))
-  const gap = [Math.min(...sxs) - 2.4, Math.max(...sxs) + 2.4]
-  ;[[-110, gap[0]], [gap[1], 110]].forEach(([a, b]) => {
-    box(street, [b - a, 0.25, 2.6], [(a + b) / 2, -0.73, PLOT.zFront + 1.7], wet)
-    for (let x = Math.ceil(a / 1.5) * 1.5; x < b - 0.2; x += 1.5) if (x > a + 0.2) box(street, [0.04, 0.02, 2.6], [x, -0.48, PLOT.zFront + 1.7], '#2a2642') // paving joints
-  })
-  const deckL = gap[1] - gap[0] + 0.4, deckX = (gap[0] + gap[1]) / 2, deckD = dz1 - dz0, deckZ = (dz0 + dz1) / 2
-  box(street, [deckL, 0.16, deckD], [deckX, -0.42, deckZ], '#8a6a4a')
-  for (let x = gap[0] + 0.2; x <= gap[1]; x += 0.45) box(street, [0.05, 0.02, deckD], [x, -0.26, deckZ], '#6b4f36') // plank lines
-  ;[dz0 + 0.08, dz1 - 0.08].forEach(z => { // posts stand just inside the deck's edge, not flush with it
-    box(street, [deckL, 0.08, 0.08], [deckX, 0.35, z], '#6b4f36')
-    for (let k = 0; k <= 4; k++) box(street, [0.1, 0.87, 0.1], [gap[0] + ((gap[1] - gap[0]) * k) / 4, -0.44, z], '#6b4f36')
-  })
-  const edgeZ = CLIFF_Z - 0.7
-  for (let x = -110; x <= 110; x += 2) box(street, [0.14, 0.95, 0.14], [x, -0.55, edgeZ], '#d8d0e8')
-  box(street, [220, 0.1, 0.1], [0, 0.4, edgeZ], '#f2eadb')
-  box(street, [220, 0.06, 0.06], [0, 0.0, edgeZ], '#f2eadb')
-  // street lamps stand at the land-side edge of the walk, their arms reaching out over it towards the sea
-  const postZ = PLOT.zFront + 0.55, headZ = postZ + 0.85
-  ;[-9.5, 9.5].forEach(x => {
-    cyl(street, 0.08, 3.4, [x, -0.5, postZ], '#2f3138', {}, 8)
-    box(street, [0.08, 0.08, 0.9], [x, 2.85, postZ + 0.45], '#2f3138')
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.18, 0.5), new THREE.MeshBasicMaterial({ color: '#ffe2a8', toneMapped: false }))
-    head.position.set(x, 2.78, headZ)
-    head.userData.keep = true
-    street.add(head)
-    glow(street, [x, 2.75, headZ], '#ffcc66', 2.4, 0.6)
-    cone(street, [x, 2.7, headZ], '#ffcc66', 3.0, 1.6, 0.16)
-    pool(street, [x, -0.48, headZ], '#ffcc66', 3.0, 0.3) // on top of the path, not inside it
-  })
+  if (!neighbour) {
+    // the cliff walk: a wet, glossy stone path that mirrors the lamps, and a low railing at the edge of the drop to the sea
+    const wet = new THREE.MeshPhysicalMaterial({ color: '#3a3558', roughness: 0.16, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.08 })
+    // the glowing stream crosses the walk on its way to the waterfall: the paving stops either side and a wide
+    // wooden deck carries the walk over the water, running all the way from the land to the cliff edge so the
+    // stream slips out of sight beneath it and reappears as the waterfall
+    const dz0 = PLOT.zFront - 0.6, dz1 = CLIFF_Z - 0.75 // the deck's land end and cliff end
+    const sxs = []
+    for (let z = dz0; z <= dz1 + 0.01; z += 0.5) sxs.push(streamX(z))
+    const gap = [Math.min(...sxs) - 2.4, Math.max(...sxs) + 2.4]
+    ;[[-110, gap[0]], [gap[1], 110]].forEach(([a, b]) => {
+      box(street, [b - a, 0.25, 2.6], [(a + b) / 2, -0.73, PLOT.zFront + 1.7], wet)
+      for (let x = Math.ceil(a / 1.5) * 1.5; x < b - 0.2; x += 1.5) if (x > a + 0.2) box(street, [0.04, 0.02, 2.6], [x, -0.48, PLOT.zFront + 1.7], '#2a2642') // paving joints
+    })
+    const deckL = gap[1] - gap[0] + 0.4, deckX = (gap[0] + gap[1]) / 2, deckD = dz1 - dz0, deckZ = (dz0 + dz1) / 2
+    box(street, [deckL, 0.16, deckD], [deckX, -0.42, deckZ], '#8a6a4a')
+    for (let x = gap[0] + 0.2; x <= gap[1]; x += 0.45) box(street, [0.05, 0.02, deckD], [x, -0.26, deckZ], '#6b4f36') // plank lines
+    ;[dz0 + 0.08, dz1 - 0.08].forEach(z => { // posts stand just inside the deck's edge, not flush with it
+      box(street, [deckL, 0.08, 0.08], [deckX, 0.35, z], '#6b4f36')
+      for (let k = 0; k <= 4; k++) box(street, [0.1, 0.87, 0.1], [gap[0] + ((gap[1] - gap[0]) * k) / 4, -0.44, z], '#6b4f36')
+    })
+    const edgeZ = CLIFF_Z - 0.7
+    for (let x = -110; x <= 110; x += 2) box(street, [0.14, 0.95, 0.14], [x, -0.55, edgeZ], '#d8d0e8')
+    box(street, [220, 0.1, 0.1], [0, 0.4, edgeZ], '#f2eadb')
+    box(street, [220, 0.06, 0.06], [0, 0.0, edgeZ], '#f2eadb')
+    // street lamps stand at the land-side edge of the walk, their arms reaching out over it towards the sea
+    const postZ = PLOT.zFront + 0.55, headZ = postZ + 0.85
+    ;[-9.5, 9.5].forEach(x => {
+      cyl(street, 0.08, 3.4, [x, -0.5, postZ], '#2f3138', {}, 8)
+      box(street, [0.08, 0.08, 0.9], [x, 2.85, postZ + 0.45], '#2f3138')
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.18, 0.5), new THREE.MeshBasicMaterial({ color: '#ffe2a8', toneMapped: false }))
+      head.position.set(x, 2.78, headZ)
+      head.userData.keep = true
+      street.add(head)
+      glow(street, [x, 2.75, headZ], '#ffcc66', 2.4, 0.6)
+      cone(street, [x, 2.7, headZ], '#ffcc66', 3.0, 1.6, 0.16)
+      pool(street, [x, -0.48, headZ], '#ffcc66', 3.0, 0.3) // on top of the path, not inside it
+    })
+  }
 
   const fence = '#f2eadb'
   const post = (x, z, h = 0.6) => box(defaultFence, [0.13, h, 0.13], [x, -0.5, z], fence)
@@ -240,8 +247,8 @@ export function buildHouse(opts = {}) {
     glow(garden, [x, -0.5 + 1.05, z], '#ffcc66', 1.5, 0.6)
     pool(garden, [x, -0.5, z], '#ffcc66', 2.0, 0.22)
   })
-  // a signpost by the back gate, so the way to the playground is never a secret
-  {
+  // a signpost by the back gate, so the way to the playground is never a secret (behind your own home)
+  if (!neighbour) {
     const px = gate + 0.75, pz = PLOT.zBack + 0.55
     box(garden, [0.1, 1.5, 0.1], [px, -0.5, pz], '#6b4a30')
     const wood = std('#7a5a3c')
@@ -258,8 +265,9 @@ export function buildHouse(opts = {}) {
     sphere(garden, r, [x, -0.5 + r * 0.5, z], '#2f6a54')
     sphere(garden, r * 0.7, [x + (r < 0.6 ? 0 : 0.6), -0.5 + r * 0.3, z + 0.5], '#3b7a62')
   })
-  const playground = buildPlayground()
-  group.add(garden, defaultFence, itemFence, gardenPlaced, street, playground.group)
+  const playground = neighbour ? null : buildPlayground()
+  group.add(garden, defaultFence, itemFence, gardenPlaced, street)
+  if (playground) group.add(playground.group)
 
   // name sign on two posts, lit by its own street lamp (kept separate so it can be re-texted: setName('X & Y'))
   const SX = P.signX, SZ = PLOT.zFront - 0.6
@@ -303,33 +311,34 @@ export function buildHouse(opts = {}) {
   gc.push({ minX: -PLOT.x - fw, maxX: -gate, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw }) // back fence, with its gate gap
   gc.push({ minX: gate, maxX: PLOT.x + fw, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw })
   // the playground's big frames (swings, slide, the station boards); everything small out here you float through
-  playground.solids.forEach(c => gc.push(c))
+  playground?.solids.forEach(c => gc.push(c))
   // your garden's side fences
   gc.push({ minX: -PLOT.x - fw, maxX: -PLOT.x + fw, minZ: PLOT.zBack, maxZ: PLOT.zFront })
   gc.push({ minX: PLOT.x - fw, maxX: PLOT.x + fw, minZ: PLOT.zBack, maxZ: PLOT.zFront })
   gc.push({ minX: -PLOT.x, maxX: -gate, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw }) // front fence, with the gate gap
   gc.push({ minX: gate, maxX: PLOT.x, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw })
 
-  // ---------- the open ground outside the fences: the whole neighbourhood is yours to wander ----------
-  // You can walk all round the outside of every plot, between the homes, along the cliff and out to the
-  // playground. Only the neighbours' fenced gardens, the stream and the cliff railing stop you, and an invisible
-  // edge where the land starts to rise (behind the homes) or the world ends (past the last home either side).
-  const [walkL, walkR] = opts.walk || [-PLOT.x, PLOT.x]
-  const L = Math.min(walkL - 2, -PLAYGROUND.x - 1), R = Math.max(walkR + 2, PLAYGROUND.x + 1) // a little room past the outermost fence
-  const BACK = -7.6 // behind the homes the hills start: the band you can walk ends here (but the playground is open)
-  const PG = PLAYGROUND
-  gc.push({ minX: L - 3, maxX: L, minZ: PG.zFar - 3, maxZ: CLIFF_Z + 2 }) // the far left
-  gc.push({ minX: R, maxX: R + 3, minZ: PG.zFar - 3, maxZ: CLIFF_Z + 2 }) // the far right
-  gc.push({ minX: L, maxX: R, minZ: CLIFF_Z - 0.7 - fw, maxZ: CLIFF_Z + 2 }) // the cliff railing
-  gc.push({ minX: L, maxX: -PG.x, minZ: PG.zFar - 3, maxZ: BACK }) // the hills behind, either side of the playground
-  gc.push({ minX: PG.x, maxX: R, minZ: PG.zFar - 3, maxZ: BACK })
-  gc.push({ minX: -PG.x, maxX: PG.x, minZ: PG.zFar - 3, maxZ: PG.zFar }) // the playground's far edge
-  // the neighbours' gardens are theirs: walk round them, and up to their gates
-  ;(opts.plots || []).forEach(({ x, half }) => gc.push({ minX: x - half - fw, maxX: x + half + fw, minZ: NEIGHBOUR_PLOT_Z[0] - fw, maxZ: NEIGHBOUR_PLOT_Z[1] + fw }))
-  // the stream runs down to the waterfall in a little valley; it is crossed on the deck along the cliff walk
-  for (let z = BACK; z < PLOT.zFront - 0.6; z += 0.5) {
-    const sx = streamX(z + 0.25)
-    gc.push({ minX: sx - 3.2, maxX: sx + 3.2, minZ: z, maxZ: z + 0.5, stream: true })
+  if (!neighbour) {
+    // ---------- the open ground outside the fences: the whole neighbourhood is yours to wander ----------
+    // You can walk all round the outside of every plot, between the homes, along the cliff and out to the
+    // playground. Only the neighbours' fenced gardens, the stream and the cliff railing stop you, and an invisible
+    // edge where the land starts to rise (behind the homes) or the world ends (past the last home either side).
+    const [walkL, walkR] = opts.walk || [-PLOT.x, PLOT.x]
+    const L = Math.min(walkL - 2, -PLAYGROUND.x - 1), R = Math.max(walkR + 2, PLAYGROUND.x + 1) // a little room past the outermost fence
+    const BACK = -7.6 // behind the homes the hills start: the band you can walk ends here (but the playground is open)
+    const PG = PLAYGROUND
+    gc.push({ minX: L - 3, maxX: L, minZ: PG.zFar - 3, maxZ: CLIFF_Z + 2 }) // the far left
+    gc.push({ minX: R, maxX: R + 3, minZ: PG.zFar - 3, maxZ: CLIFF_Z + 2 }) // the far right
+    gc.push({ minX: L, maxX: R, minZ: CLIFF_Z - 0.7 - fw, maxZ: CLIFF_Z + 2 }) // the cliff railing
+    gc.push({ minX: L, maxX: -PG.x, minZ: PG.zFar - 3, maxZ: BACK }) // the hills behind, either side of the playground
+    gc.push({ minX: PG.x, maxX: R, minZ: PG.zFar - 3, maxZ: BACK })
+    gc.push({ minX: -PG.x, maxX: PG.x, minZ: PG.zFar - 3, maxZ: PG.zFar }) // the playground's far edge
+    // (the neighbours' homes keep you out themselves, until they let you in: see game.js)
+    // the stream runs down to the waterfall in a little valley; it is crossed on the deck along the cliff walk
+    for (let z = BACK; z < PLOT.zFront - 0.6; z += 0.5) {
+      const sx = streamX(z + 0.25)
+      gc.push({ minX: sx - 3.2, maxX: sx + 3.2, minZ: z, maxZ: z + 0.5, stream: true })
+    }
   }
 
   // ---------- global lights: an evening sky (rose above, violet below) and the low sun over the sea ----------
@@ -391,6 +400,7 @@ export function buildHouse(opts = {}) {
   const roomById = id => rooms.find(r => r.id === id)
   const prepared = new Set()
   function applyLight(r, light) {
+    if (!r.light) { r.sh.setCove(!!light); return } // (a neighbour's home: its lamps glow, nothing more)
     if (!light) {
       // every lamp is off: only dim moonlight coming in through the window
       const w = WINDOWS[r.id].x
@@ -454,9 +464,11 @@ export function buildHouse(opts = {}) {
   bake(defaultFence)
   bake(gardenPlaced, { clone: true })
   bake(street, { clone: true })
-  bake(playground.group)
-  // the low moon throws the house's shadow 20 m back; the playground stays out of it, so it never sits in the dark
-  playground.group.traverse(o => { if (o.isMesh) o.receiveShadow = false })
+  if (playground) {
+    bake(playground.group)
+    // the low moon throws the house's shadow 20 m back; the playground stays out of it, so it never sits in the dark
+    playground.group.traverse(o => { if (o.isMesh) o.receiveShadow = false })
+  }
 
   // the room with the front door; and the staircase (only the two-storey house has one)
   const entry = rooms.find(r => r.door) || rooms[0]
@@ -487,7 +499,7 @@ export function buildHouse(opts = {}) {
       rooms.forEach(r => { r.sh.root.visible = all || areaId === 'garden' || r.id === areaId })
       const outside = areaId === 'garden' || all
       roof.visible = outside
-      ;[garden, defaultFence, itemFence, gardenPlaced, gateGroup, playground.group].forEach(o => { o.visible = outside })
+      ;[garden, defaultFence, itemFence, gardenPlaced, gateGroup, playground?.group].forEach(o => { if (o) o.visible = outside })
       defaultFence.visible = outside && !itemFence.children.length
       itemFence.visible = outside
       defaultSign.visible = outside && !itemSign

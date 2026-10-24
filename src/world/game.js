@@ -8,7 +8,7 @@ import { makeEnvironment } from './env.js'
 import { buildScenery, applyPalette, setStreet, FOG_COLOR, FOG_NEAR, FOG_FAR, CLIFF_Z } from './scenery.js'
 import { bake } from './bake.js'
 import { setCurtain } from './switches.js'
-import { buildNeighbours, neighbourSpan, neighbourPlots, streetPlots, NEIGHBOUR_PLOT_Z } from './neighbours.js'
+import { neighbourSpan, neighbourPlots, streetPlots, NEIGHBOUR_PLOT_Z } from './neighbours.js'
 import { createPeers } from './peers.js'
 import { setSeaNear } from '../game/audio.js'
 import { findZFighting, settleCoplanar } from './zfight.js'
@@ -17,7 +17,8 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
-import { areaList, areaOf, getHomeKind, plot, PLAYGROUND } from '../game/areas.js'
+import { areaList, areaOf, getHomeKind, setHomeKind, plot, PLAYGROUND, PLOTS } from '../game/areas.js'
+import { ITEM_BY_ID } from '../game/catalog.js'
 import { CELL, TABLE_TOP, overlap, floorRect } from '../game/grid.js'
 
 const HALF = 0.42 // cube collision half-extent
@@ -152,7 +153,7 @@ export function createGame(container, opts = {}) {
   const street = opts.neighbours || []
   const walkSpan = neighbourSpan(street, plot().x) // how far the street reaches either side
   setStreet(walkSpan[0], walkSpan[1]) // (the stream runs past its left end; the land is level along it)
-  const house = buildHouse({ layout, style: opts.style, fence: opts.fence, sign: opts.sign, switches: opts.switches, walk: walkSpan, plots: neighbourPlots(street, plot().x) })
+  const house = buildHouse({ layout, style: opts.style, fence: opts.fence, sign: opts.sign, switches: opts.switches, walk: walkSpan, name: opts.name })
   scene.add(house.group, house.lights)
   // the cliff, the sea in front and the magical land behind
   // the time of day: 'night', 'evening', or 'auto' (evening from 5 to 8 pm on your own clock, night otherwise)
@@ -162,8 +163,10 @@ export function createGame(container, opts = {}) {
   const scenery = buildScenery(timeNow)
   bake(scenery.statics)
   scene.add(scenery.group)
-  // two homes merging into one: a big cloud covers the plot, the house rises out of it, then the cloud drifts away
-  const merge = opts.intro === 'merge' ? { t: 0, puffs: [] } : null
+  // a big cloud covers the plot, the house rises out of it (you inside), then the cloud drifts away. It plays
+  // when two homes merge into one ('merge'), and for a new player's arrival ('arrival': the cloud waits, covering
+  // the plot, until arrive() is called once they have told us their name)
+  const merge = opts.intro === 'merge' || opts.intro === 'arrival' ? { t: 0, puffs: [], hold: opts.intro === 'arrival' } : null
   if (merge) {
     const tex = (() => {
       const c = document.createElement('canvas'); c.width = c.height = 128
@@ -185,9 +188,39 @@ export function createGame(container, opts = {}) {
     house.group.position.y = -12
   }
 
-  // the other homes in your world, along the cliff either side (simple versions, so they cost little)
-  const neighbours = buildNeighbours(street, plot().x)
+  // ---- the other homes in your world, along the street: each the real house, as its owner furnished it ----
+  // Drawn more lightly than yours (no real lights; their lamps glow). Their walls, furniture, fence and stairs
+  // work just like yours, but only for people they let in: everyone else stays outside their fence.
+  const neighbours = new THREE.Group()
   scene.add(neighbours)
+  const myKind = getHomeKind()
+  const tierOf = id => (id && ITEM_BY_ID[id] ? ITEM_BY_ID[id].tier : 0)
+  const others = []
+  function buildOther({ x, member: m }) {
+    const kind = m.kind === 'couple' ? 'couple' : 'solo'
+    setHomeKind(kind)
+    const h = m.home || {}
+    const lay = h.layout ? { ...h.layout } : Object.fromEntries(areaList().map(id => [id, resolveDefaults(id)]))
+    areaList().forEach(id => { if (!lay[id]) lay[id] = resolveDefaults(id) })
+    const hs = buildHouse({ role: 'neighbour', layout: lay, style: h.style, switches: h.switches, fence: tierOf(h.fence), sign: tierOf(h.sign), name: h.name || m.house || '' })
+    hs.group.position.x = x
+    neighbours.add(hs.group)
+    const shift = c => ({ ...c, minX: c.minX + x, maxX: c.maxX + x })
+    const n = {
+      id: m.id, ids: m.ids || [m.id], x, half: PLOTS[kind].x, kind, house: hs, allowed: !!m.allowed, name: h.name || m.house || '',
+      colliders: [hs.colliders[0].map(shift), hs.colliders[1].map(shift)],
+      furniture: blocksFor(hs.rooms, lay, x),
+      stairs: hs.stairs ? { ...hs.stairs, x: hs.stairs.x + x } : null,
+      rooms: hs.rooms.map(r => ({ ...r, ox: r.ox + x, center: r.center.clone().setX(r.center.x + x), key: `${m.id}:${r.id}` })),
+      door: { ...hs.door, x: hs.door.x + x }, doorOpen: 0, doorWas: 0,
+    }
+    setHomeKind(myKind)
+    return n
+  }
+  neighbourPlots(street, plot().x).forEach(p => others.push(buildOther(p)))
+  setHomeKind(myKind)
+  /** the home (yours or a neighbour's) whose plot covers x */
+  const homeAt = x => others.find(n => Math.abs(x - n.x) < n.half + 1.6) || null
   scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR) // the island sits in a thick bank of fog (see scenery.js)
   const { rooms, colliders, stairs: S } = house
   const houseCenter = new THREE.Vector3(0, (house.bounds.yMin + house.bounds.yMax) / 2, 0)
@@ -302,14 +335,15 @@ export function createGame(container, opts = {}) {
   const gates = streetPlots(street, plot().x).filter(p => !p.member.you).map(p => ({ id: p.member.id, x: p.x }))
   let atGate = null
   let reached = null
-  // arriving somewhere you are visiting: you start outside its garden gate, facing the house
-  if (opts.spawn === 'gate') { me.pos.set(0, 0, PLOT_FRONT + 1.6); me.yaw = Math.PI }
+
 
   // the room someone is in (or nearest to, out in the garden) on their storey
+  // (any home's rooms: the camera frames whichever room you are in, yours or a neighbour's)
   const roomAt = a => {
     const lvl = levelOf(a.pos.y)
-    const same = rooms.filter(r => r.level === lvl)
-    return (same.length ? same : rooms).reduce((b, r) => (Math.abs(r.ox - a.pos.x) < Math.abs(b.ox - a.pos.x) ? r : b))
+    const all = [...rooms, ...others.flatMap(n => n.rooms)]
+    const same = all.filter(r => r.level === lvl)
+    return (same.length ? same : all).reduce((b, r) => (Math.abs(r.ox - a.pos.x) < Math.abs(b.ox - a.pos.x) ? r : b))
   }
 
   const marker = new THREE.Mesh(
@@ -321,11 +355,13 @@ export function createGame(container, opts = {}) {
   let markerLife = 0
 
   // ---- view control ----
+  // the staircase you are standing at the foot (or the top) of, in any home: 'up', 'down' or null
+  const nearStairs = () => allStairs().find(st => Math.abs(me.pos.x - st.x) < 2.5) || null
   const stairPrompt = () => {
-    if (!S) return null
-    if (onStair(me.pos.x, me.pos.z)) return null
-    if (levelOf(me.pos.y) === 0 && Math.hypot(me.pos.x - S.x, me.pos.z - S.footZ) < 1.5) return 'up'
-    if (levelOf(me.pos.y) === 1 && Math.hypot(me.pos.x - S.x, me.pos.z - S.landingZ) < 1.5) return 'down'
+    const st = nearStairs()
+    if (!st || onStair(me.pos.x, me.pos.z)) return null
+    if (levelOf(me.pos.y) === 0 && Math.hypot(me.pos.x - st.x, me.pos.z - st.footZ) < 1.5) return 'up'
+    if (levelOf(me.pos.y) === 1 && Math.hypot(me.pos.x - st.x, me.pos.z - st.landingZ) < 1.5) return 'down'
     return null
   }
   const shownMode = () => (view.mode === 'room' && view.mul.room > mulMax * 0.9 ? 'house' : view.mode === 'street' && view.focusZ != null ? 'playground' : view.mode)
@@ -694,6 +730,20 @@ export function createGame(container, opts = {}) {
   // ---- movement ----
   // furniture the player has placed indoors blocks walking too (rugs, lights, and things on tables do not)
   const furnitureBlocks = [[], []]
+  /** what furniture stands in the way, for rooms (of a house shifted dx along the street) */
+  function blocksFor(rms, lay, dx = 0) {
+    const out = [[], []]
+    rms.forEach(r => {
+      (lay[r.id] || []).forEach(e => {
+        if (e.on || e.wall) return
+        const info = infoOf(e.id)
+        if (info.kind !== 'floor') return
+        const fp = footOf(e)
+        out[r.level].push({ minX: dx + r.ox - 5.4 + e.i * CELL, maxX: dx + r.ox - 5.4 + (e.i + fp.cw) * CELL, minZ: -3.6 + e.j * CELL, maxZ: -3.6 + (e.j + fp.cd) * CELL })
+      })
+    })
+    return out
+  }
   function rebuildBlocks() {
     furnitureBlocks[0] = []; furnitureBlocks[1] = []
     rooms.forEach(r => {
@@ -709,15 +759,24 @@ export function createGame(container, opts = {}) {
   }
   const hits = (list, x, z, skipStair = false) => list.some(c => !(skipStair && c.stair) && x > c.minX - HALF && x < c.maxX + HALF && z > c.minZ - HALF && z < c.maxZ + HALF)
   // standing in line with the staircase: its side colliders step aside so you can walk onto it from either end
-  const inStairColumn = x => !!S && Math.abs(x - S.x) < STAIR_LANE
-  const onStair = (x, z) => inStairColumn(x) && z >= S.topZ && z <= S.startZ
+  // every staircase on the street: yours, and those in your neighbours' two-storey homes
+  const allStairs = () => [S, ...others.map(n => n.stairs)].filter(Boolean)
+  const stairAt = x => allStairs().find(st => Math.abs(x - st.x) < STAIR_LANE) || null
+  const inStairColumn = x => !!stairAt(x)
+  const onStair = (x, z) => { const st = stairAt(x); return !!st && z >= st.topZ && z <= st.startZ }
+  const PLOT_BACK = -(3.6 + 0.3 + 2.4)
   function blocked(x, z, level) {
-    return hits(colliders[level], x, z, inStairColumn(x)) || hits(furnitureBlocks[level], x, z)
+    if (hits(colliders[level], x, z, inStairColumn(x)) || hits(furnitureBlocks[level], x, z)) return true
+    const n = homeAt(x)
+    if (!n) return false
+    // a neighbour's home: their whole garden is closed to you, unless they let you in
+    if (!n.allowed) return Math.abs(x - n.x) < n.half + 0.2 + HALF && z > PLOT_BACK - 0.2 - HALF && z < PLOT_FRONT + 0.2 + HALF
+    return hits(n.colliders[level], x, z, inStairColumn(x)) || hits(n.furniture[level], x, z)
   }
   /** the height someone at (x, z) would stand at, coming from height y; null if they can't step there */
   function standY(x, z, y) {
     if (onStair(x, z)) {
-      const sy = stairY(z)
+      const sy = stairY(x, z)
       return Math.abs(sy - y) < STEP_UP ? sy : null
     }
     const lvl = levelOf(y)
@@ -752,7 +811,7 @@ export function createGame(container, opts = {}) {
   }
 
   // the staircase is a ramp you walk up and down; Space (or the button) just walks you there and over it
-  const stairY = z => (S ? FH * THREE.MathUtils.clamp((S.startZ - z) / (S.startZ - S.topZ), 0, 1) : 0)
+  const stairY = (x, z) => { const st = stairAt(x); return st ? FH * THREE.MathUtils.clamp((st.startZ - z) / (st.startZ - st.topZ), 0, 1) : 0 }
   function takeStairs() {
     const p = stairPrompt()
     if (!p) return
@@ -760,12 +819,14 @@ export function createGame(container, opts = {}) {
   }
   /** a way over the stairs that lines up in front of them first, so it never cuts through the staircase */
   function stairRoute(a, dir) {
-    const from = dir === 'up' ? S.footZ : S.landingZ
-    const to = dir === 'up' ? S.landingZ : S.footZ
+    const st = allStairs().reduce((b, q) => (!b || Math.abs(a.pos.x - q.x) < Math.abs(a.pos.x - b.x) ? q : b), null)
+    const from = dir === 'up' ? st.footZ : st.landingZ
+    const to = dir === 'up' ? st.landingZ : st.footZ
+    const lineUp = new THREE.Vector3(st.x - 1.5, a.pos.y, from)
     return [
-      ...routeTo(a, new THREE.Vector3(S.x - 1.5, a.pos.y, from)),
-      new THREE.Vector3(S.x, a.pos.y, from),
-      new THREE.Vector3(S.x, a.pos.y, to),
+      ...(st === S ? routeTo(a, lineUp) : findPath(a.pos, lineUp, levelOf(a.pos.y)) || [lineUp]),
+      new THREE.Vector3(st.x, a.pos.y, from),
+      new THREE.Vector3(st.x, a.pos.y, to),
     ]
   }
 
@@ -948,6 +1009,8 @@ export function createGame(container, opts = {}) {
       a.cube.group.rotation.y = a.yaw
       a.cube.update(t, dt, a.moving)
     })
+    // (during the rise, you rise with your home)
+    if (merge && merge.t < 6) me.cube.group.position.y += house.group.position.y
     peers.update(t, dt)
     {
       const z = NEIGHBOUR_PLOT_Z[1] + 0.9
@@ -996,7 +1059,8 @@ export function createGame(container, opts = {}) {
       } else {
         // zooming out slides the framing from this room to the middle of the whole house
         const blend = smooth(1, mulMax, view.mul.room)
-        goalTarget.lerpVectors(myRoom.center, houseCenter, blend)
+        const at = homeAt(me.pos.x)
+        goalTarget.lerpVectors(myRoom.center, at ? houseCenter.clone().setX(at.x) : houseCenter, blend)
       }
       camTarget.lerp(goalTarget, k)
       const goalDist = view.mode === 'close' ? CLOSE_DIST * view.mul.close
@@ -1042,6 +1106,24 @@ export function createGame(container, opts = {}) {
       const editedHere = editing() && view.editArea === r.id
       if (r.top || editedHere) fadeTo(`${r.id}.ceil`, r.ceiling, !closedIn() && (cp.y > r.oy + 4.2 || editedHere) ? 0 : 1, dt)
     })
+    // a neighbour's home opens up the same way while you are inside it (from outside, it stays a closed house)
+    const inside = homeAt(me.pos.x)
+    others.forEach(n => {
+      const look = n === inside && n.allowed && me.pos.z < HZ + 1
+      n.rooms.forEach(r => {
+        const exterior = { back: true, front: true, left: r.col === 0, right: r.col === 1 }
+        Object.entries(r.walls).forEach(([name, g]) => {
+          let goal = 1
+          if (look && !closedIn() && exterior[name]) {
+            const o = OUT[name]
+            goal = 1 - smooth(-0.5, 1.5, o.x * (cp.x - r.ox) + o.z * cp.z - OFFSET[name])
+          }
+          fadeTo(`${r.key}.${name}`, g, goal, dt)
+        })
+        if (r.top) fadeTo(`${r.key}.ceil`, r.ceiling, look && !closedIn() && cp.y > r.oy + 4.2 ? 0 : 1, dt)
+      })
+      if (look !== !!n.roofOff) { n.roofOff = look; setOpacity(n.house.roof, look && !closedIn() && cp.y > n.house.roofBase ? 0 : 1) }
+    })
     const roofGoal = !closedIn() && cp.y > house.roofBase + 0.2 ? 0 : 1
     roofFade += (roofGoal - roofFade) * (frameCount < 3 ? 1 : Math.min(1, dt * 10))
     if (Math.abs(roofFade - roofGoal) < 0.002) roofFade = roofGoal
@@ -1056,10 +1138,27 @@ export function createGame(container, opts = {}) {
     // the garden gate swings outward the same way when you come near it, from either side
     // the garden gates (front and back) swing outward the same way when you come near, from either side
     house.gates.forEach(g => {
-      const want = Math.hypot(me.pos.x, me.pos.z - g.z) < 2.4 && levelOf(me.pos.y) === 0 ? 1 : 0
+      const want = Math.hypot(me.pos.x, me.pos.z - g.z) < 2.4 && levelOf(me.pos.y) === 0 ? 1 : 0 // (your own gates, at x = 0)
       if (want !== (g.was || 0)) { g.was = want; opts.onSfx?.('gate') }
       g.open = (g.open || 0) + (want - (g.open || 0)) * Math.min(1, dt * 5)
       g.leaves.forEach(l => { l.pivot.rotation.y = l.side * 1.6 * g.open })
+    })
+    // a neighbour's front door and garden gates open for you when they have let you in
+    others.forEach(n => {
+      if (!n.allowed) return
+      const near = levelOf(me.pos.y) === 0
+      const want = near && Math.hypot(me.pos.x - n.door.x, me.pos.z - (HZ + 1.0)) < 2.6 ? 1 : 0
+      if (want !== n.doorWas) { n.doorWas = want; opts.onSfx?.('door') }
+      n.doorOpen += (want - n.doorOpen) * Math.min(1, dt * 5)
+      n.door.pivot.rotation.y = -1.75 * n.doorOpen
+      n.house.gates.forEach(g => {
+        const w = near && Math.hypot(me.pos.x - n.x, me.pos.z - g.z) < 2.4 ? 1 : 0
+        if (w !== (g.was || 0)) { g.was = w; opts.onSfx?.('gate') }
+        g.open = (g.open || 0) + (w - (g.open || 0)) * Math.min(1, dt * 5)
+        g.leaves.forEach(l => { l.pivot.rotation.y = l.side * 1.6 * g.open })
+      })
+      // walking into their garden for the first time today counts as a visit
+      if (!n.visited && Math.abs(me.pos.x - n.x) < n.half && me.pos.z < PLOT_FRONT - 0.5 && me.pos.z > PLOT_BACK) { n.visited = true; opts.onEnterHome?.(n.id) }
     })
     // the playground's game stations: their gems turn slowly and bob
     house.playground.stations.forEach((st, k) => { st.gem.rotation.y = t * 0.8 + k; st.gem.position.y = -0.5 + 1.6 + Math.sin(t * 1.5 + k) * 0.12 })
@@ -1067,7 +1166,7 @@ export function createGame(container, opts = {}) {
 
     // the merge: the house rises (after the cloud has gathered), then the cloud thins and drifts apart
     if (merge && merge.t < 6) {
-      merge.t += dt
+      if (!merge.hold) merge.t += dt
       const rise = THREE.MathUtils.clamp((merge.t - 1.0) / 2.6, 0, 1)
       house.group.position.y = -12 * Math.pow(1 - rise, 3)
       const fade = THREE.MathUtils.clamp((merge.t - 3.2) / 2.6, 0, 1)
@@ -1116,6 +1215,24 @@ export function createGame(container, opts = {}) {
     setKey(k, on) { if (on && inputOn) keys.add(k); else keys.delete(k) },
     /** true while a window covers the world: render it at a quarter of the speed */
     setIdle(b) { idle = b },
+    /** a new player is ready: the house rises out of the cloud (see intro 'arrival') */
+    arrive() { if (merge) { merge.hold = false; opts.onSfx?.('whoosh') } },
+    // ---- the neighbours' homes ----
+    /** let yourself into a neighbour's home (they allowed you), or not */
+    setAllowed(id, yes) { const n = others.find(o => o.id === id); if (n) n.allowed = !!yes },
+    /** a neighbour changed their home: build it again as it is now (only that one) */
+    updateHome(id, home) {
+      const i = others.findIndex(o => o.id === id)
+      if (i < 0) return
+      const old = others[i]
+      neighbours.remove(old.house.group)
+      old.house.group.traverse(o => { o.geometry?.dispose?.() })
+      const member = { id: old.id, ids: old.ids, kind: old.kind, house: old.name, home, allowed: old.allowed }
+      others[i] = buildOther({ x: old.x, member })
+      others[i].visited = old.visited
+      shadowFrames = 3
+    },
+    homesAllowed: () => others.filter(n => n.allowed).map(n => n.id),
     // ---- other people, live ----
     peerSet: (id, info) => peers.set(id, info),
     /** a position message from someone (as sent by onMove); hidden if it refers to a home not on this street */
@@ -1183,7 +1300,7 @@ export function createGame(container, opts = {}) {
     setReduceMotion(b) { calmMotion = !!b },
     /** fly over to a neighbour's home (k: their place in the world's member list, not counting you) */
     visit(k) {
-      const x = neighbours.userData.spots?.[k]
+      const x = others[k]?.x
       if (x == null) return
       setView('street')
       view.focusX = x

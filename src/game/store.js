@@ -14,7 +14,7 @@ const testSave = typeof location !== 'undefined' && new URLSearchParams(location
 const GUEST_KEY = testSave ? `cc:v3:test:${testSave}` : 'cc:v3'
 let KEY = GUEST_KEY
 let server = null // set while signed in (net/account.js)
-const HOME_KEYS = ['layout', 'style', 'switches', 'equipped'] // changing any of these saves your home
+const HOME_KEYS = ['layout', 'style', 'switches', 'equipped', 'access'] // changing any of these saves your home
 const listeners = new Set()
 let undoStack = []
 let redoStack = []
@@ -24,7 +24,7 @@ const today = () => toDateStr(new Date())
 function fresh() {
   const t = today()
   return {
-    profile: { name: 'Sera', house: "Sera's home" },
+    profile: { name: '', house: '' }, // (a new player chooses both in the welcome)
     boxets: 1500,
     owned: starterOwned(), // itemId -> count: the standard homes' furniture to start with
     equipped: { skin: null, hat: null, fence: null, sign: null },
@@ -36,11 +36,11 @@ function fresh() {
     today: t, // overridable with the dev "next day" button
     settings: { quality: 'medium', perfV: 3, time: 'evening', timeV: 2, music: true, sfx: true, chat: true, names: true, hints: true, reduceMotion: false },
     world: {
-      name: "Sera's block",
+      name: 'Your block',
       slots: WORLD_BASE_SLOTS,
       fund: 0,
       // on your own until you sign in and invite people (the online world replaces this)
-      members: [{ id: 'me', name: 'Sera', house: "Sera's home", online: true, kind: 'solo', you: true }],
+      members: [{ id: 'me', name: '', house: '', online: true, kind: 'solo', you: true }],
       invites: [],
     },
     // a new player starts on their own, in the starter home; becoming a couple moves them into the big house
@@ -219,8 +219,10 @@ export const store = {
   setHouseName(name) {
     const n = name.trim().slice(0, 24) || state.profile.house
     set({ profile: { ...state.profile, house: n } })
-    server?.setProfile(state.profile.name, n)
+    server?.saveHome() // (the name is painted on the sign, and kept with the house)
   },
+  /** who may walk into your home without asking (world members' ids) */
+  setAccess(ids) { set({ access: ids }) },
   setName(name) {
     set({ profile: { ...state.profile, name: name.trim().slice(0, 16) || state.profile.name } })
     server?.setProfile(state.profile.name, state.profile.house)

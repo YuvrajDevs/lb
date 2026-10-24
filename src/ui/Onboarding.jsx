@@ -6,23 +6,25 @@ import { Icon } from './icons'
 
 const touch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
 
-const STEPS = [
-  { icon: 'heart', title: 'Welcome to NeighBoxed', text: 'This is your home, on a cliff above the sea. Decorate it, earn Boxets, and share it with your friends and your partner.' },
+const STEPS = name => [
+  { icon: 'heart', title: name ? `Welcome home, ${name}` : 'Welcome home', text: 'This is your home, on a cliff above the sea, at sunset. Make it yours, and share the street with friends and your partner.' },
   {
     icon: 'cube', title: 'Getting around',
     text: touch
-      ? 'Tap anywhere on the floor, in the garden or on the cliff walk to walk there. The arrow pad moves you too.'
-      : 'Click anywhere to walk there, or use W A S D. Hold Shift to run. Doors and gates open as you come near.',
+      ? 'Tap anywhere to walk there, or use the arrow pad. You can wander the whole street, out to the cliff and the playground behind your home.'
+      : 'Click anywhere to walk there, or use W A S D. Hold Shift to run. Wander the whole street, out to the cliff and the playground behind your home.',
   },
-  { icon: 'eye', title: 'Looking around', text: `${touch ? 'Use' : 'Scroll or use'} the eye button by the compass to change the view: from your own eyes, to the room, the whole house and the street. Drag to turn.` },
-  { icon: 'lamp', title: 'Make it feel like home', text: 'Tap a lamp to switch it off or on, and curtains to open or close them. Edit home lets you place furniture, or auto-furnish a room.' },
-  { icon: 'gift', title: 'Boxets', text: 'Every 30 minutes of play earns Boxets, and so does your daily gift. Out of the back gate is the playground: walk up to a glowing station to play Star catch. Spend it all in the shop.' },
+  { icon: 'eye', title: 'Looking around', text: `${touch ? 'Use' : 'Scroll, or use'} the eye button by the compass, to go from your own eyes to the room, the house and the street. Drag to turn.` },
+  { icon: 'lamp', title: 'Make it yours', text: 'Tap lamps and curtains to switch them. Edit home places furniture, names your sign, and chooses who can come in without asking.' },
+  { icon: 'world', title: 'Neighbours', text: "Everyone's home is on the street. At a neighbour's gate you can ask to visit; when they say yes, in you go. Sign in to invite friends." },
+  { icon: 'gift', title: 'Boxets', text: 'Play and earn: every 30 minutes, three quests a day, a daily gift, and Star catch at the playground. Spend it all in the shop.' },
 ]
 
-export default function Onboarding({ onDone }) {
+export default function Onboarding({ onDone, name }) {
   const [k, setK] = useState(0)
-  const step = STEPS[k]
-  const last = k === STEPS.length - 1
+  const steps = STEPS(name)
+  const step = steps[k]
+  const last = k === steps.length - 1
   useEffect(() => {
     const onKey = e => {
       if (e.key === 'ArrowRight' || e.key === 'Enter') (last ? onDone() : setK(k + 1))
@@ -39,8 +41,8 @@ export default function Onboarding({ onDone }) {
         <div className="onboard-art" key={k}><Icon name={step.icon} size={40} /></div>
         <h2>{step.title}</h2>
         <p>{step.text}</p>
-        <div className="onboard-dots" aria-label={`Step ${k + 1} of ${STEPS.length}`}>
-          {STEPS.map((_, i) => <button key={i} className={i === k ? 'on' : ''} onClick={() => setK(i)} aria-label={`Step ${i + 1}`} />)}
+        <div className="onboard-dots" aria-label={`Step ${k + 1} of ${steps.length}`}>
+          {steps.map((_, i) => <button key={i} className={i === k ? 'on' : ''} onClick={() => setK(i)} aria-label={`Step ${i + 1}`} />)}
         </div>
         <div className="onboard-actions">
           <button className="btn ghost" onClick={onDone}>{last ? 'Close' : 'Skip'}</button>

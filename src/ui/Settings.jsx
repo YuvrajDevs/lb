@@ -33,11 +33,10 @@ function Toggle({ label, hint, value, onChange, disabled }) {
 export default function Settings({ onClose, debug, onAccount }) {
   const s = useStore()
   const [name, setName] = useState(s.profile.name)
-  const [house, setHouse] = useState(s.profile.house)
-  // names save when you leave the field, and also when the window closes with the field still focused (Esc)
-  const latest = useRef({ name, house })
-  latest.current = { name, house }
-  useEffect(() => () => { store.setName(latest.current.name); store.setHouseName(latest.current.house) }, [])
+  // your name saves when you leave the field, and also when the window closes with the field still focused (Esc)
+  const latest = useRef(name)
+  latest.current = name
+  useEffect(() => () => { if (latest.current.trim()) store.setName(latest.current) }, [])
   const set = (k, v) => store.setSetting(k, v)
 
   return (
@@ -47,12 +46,8 @@ export default function Settings({ onClose, debug, onAccount }) {
           <h3><Icon name="user" size={16} /> You</h3>
           <label className="field">
             <span>Your name</span>
-            <input value={name} maxLength={16} onChange={e => setName(e.target.value)} onBlur={() => store.setName(name)} />
-          </label>
-          <label className="field">
-            <span>House name on the sign</span>
-            <input value={house} maxLength={24} onChange={e => setHouse(e.target.value)} onBlur={() => store.setHouseName(house)} />
-            <small>Shown on the garden sign. A couple chooses one shared name.</small>
+            <input value={name} maxLength={16} onChange={e => setName(e.target.value)} onBlur={() => name.trim() && store.setName(name)} />
+            <small>The name everyone sees. Your home's name, on its sign, is in Edit home.</small>
           </label>
         </section>
 

@@ -650,3 +650,21 @@ h4.sub { margin: 26px 0 10px; font: 700 10.5px var(--words); letter-spacing: .24
 .quest-pips i.on { background: var(--good); border-color: var(--good); box-shadow: 0 0 8px var(--good); }
 .quest-pips span { margin-left: 3px; font: 600 10px var(--words); letter-spacing: .16em; text-transform: uppercase; }
 .quest-pips:hover { color: var(--ink); }
+
+/* knocking: asking to visit, and being asked */
+.stairs.waiting { pointer-events: none; opacity: .75; }
+.knocks { top: 92px; left: 50%; transform: translateX(-50%); display: grid; gap: 8px; z-index: 8; }
+.knock { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 18px; border-radius: 99px; background: var(--glass-flat); border: 1px solid rgba(255, 210, 122, 0.4); box-shadow: var(--shadow); font: 400 13px var(--words); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); animation: toastIn .3s var(--ease); }
+.knock b { font-weight: 700; letter-spacing: .06em; }
+.knock .btn { padding: 8px 14px; }
+.ed-name { width: 100%; }
+
+/* ---------- a new player's welcome: over the cloud that hides their plot ---------- */
+.welcome { position: absolute; inset: 0; z-index: 25; display: grid; place-items: center; padding: 16px; background: radial-gradient(ellipse at 50% 45%, rgba(14, 8, 36, 0.35), rgba(6, 3, 18, 0.7)); animation: fade .8s ease; }
+.welcome-card { width: min(520px, 100%); display: flex; flex-direction: column; align-items: center; text-align: center; color: #fff; text-shadow: 0 2px 18px rgba(6, 2, 20, 0.6); animation: mgIn .9s var(--ease) both; }
+.welcome-card .mark { margin-bottom: 14px; filter: drop-shadow(0 0 14px rgba(255, 210, 160, 0.45)); }
+.welcome-field { display: grid; gap: 8px; width: min(400px, 100%); margin: 0 0 22px; text-align: left; }
+.welcome-field span { font: 700 10.5px var(--words); letter-spacing: .24em; text-transform: uppercase; color: var(--ink-2); }
+.welcome-field input { font-size: 20px !important; padding: 10px 0 !important; }
+.welcome-field small { font: 400 12px var(--words); color: var(--ink-3); }
+.mg-menu button:disabled { opacity: .35; cursor: not-allowed; }

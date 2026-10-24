@@ -7,11 +7,12 @@ import { supabase, rpc } from './client.js'
 //             encode() in world/game.js), every few seconds when still
 //   'e'       an emote (wave, heart, hug...)
 //   'chat'    a chat line, for instant display (it is also stored by send_message for history and moderation)
+//   'knock'   someone at your gate asks to come in; 'allow' is the answer (it lasts while you are both here)
 // Nothing here moves money; it is only what people see of each other.
 
 let channel = null
 let joined = null
-const handlers = { presence: () => {}, move: () => {}, emote: () => {}, chat: () => {}, status: () => {} }
+const handlers = { presence: () => {}, move: () => {}, emote: () => {}, chat: () => {}, knock: () => {}, allow: () => {}, status: () => {} }
 
 /** set what happens when things arrive: { presence(list), move(id, m), emote(id, kind), chat(msg), status(s) } */
 export function onLive(h) { Object.assign(handlers, h) }
@@ -32,6 +33,8 @@ export async function joinLive(worldId, me) {
   ch.on('broadcast', { event: 'm' }, ({ payload }) => handlers.move(payload.id, payload))
   ch.on('broadcast', { event: 'e' }, ({ payload }) => handlers.emote(payload.id, payload.kind))
   ch.on('broadcast', { event: 'chat' }, ({ payload }) => handlers.chat(payload))
+  ch.on('broadcast', { event: 'knock' }, ({ payload }) => handlers.knock(payload))
+  ch.on('broadcast', { event: 'allow' }, ({ payload }) => handlers.allow(payload))
   ch.subscribe(async status => {
     handlers.status(status)
     if (status === 'SUBSCRIBED') await ch.track(me)
@@ -47,6 +50,11 @@ export function track(me) { channel?.track(me) }
 
 /** your position (from the game's onMove) */
 export function sendMove(id, m) { channel?.send({ type: 'broadcast', event: 'm', payload: { id, ...m } }) }
+
+/** ask to come into a home (plot: its id) */
+export function sendKnock(from, name, plot) { channel?.send({ type: 'broadcast', event: 'knock', payload: { from, name, plot } }) }
+/** let someone in (or not) */
+export function sendAllow(to, plot, yes) { channel?.send({ type: 'broadcast', event: 'allow', payload: { to, plot, yes } }) }
 
 export function sendEmote(id, kind) { channel?.send({ type: 'broadcast', event: 'e', payload: { id, kind } }) }
 

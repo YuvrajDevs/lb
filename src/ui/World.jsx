@@ -25,7 +25,7 @@ function useAction() {
   return [busy, run]
 }
 
-export default function World({ onClose, onAccount, onVisit, visitingId }) {
+export default function World({ onClose, onAccount }) {
   const s = useStore()
   const [tab, setTab] = useState('world')
   const online = s.net?.status === 'online'
@@ -38,7 +38,7 @@ export default function World({ onClose, onAccount, onVisit, visitingId }) {
         <button className={`chip ${tab === 'couple' ? 'on' : ''}`} onClick={() => setTab('couple')}><Icon name="heart" size={15} /> Couple</button>
       </div>
       {!online && <SignInFirst onAccount={onAccount} tab={tab} />}
-      {online && tab === 'world' && <WorldTab s={s} onVisit={onVisit} visitingId={visitingId} />}
+      {online && tab === 'world' && <WorldTab s={s} />}
       {online && tab === 'friends' && <FriendsTab s={s} />}
       {online && tab === 'couple' && <CoupleTab s={s} onClose={onClose} />}
     </Modal>
@@ -63,7 +63,7 @@ function SignInFirst({ onAccount, tab }) {
 
 // ---------------------------------------------------------------- world
 
-function WorldTab({ s, onVisit, visitingId }) {
+function WorldTab({ s }) {
   const w = s.world
   const srv = store.server()
   const [busy, run] = useAction()
@@ -100,8 +100,6 @@ function WorldTab({ s, onVisit, visitingId }) {
           <span className={`presence ${m.online ? 'on' : ''}`} title={m.online ? 'Online' : 'Offline'} />
           <div className="avatar"><Icon name={m.kind === 'couple' ? 'couple' : 'world'} size={20} /></div>
           <div><b>{m.you ? `${m.house} (you)` : m.house}</b><small>{m.kind === 'couple' ? 'a couple' : m.name}</small></div>
-          {!m.you && m.id !== visitingId && <button className="link" onClick={() => onVisit(m)}>Visit</button>}
-          {m.you && visitingId && <button className="link" onClick={() => onVisit(m)}>Go home</button>}
           {creator && !m.you && (
             <button className="link" onClick={() => run('rm' + m.id, async () => { for (const id of m.ids) await srv.removeMember(id) }, `${m.name} has left your world`)}>Remove</button>
           )}

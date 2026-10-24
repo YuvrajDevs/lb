@@ -114,7 +114,8 @@ export function addExterior(walls, o) {
   ]
   clad(walls.front, faces.front, fHoles)
   // belt course hiding the floor-slab nameplate when the house is closed in
-  box(walls.front, [W + 2 * T, 0.5, 0.09], [0, -0.5, HZ + T + 0.045], TRIM) // (0.09 deep: not flush with the plinth)
+  // (0.09 deep: not flush with the plinth; and 3 mm off the wall, so its back never shares the plinth's back plane)
+  box(walls.front, [W + 2 * T, 0.5, 0.09], [0, -0.5, HZ + T + 0.048], TRIM)
 
   windows.forEach(x => windowTrim(walls.front, faces.front, x, FRONT_WIN.w, FRONT_WIN.y[0], FRONT_WIN.y[1]))
 
@@ -171,7 +172,7 @@ export function addExterior(walls, o) {
 
   // ---- back (with the real window) ----
   clad(walls.back, faces.back, backHole ? [[backHole[0], backHole[1], backHole[2], backHole[3]]] : [])
-  box(walls.back, [W + 2 * T, 0.5, 0.09], [0, -0.5, -(HZ + T) - 0.045], TRIM)
+  box(walls.back, [W + 2 * T, 0.5, 0.09], [0, -0.5, -(HZ + T) - 0.048], TRIM) // (3 mm off the wall, like the front)
 
   // ---- sides ----
   ;[['left', extLeft], ['right', extRight]].forEach(([name, on]) => {

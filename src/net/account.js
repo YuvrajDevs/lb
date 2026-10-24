@@ -124,7 +124,9 @@ async function loadAll(profile, guest) {
   const quests = { date: today, ids: questIds || [], claimed: questDone.map(q => q.quest), progress: cached?.date === today && String(cached.ids) === String(questIds) ? cached.progress : {} }
   const by = Object.fromEntries(earnings.map(e => [e.source, e.amount]))
   return {
-    profile: { name: profile.name, house: profile.house_name, tag: profile.tag, id: uid },
+    // the sign on your house shows its name, kept with the house (shared by a couple)
+    profile: { name: profile.name, house: house.name || (couple ? `${profile.name} & ${couple.partner_name}` : `${profile.name}'s home`), tag: profile.tag, id: uid },
+    access: house.access || [],
     boxets: wallet.boxets,
     owned,
     layout: house.layout || null,
@@ -171,11 +173,22 @@ async function loadWorld(uid, preferred) {
       plots.push({ ...p, kind: 'couple', house: `${p.name} & ${q?.name || '?'}`, you: p.you || !!q?.you, online: p.online || !!q?.online, ids: [p.id, p.partner] })
     } else plots.push({ ...p, kind: 'solo', ids: [p.id] })
   })
+  // every home on the street, as its owner furnished it (a couple's lives in their user_a's row)
+  const rows = await many(supabase.from('homes').select('user_id, data').in('user_id', people.map(p => p.id)))
+  plots.forEach(p => { p.home = homeOf(p, rows); p.allowed = !p.you && (p.home.access || []).includes(uid) })
   return {
     id: w.id, name: w.name, slots: w.slots, fund: w.fund, creator: w.creator,
     people, members: plots, invites: [],
     list: worlds.map(x => ({ id: x.id, name: x.name })),
   }
+}
+
+/** the house on a plot, from the homes rows: { layout, style, switches, fence, sign, name, access } */
+function homeOf(plot, rows) {
+  const owner = plot.kind === 'couple' ? [...plot.ids].sort()[0] : plot.id
+  const data = rows.find(r => r.user_id === owner)?.data || {}
+  const h = (plot.kind === 'couple' ? data.couple : data.solo) || {}
+  return { ...h, name: h.name || plot.house }
 }
 
 /** friends, requests and people you have blocked */
@@ -233,8 +246,15 @@ function listen() {
       if (p.new?.user_id === homeOwner && homeOwner !== uid) {
         homeData = p.new.data || {}
         const h = homeData.couple || {}
-        store.patchOnline({ layout: h.layout || null, style: h.style || {}, switches: h.switches || {} })
+        store.patchOnline({ layout: h.layout || null, style: h.style || {}, switches: h.switches || {}, access: h.access || [], profile: { ...store.get().profile, house: h.name || store.get().profile.house } })
+        return
       }
+      // a neighbour changed their home: that plot (and whether you may walk in) follows
+      const w = store.get().world
+      const plot = w.members.find(m => !m.you && (m.kind === 'couple' ? [...m.ids].sort()[0] : m.id) === p.new?.user_id)
+      if (!plot) return
+      const home = homeOf(plot, [{ user_id: p.new.user_id, data: p.new.data }])
+      store.patchOnline({ world: { ...w, members: w.members.map(m => (m === plot ? { ...m, home, allowed: m.allowed || (home.access || []).includes(uid), house: home.name } : m)) } })
     })
     .subscribe()
 }
@@ -246,7 +266,7 @@ function saveHome() {
   clearTimeout(saveTimer)
   saveTimer = setTimeout(async () => {
     const s = store.get()
-    const house = { layout: s.layout, style: s.style, switches: s.switches, fence: s.equipped.fence, sign: s.equipped.sign }
+    const house = { layout: s.layout, style: s.style, switches: s.switches, fence: s.equipped.fence, sign: s.equipped.sign, name: s.profile.house, access: s.access || [] }
     const coupleHouse = s.couple?.state === 'active'
     if (homeOwner === user.id) {
       ownData = { ...ownData, [coupleHouse ? 'couple' : 'solo']: house, cube: { skin: s.equipped.skin, hat: s.equipped.hat } }

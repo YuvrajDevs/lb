@@ -148,6 +148,8 @@ export default function Editor({ game, ed, onExit, onOpenShop, onReset, onAuto }
 
         {tab === 'style' && area === 'garden' && (
           <div className="ed-style">
+            <HomeName name={s.profile.house} />
+            {s.net?.status === 'online' && <Visitors s={s} />}
             {[['fence', 'Fence', 'fences'], ['sign', 'Name sign', 'signs']].map(([slot, label, catId]) => (
               <section key={slot}>
                 <h4>{label}</h4>
@@ -205,5 +207,39 @@ export default function Editor({ game, ed, onExit, onOpenShop, onReset, onAuto }
       </div>
       {armedDrag && <div className="ed-drag-hint" aria-hidden="true" />}
     </>
+  )
+}
+
+/** the name on your sign (everyone sees the same) */
+function HomeName({ name }) {
+  const [v, setV] = useState(name)
+  useEffect(() => setV(name), [name])
+  const save = () => { if (v.trim() && v.trim() !== name) { store.setHouseName(v); sfx('place') } }
+  return (
+    <section>
+      <h4>Name on the sign</h4>
+      <input className="ed-name" value={v} maxLength={24} onChange={e => setV(e.target.value)} onBlur={save} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }} />
+    </section>
+  )
+}
+
+/** who may come into your home without asking (everyone else asks at the gate, and you say yes or not now) */
+function Visitors({ s }) {
+  const people = (s.world.people || []).filter(p => !p.you && p.id !== s.couple.partnerId)
+  const access = s.access || []
+  const toggle = id => store.setAccess(access.includes(id) ? access.filter(x => x !== id) : [...access, id])
+  return (
+    <section>
+      <h4>Who can come in without asking</h4>
+      {!people.length && <p className="soft small">Nobody else lives in your world yet.</p>}
+      {people.map(p => (
+        <label className="row toggle" key={p.id}>
+          <span><b>{p.name}</b></span>
+          <input type="checkbox" checked={access.includes(p.id)} onChange={() => toggle(p.id)} />
+          <span className="knob" />
+        </label>
+      ))}
+      <p className="soft small">Anyone else knocks at your gate, and you choose.</p>
+    </section>
   )
 }
