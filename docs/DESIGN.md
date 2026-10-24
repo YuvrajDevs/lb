@@ -2,7 +2,7 @@
 
 A cosy 3D neighbourhood for friends and couples. Everyone has a house, earns Boxets by spending time and playing together, and spends them on rooms, furniture and skins. Web first (Three.js), app later (Capacitor wrapper).
 
-Status (October 2026): the whole game runs **locally in the browser**: both homes, the world around them, the editor with auto-furnish, the shop, wardrobe, daily gift, the couple invite / merge / breakup flow, neighbours, the earning games and the economy rules, all saved on the device (see README). What is left is **online play**: accounts, saving on the server, real friends and partners, server-checked earning, chat. Each phase below says what is already done on the client.
+Status (October 2026): playable as a guest on the device, or signed in with accounts, worlds, friends, couples, live play, chat, visiting and a server-owned economy on Supabase (see `supabase/migrations` and [`PLAN.md`](PLAN.md) for what is left). Each phase below says what is already done.
 
 ---
 

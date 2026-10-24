@@ -2,7 +2,25 @@
 
 The game rules (houses, earning, worlds, couples) live in [`DESIGN.md`](DESIGN.md). This file is the **what is left, in what order, and why**: the full player journey, the look, the performance rules, and the business. Every item has a "done when" so nothing is half-built again (like a playground with no way to reach it).
 
-Status on 2026-10-24: one player, offline, on one device. Everything below is still to do unless marked *done*.
+## Status (2026-10-24, evening)
+
+| Phase | State |
+|---|---|
+| 1. Fix the loop | **Done.** Active-time earning, the 2 m back path, signpost and playground view, the playground out of the house shadow and lit, honest guide and README. |
+| 2. UI system | **Done.** One language for the HUD and every panel (night glass, hairline rules, Josefin Sans and Oswald), a Firewatch-style title screen, minigame screens like the reference score screen. |
+| 3. Accounts & cloud save | **Done.** Magic-link sign-in, `start_player`, your home saved to your account, guest home carried over (only what the account owns). Needs the Auth URL settings below before sign-in links work. |
+| 4. Friends & worlds | **Done.** Tags, requests, remove, block, report; worlds, invite links and codes, join, leave, remove (creator), the fund and slots, delete account. |
+| 5. Together live | **Done:** presence, movement, chat with bubbles, emotes, visiting homes. **Left:** sitting together and the joint hug animation. |
+| 6. Server economy | **Done.** Buying, the daily gift, quests, minigame pay, visits and active-time earning (with the friends and partner multipliers) are server functions with daily caps. |
+| 7. Games & quests | **Started:** Star catch is a 3D side-view game (Starfall Bridge); daily quests. **Left:** the couple quiz and the arcade (both two-player, live), levels. |
+| 8–10 | Not started: landing page, privacy policy and terms, analytics and crash reports, moderation queue view, hosting (Vercel), apps (Capacitor), payments. |
+
+Also done beyond the plan: walk freely between homes and through small things (only fences, walls and neighbours' gardens stop you), a 3 m gap between plots, and the street the same on every screen.
+
+**To switch sign-in on** (Supabase dashboard → Authentication → URL Configuration): set *Site URL* to the address the game is played at (`http://localhost:5173` while testing, the real domain later) and add the same address to *Redirect URLs*. Without it the sign-in email's link lands on the wrong page.
+
+The sections below are the original plan.
+
 
 ---
 

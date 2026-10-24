@@ -77,6 +77,21 @@ function WorldTab({ s, onVisit, visitingId }) {
   const rate = windowEarning({ onlineActive: onlineCount, withPartner: s.couple.state === 'active' })
   const link = invite && `${location.origin}${location.pathname}?join=${invite}`
 
+  if (!w.id) {
+    return (
+      <div className="empty-state">
+        <Icon name="world" size={34} />
+        <h3>No world yet</h3>
+        <p className="soft">Start one and invite people, or join a friend's with their code.</p>
+        <button className="btn primary" disabled={!!busy} onClick={() => run('new', () => srv.createWorld(`${s.profile.name}'s block`), 'Your world is ready')}>Start a world</button>
+        <form className="invite" onSubmit={e => { e.preventDefault(); run('j', () => srv.joinWorld(code), 'Welcome!') }}>
+          <input placeholder="Or a six-letter code" value={code} maxLength={6} onChange={e => setCode(e.target.value.toUpperCase())} />
+          <button className="btn ghost" disabled={code.trim().length !== 6}>Join</button>
+        </form>
+      </div>
+    )
+  }
+
   const slots = Array.from({ length: WORLD_MAX_SLOTS }, (_, i) => {
     const m = w.members[i]
     if (m) {
