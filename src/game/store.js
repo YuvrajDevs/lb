@@ -378,7 +378,8 @@ export const store = {
     let base = { ...fresh().settings, ...(snap.settings || {}) }
     // (what was called evening is now sunset; evening is the golden afternoon before it)
     if (base.timeV !== 3) base = { ...base, time: !base.time || base.time === 'evening' ? 'sunset' : base.time, timeV: 3 }
-    const settings = snap.isNew ? { ...base, arrived: false, onboarded: false } : base
+    // (only a brand-new account is welcomed; one that already has a home has moved in, whatever its settings say)
+    const settings = snap.isNew ? { ...base, arrived: false, onboarded: false } : { ...base, arrived: true, onboarded: base.onboarded ?? true }
     state = { ...fresh(), ...snap, settings, toasts: state.toasts, net: state.net }
     server = srv
     persist()
