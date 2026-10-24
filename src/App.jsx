@@ -18,9 +18,9 @@ import Editor from './ui/Editor'
 import { editInset } from './ui/layout'
 import Wardrobe from './ui/Wardrobe'
 import Settings from './ui/Settings'
+import Onboarding from './ui/Onboarding'
 import World from './ui/World'
 import DailyReward from './ui/DailyReward'
-import Play from './ui/Play'
 import './ui/ui.css'
 
 const VIEWS = [
@@ -87,6 +87,7 @@ function App() {
       onEditor: setEd,
       onBlocked: reason => store.notify(reason, 'warn'),
       onSfx: sfx,
+      onNotice: text => store.notify(text, 'info'),
       })
       game.current = g
       if (!saved.settings.artLowered) store.setSetting('artLowered', true)
@@ -107,7 +108,7 @@ function App() {
   useEffect(() => { game.current?.setReduceMotion(s.settings.reduceMotion) }, [s.settings.reduceMotion, ready])
   useEffect(() => { game.current?.setTimeOfDay(s.settings.time || 'night') }, [s.settings.time, ready])
   const editing = !!ed?.active
-  useEffect(() => { game.current?.setInputEnabled(!open && !editing) }, [open, editing, ready])
+  useEffect(() => { game.current?.setInputEnabled(!open && !editing && !!s.settings.onboarded) }, [open, editing, ready, s.settings.onboarded])
   useEffect(() => { game.current?.setIdle(!!open && !editing) }, [open, editing, ready])
 
   // what the home looks like follows the saved state (this also handles undo, redo and reset)
@@ -229,7 +230,6 @@ function App() {
       {open === 'wardrobe' && <Wardrobe onClose={close} onOpenShop={openShopAt} />}
       {open === 'world' && <World onClose={close} />}
       {open === 'daily' && <DailyReward onClose={close} />}
-      {open === 'play' && <Play onClose={close} onVisit={k => game.current?.visit(k)} />}
       {open === 'settings' && <Settings onClose={close} debug={debug} />}
 
       {rotateNote && !open && !editing && (
@@ -254,6 +254,7 @@ function App() {
         </div>
       )}
 
+      {ready && !s.settings.onboarded && <Onboarding onDone={() => store.setSetting('onboarded', true)} />}
       <Toasts />
     </div>
   )

@@ -74,6 +74,7 @@ export default function Settings({ onClose, debug }) {
           </div>
           <Toggle label="Reduce motion" hint="The camera cuts instead of swooping; the scenery drifts slower" value={s.settings.reduceMotion} onChange={v => set('reduceMotion', v)} />
           <Toggle label="Show control hints" value={s.settings.hints} onChange={v => set('hints', v)} />
+          <div className="row"><span><b>The welcome guide</b><small>The short tour from your first visit</small></span><button className="btn ghost" onClick={() => { set('onboarded', false); onClose() }}>Show again</button></div>
         </section>
 
         <section>

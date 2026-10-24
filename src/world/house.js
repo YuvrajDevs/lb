@@ -13,6 +13,8 @@ import { ITEM_BY_ID } from '../game/catalog.js'
 import { WINDOWS, PLOTS, getHomeKind, gardenArea } from '../game/areas.js'
 import { furnishArea, paintTexture, floorTex } from './furnish.js'
 import { CLIFF_Z, streamX } from './scenery.js'
+import { buildPlayground } from './playground.js'
+import { PLAYGROUND } from '../game/areas.js'
 
 export { H }
 export const SLAB = 0.72
@@ -202,7 +204,8 @@ export function buildHouse(opts = {}) {
     for (let i = 0; i <= n; i++) post(x0 + ((x1 - x0) * i) / n, z0 + ((z1 - z0) * i) / n)
   }
   const gate = 1.3
-  run(-PLOT.x, PLOT.zBack, PLOT.x, PLOT.zBack)
+  run(-PLOT.x, PLOT.zBack, -gate, PLOT.zBack) // (the back fence has a gate too, out to the playground)
+  run(gate, PLOT.zBack, PLOT.x, PLOT.zBack)
   run(-PLOT.x, PLOT.zBack, -PLOT.x, PLOT.zFront)
   run(PLOT.x, PLOT.zBack, PLOT.x, PLOT.zFront)
   run(-PLOT.x, PLOT.zFront, -gate, PLOT.zFront)
@@ -210,9 +213,10 @@ export function buildHouse(opts = {}) {
   // the garden gate: two little picket leaves that swing outward when someone walks up to them (see game.js)
   const gateGroup = new THREE.Group()
   group.add(gateGroup)
-  const gateLeaves = [-1, 1].map(side => {
+  // a gate: two little picket leaves that swing outward (dir +1 towards the sea, -1 towards the back)
+  const makeGate = (z, dir) => [-1, 1].map(side => {
     const pivot = new THREE.Group()
-    pivot.position.set(side * gate, -0.5, PLOT.zFront)
+    pivot.position.set(side * gate, -0.5, z)
     const leaf = new THREE.Group()
     const mat = std('#f2eadb')
     const add = (w, h, d, x, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, 0); m.castShadow = true; m.userData.keep = true; leaf.add(m) }
@@ -221,10 +225,12 @@ export function buildHouse(opts = {}) {
     for (let i = 0; i < 4; i++) add(0.1, 0.62, 0.05, -side * (0.15 + i * (gate - 0.3) / 3), 0.31)
     pivot.add(leaf)
     gateGroup.add(pivot)
-    return { pivot, side }
+    return { pivot, side: side * dir }
   })
+  const gateLeaves = makeGate(PLOT.zFront, 1)
+  const backGateLeaves = makeGate(PLOT.zBack, -1)
   // lanterns on the corners and either side of the gate
-  ;[[-PLOT.x, PLOT.zBack], [PLOT.x, PLOT.zBack], [-PLOT.x, PLOT.zFront], [PLOT.x, PLOT.zFront], [-gate, PLOT.zFront], [gate, PLOT.zFront]].forEach(([x, z]) => {
+  ;[[-PLOT.x, PLOT.zBack], [PLOT.x, PLOT.zBack], [-PLOT.x, PLOT.zFront], [PLOT.x, PLOT.zFront], [-gate, PLOT.zFront], [gate, PLOT.zFront], [-gate, PLOT.zBack], [gate, PLOT.zBack]].forEach(([x, z]) => {
     box(garden, [0.2, 0.3, 0.2], [x, -0.5 + 0.6, z], fence)
     const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), new THREE.MeshBasicMaterial({ color: '#ffe2a8', toneMapped: false }))
     lamp.position.set(x, -0.5 + 1.05, z)
@@ -239,7 +245,8 @@ export function buildHouse(opts = {}) {
     sphere(garden, r, [x, -0.5 + r * 0.5, z], '#2f6a54')
     sphere(garden, r * 0.7, [x + (r < 0.6 ? 0 : 0.6), -0.5 + r * 0.3, z + 0.5], '#3b7a62')
   })
-  group.add(garden, defaultFence, itemFence, gardenPlaced, street)
+  const playground = buildPlayground()
+  group.add(garden, defaultFence, itemFence, gardenPlaced, street, playground.group)
 
   // name sign on two posts, lit by its own street lamp (kept separate so it can be re-texted: setName('X & Y'))
   const SX = P.signX, SZ = PLOT.zFront - 0.6
@@ -279,7 +286,17 @@ export function buildHouse(opts = {}) {
   // ---------- garden collision: first person can walk out of the front door, but not through the fence ----------
   const gc = colliders[0]
   const fw = 0.2
-  gc.push({ minX: -PLOT.x - fw, maxX: PLOT.x + fw, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw })
+  gc.push({ minX: -PLOT.x - fw, maxX: -gate, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw }) // back fence, with its gate gap
+  gc.push({ minX: gate, maxX: PLOT.x + fw, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw })
+  // the playground behind, and the invisible edge of everywhere you can walk: round the playground, and closing
+  // the gaps between it and the garden's side fences
+  const PG = PLAYGROUND
+  playground.solids.forEach(c => gc.push(c))
+  gc.push({ minX: -PG.x - 1, maxX: -PG.x, minZ: PG.zFar, maxZ: PLOT.zBack })
+  gc.push({ minX: PG.x, maxX: PG.x + 1, minZ: PG.zFar, maxZ: PLOT.zBack })
+  gc.push({ minX: -PG.x - 1, maxX: PG.x + 1, minZ: PG.zFar - 1, maxZ: PG.zFar })
+  gc.push({ minX: -PG.x - 1, maxX: -PLOT.x, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw })
+  gc.push({ minX: PLOT.x, maxX: PG.x + 1, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw })
   gc.push({ minX: -PLOT.x - fw, maxX: -PLOT.x + fw, minZ: PLOT.zBack, maxZ: PLOT.zFront })
   gc.push({ minX: PLOT.x - fw, maxX: PLOT.x + fw, minZ: PLOT.zBack, maxZ: PLOT.zFront })
   gc.push({ minX: -PLOT.x, maxX: -gate, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw }) // front fence, with the gate gap
@@ -321,7 +338,7 @@ export function buildHouse(opts = {}) {
 
   // ---------- the garden: swap the fence or the sign for ones from the shop ----------
   const fenceRuns = [
-    [-PLOT.x, PLOT.zBack, PLOT.x, PLOT.zBack], [-PLOT.x, PLOT.zBack, -PLOT.x, PLOT.zFront], [PLOT.x, PLOT.zBack, PLOT.x, PLOT.zFront],
+    [-PLOT.x, PLOT.zBack, -gate, PLOT.zBack], [gate, PLOT.zBack, PLOT.x, PLOT.zBack], [-PLOT.x, PLOT.zBack, -PLOT.x, PLOT.zFront], [PLOT.x, PLOT.zBack, PLOT.x, PLOT.zFront],
     [-PLOT.x, PLOT.zFront, -gate, PLOT.zFront], [gate, PLOT.zFront, PLOT.x, PLOT.zFront],
   ]
   function setFence(tier) {
@@ -420,6 +437,7 @@ export function buildHouse(opts = {}) {
   bake(defaultFence)
   bake(gardenPlaced, { clone: true })
   bake(street, { clone: true })
+  bake(playground.group)
 
   // the room with the front door; and the staircase (only the two-storey house has one)
   const entry = rooms.find(r => r.door) || rooms[0]
@@ -450,14 +468,15 @@ export function buildHouse(opts = {}) {
       rooms.forEach(r => { r.sh.root.visible = all || areaId === 'garden' || r.id === areaId })
       const outside = areaId === 'garden' || all
       roof.visible = outside
-      ;[garden, defaultFence, itemFence, gardenPlaced, gateGroup].forEach(o => { o.visible = outside })
+      ;[garden, defaultFence, itemFence, gardenPlaced, gateGroup, playground.group].forEach(o => { o.visible = outside })
       defaultFence.visible = outside && !itemFence.children.length
       itemFence.visible = outside
       defaultSign.visible = outside && !itemSign
       if (itemSign) itemSign.group.visible = outside
     },
     door: { pivot: entry.door, x: entry.ox + entry.doorX, z: HZ + 0.15 },
-    gate: { leaves: gateLeaves, z: PLOT.zFront },
+    gates: [{ leaves: gateLeaves, z: PLOT.zFront }, { leaves: backGateLeaves, z: PLOT.zBack }],
+    playground,
     bounds: { halfW: PLOT.x + 0.6, yMin: -1.25, yMax: roofBase + rh },
   }
 }

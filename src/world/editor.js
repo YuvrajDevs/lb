@@ -246,7 +246,7 @@ export function createEditor(ctx) {
   }
 
   function showWallOverlays(on) {
-    wallOverlays.forEach(w => { w.visible = on && st.grid })
+    wallOverlays.forEach(w => { w.visible = on && gridOn() })
   }
 
   function buildOverlays() {
@@ -260,7 +260,7 @@ export function createEditor(ctx) {
     floorOverlay.rotation.x = -Math.PI / 2
     floorOverlay.position.set(ox + w / 2, y0 + 0.02, oz + d / 2)
     floorOverlay.renderOrder = 5
-    floorOverlay.visible = st.grid
+    floorOverlay.visible = gridOn()
     root.add(floorOverlay)
     if (area.walls) {
       ['back', 'left', 'right'].forEach(wall => {
@@ -285,8 +285,11 @@ export function createEditor(ctx) {
     const id = st.ghost?.entry.id || st.armedItem || (st.selected && entries().find(e => e.uid === st.selected)?.id)
     return !!id && infoOf(id).kind === 'wall'
   }
+  // the grid and the no-build zones show only while you are placing or moving something
+  const gridOn = () => !!(st.armedItem || st.drag?.started)
+
   function refreshOverlays() {
-    if (floorOverlay) floorOverlay.visible = st.grid
+    if (floorOverlay) floorOverlay.visible = gridOn()
     showWallOverlays(wallMode())
   }
 
@@ -420,6 +423,7 @@ export function createEditor(ctx) {
       hiddenObj = d.obj
       d.obj.visible = false
       updateSelPlane()
+      refreshOverlays()
     }
     const e = entries().find(x => x.uid === d.uid)
     const next = candidate(e.id, ev, d.rot, [d.uid, ...childrenOf(d.uid).map(c => c.uid)])
@@ -431,6 +435,7 @@ export function createEditor(ctx) {
     if (!st.active) return
     const d = st.drag
     st.drag = null
+    refreshOverlays()
     if (!d || !d.started) { if (d) emit(); return }
     const g = st.ghost
     const uid = d.uid

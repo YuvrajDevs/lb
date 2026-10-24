@@ -93,7 +93,8 @@ const STREAM_TOP = -58
 function heightAt(x, z) {
   // the garden stays flat, and so does the whole strip along the front (the cliff walk runs its full width)
   // (and a level strip along the cliff top, either side, where the neighbours' plots are; the stream keeps its valley)
-  const plot = (Math.abs(x) < 15 && z > -8) || z > FRONT_FLAT || (Math.abs(x) < 58 && z > -8 && Math.abs(x - streamX(z)) > 5)
+  const plot = (Math.abs(x) < 15 && z > -8) || z > FRONT_FLAT || (Math.abs(x) < 58 && z > -8 && Math.abs(x - streamX(z)) > 5) ||
+    (Math.abs(x) < 19 && z > -31) // the playground clearing behind the house
   if (plot) return 0
   const back = smooth(-8, -42, z) // rises behind the house
   const side = smooth(16, 40, Math.abs(x)) * 0.45 // gentle mounds to the sides
@@ -255,7 +256,7 @@ function makeLand() {
     const x = pos.getX(i), z = pos.getZ(i)
     // jitter the inner vertices a little so the facets look hand-cut (not on the edges, not on the plot)
     const edge = Math.abs(z - Z1) < 0.01 || Math.abs(z - Z0) < 0.01 || Math.abs(x - X0) < 0.01 || Math.abs(x - X1) < 0.01
-    const inPlot = Math.abs(x) < 60 && z > -9
+    const inPlot = (Math.abs(x) < 60 && z > -9) || (Math.abs(x) < 21 && z > -33)
     const jx = edge || inPlot ? 0 : (hash(x, z) - 0.5) * 1.6
     const jz = edge || inPlot ? 0 : (hash(z, x) - 0.5) * 1.6
     pos.setXYZ(i, x + jx, GROUND_Y + heightAt(x + jx, z + jz), z + jz)
@@ -584,7 +585,7 @@ export function buildScenery(palette = 'night') {
     lawn: flat('#3b4f6e'), rock: flat('#4b3c6e'),
   }
   const stoneMats = [flat('#6c5a9a'), flat('#8a78bc'), flat('#54467e')]
-  const free = (x, z) => !(Math.abs(x) < 60 && z > -9) && Math.abs(x - streamX(z)) > 2.4 && z < FRONT_FLAT - 1.5 // nothing grows on the cliff walk
+  const free = (x, z) => !(Math.abs(x) < 60 && z > -9) && !(Math.abs(x) < 21 && z > -33) && Math.abs(x - streamX(z)) > 2.4 && z < FRONT_FLAT - 1.5 // nothing grows on the cliff walk
 
   // a forest that thickens toward the hills behind
   for (let i = 0; i < 160; i++) {
@@ -595,18 +596,19 @@ export function buildScenery(palette = 'night') {
     pine(statics, x, z, 1.1 + rnd() * 1.4, mats)
   }
   // a frame of trees right behind the house, so the roofline has a backdrop
-  [[-17, -11, 2.2], [-12, -13, 1.8], [-6, -12.5, 2.5], [5, -13, 2.1], [11, -11.5, 2.6], [17.5, -12, 2.0]].forEach(([x, z, s]) => pine(statics, x, z, s, mats))
+  // (they ring the playground clearing, so the roofline still has a backdrop from the front)
+  [[-22, -12, 2.2], [-19, -24, 1.8], [-10, -34, 2.5], [2, -35, 2.1], [12, -34, 2.6], [21, -22, 2.0], [23, -10, 2.4]].forEach(([x, z, s]) => pine(statics, x, z, s, mats))
   for (let i = 0; i < 70; i++) {
     const x = (rnd() - 0.5) * 120, z = -70 + rnd() * 80
     if (free(x, z)) stone(statics, x, z, 0.5 + rnd() * 1.4, stoneMats[i % 3])
   }
   // crystals and their glow
-  [[-26, -18, 1.6, '#9a7bff'], [24, -20, 1.9, '#7fe0ff'], [-9, -24, 2.2, '#c08bff'], [36, -9, 1.4, '#ff8fd0'], [-38, -8, 1.5, '#7fe0ff'], [14, -32, 2.6, '#b48cff'], [-30, -36, 2.4, '#ff8fd0']].forEach(([x, z, s, c]) => {
+  [[-26, -18, 1.6, '#9a7bff'], [24, -20, 1.9, '#7fe0ff'], [-9, -24, 2.2, '#c08bff'], [36, -9, 1.4, '#ff8fd0'], [-38, -8, 1.5, '#7fe0ff'], [14, -32, 2.6, '#b48cff'], [-30, -36, 2.4, '#ff8fd0']].filter(([x, z]) => !(Math.abs(x) < 21 && z > -33)).forEach(([x, z, s, c]) => {
     crystal(statics, x, z, s, c)
     glows.push(glow(group, [x, GROUND_Y + heightAt(x, z) + 1.2 * s, z], c, 5 * s, 0.5))
   })
   // glowing mushrooms near the stream
-  ;[[-16.5, -9], [-25, -2], [-24.5, 6], [-14, 2], [-28, -14]].forEach(([x, z], i) => {
+  ;[[-22.5, -9], [-25, -2], [-24.5, 6], [-28, -14]].forEach(([x, z], i) => {
     mushroom(statics, x, z, 0.9 + (i % 3) * 0.35)
     glows.push(glow(group, [x, GROUND_Y + heightAt(x, z) + 0.8, z], '#ff6fae', 2.6, 0.35))
   })

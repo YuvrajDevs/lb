@@ -8,8 +8,10 @@ import { Icon } from './icons'
 import Preview from './Preview'
 import { editInset } from './layout'
 
+// short names keep every tab on one line
+const SHORT = { living: 'Living' }
 const AREA_ICON = { home: 'bed', study: 'table', bedroom: 'bed', kitchen: 'plant', living: 'sofa', garden: 'fence' }
-const SNAPS = [['fine', '0.1'], ['normal', '0.3'], ['big', '0.6']]
+const SNAPS = [['fine', 'Fine', '10 cm'], ['normal', 'Medium', '30 cm'], ['big', 'Large', '60 cm']]
 const VIEWS = [['top', 'Top'], ['angle', 'Angled'], ['front', 'Front']]
 
 /** categories you can place in an area */
@@ -31,6 +33,7 @@ export default function Editor({ game, ed, onExit, onOpenShop, onReset, onAuto }
   const [tab, setTab] = useState('items')
   const [cat, setCat] = useState('all')
   const [armedDrag, setArmedDrag] = useState(false)
+  const [view, setView] = useState('angle')
   const down = useRef(null)
 
   useEffect(() => { setCat('all'); setTab('items') }, [area])
@@ -86,7 +89,7 @@ export default function Editor({ game, ed, onExit, onOpenShop, onReset, onAuto }
         <div className="ed-areas" role="tablist" aria-label="Where to edit">
           {areaList().map(id => (
             <button key={id} role="tab" aria-selected={area === id} className={area === id ? 'on' : ''} onClick={() => game.enterEdit(id, editInset())}>
-              <Icon name={AREA_ICON[id]} size={16} /> {areaOf(id).label}
+              <Icon name={AREA_ICON[id]} size={16} /> <span>{SHORT[id] || areaOf(id).label}</span>
             </button>
           ))}
         </div>
@@ -181,17 +184,24 @@ export default function Editor({ game, ed, onExit, onOpenShop, onReset, onAuto }
       )}
 
       <div className="ed-bar">
-        <div className="seg" role="radiogroup" aria-label="Snap size">
-          {SNAPS.map(([id, label]) => <button key={id} role="radio" aria-checked={ed.snap === id} className={ed.snap === id ? 'on' : ''} onClick={() => game.editor.setSnap(id)} title={`Snap to ${label} units`}>{label}</button>)}
+        <div className="ed-group">
+          <small>Snap</small>
+          <div className="seg" role="radiogroup" aria-label="Snap size">
+            {SNAPS.map(([id, label, size]) => <button key={id} role="radio" aria-checked={ed.snap === id} className={ed.snap === id ? 'on' : ''} onClick={() => game.editor.setSnap(id)} title={`Moves in ${size} steps`}>{label}</button>)}
+          </div>
         </div>
-        <button className={`bar-btn ${ed.grid ? 'on' : ''}`} onClick={() => game.editor.setGrid(!ed.grid)} title="Show the grid"><Icon name="grid" size={17} /> Grid</button>
-        <div className="seg" role="radiogroup" aria-label="Camera">
-          {VIEWS.map(([id, label]) => <button key={id} role="radio" aria-checked="false" onClick={() => game.setEditView(id)}>{label}</button>)}
+        <div className="ed-group">
+          <small>View</small>
+          <div className="seg" role="radiogroup" aria-label="Camera">
+            {VIEWS.map(([id, label]) => <button key={id} role="radio" aria-checked={view === id} className={view === id ? 'on' : ''} onClick={() => { setView(id); game.setEditView(id) }}>{label}</button>)}
+          </div>
         </div>
-        <button className="bar-btn" disabled={!store.canUndo()} onClick={() => { store.undo(); sfx('pick') }} title="Undo (Ctrl+Z)"><Icon name="undo" size={17} /></button>
-        <button className="bar-btn" disabled={!store.canRedo()} onClick={() => { store.redo(); sfx('pick') }} title="Redo"><Icon name="redo" size={17} /></button>
-        <button className="bar-btn" onClick={() => onAuto(area)} title="Fill the room with things you own but haven't placed, in a matching style">Auto-furnish</button>
-        <button className="bar-btn" onClick={() => onReset(area)} title="Back to the standard furnishing">Reset</button>
+        <div className="ed-group tools">
+          <button className="bar-btn icon" disabled={!store.canUndo()} onClick={() => { store.undo(); sfx('pick') }} title="Undo (Ctrl+Z)" aria-label="Undo"><Icon name="undo" size={17} /></button>
+          <button className="bar-btn icon" disabled={!store.canRedo()} onClick={() => { store.redo(); sfx('pick') }} title="Redo" aria-label="Redo"><Icon name="redo" size={17} /></button>
+          <button className="bar-btn accent" onClick={() => onAuto(area)} title="Fill the room with things you own but haven't placed, in a matching style"><Icon name="bolt" size={15} /> Auto-furnish</button>
+          <button className="bar-btn" onClick={() => onReset(area)} title="Back to the standard furnishing">Reset</button>
+        </div>
       </div>
       {armedDrag && <div className="ed-drag-hint" aria-hidden="true" />}
     </>

@@ -16,7 +16,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
-import { areaList, areaOf, getHomeKind, plot } from '../game/areas.js'
+import { areaList, areaOf, getHomeKind, plot, PLAYGROUND } from '../game/areas.js'
 import { CELL, TABLE_TOP, overlap, floorRect } from '../game/grid.js'
 
 const HALF = 0.42 // cube collision half-extent
@@ -364,7 +364,7 @@ export function createGame(container, opts = {}) {
   const GRID = 0.25
   function findPath(fromV, toV, level) {
     const P = plot()
-    const minX = Math.min(-P.x, walkSpan[0]) - 1, maxX = Math.max(P.x, walkSpan[1]) + 1, minZ = -HZ - 1, maxZ = level === 0 ? CLIFF_Z : HZ + 2
+    const minX = Math.min(-P.x, walkSpan[0], -PLAYGROUND.x) - 1, maxX = Math.max(P.x, walkSpan[1], PLAYGROUND.x) + 1, minZ = level === 0 ? PLAYGROUND.zFar - 1 : -HZ - 1, maxZ = level === 0 ? CLIFF_Z : HZ + 2
     const nx = Math.ceil((maxX - minX) / GRID), nz = Math.ceil((maxZ - minZ) / GRID)
     const idx = (i, j) => j * nx + i
     const cx = x => Math.round((x - minX) / GRID), cz = z => Math.round((z - minZ) / GRID)
@@ -440,10 +440,13 @@ export function createGame(container, opts = {}) {
     if (!ray.ray.intersectPlane(plane, hit)) return
     // on the ground floor you can click out in the garden or on the cliff walk too
     const ground = levelOf(me.pos.y) === 0
-    const outsideClick = ground && hit.z > HZ + 0.6
     const P = plot()
+    const houseHalf = solo ? HX + 0.3 : COL
+    const outsideClick = ground && (hit.z > HZ + 0.6 || hit.z < -HZ - 0.6 || Math.abs(hit.x) > houseHalf)
+    // outside: as far as that part of the world reaches (the cliff walk, the garden, or the playground)
+    const span = hit.z > PLOT_FRONT ? walkSpan : hit.z < -HZ - 1.4 ? [-PLAYGROUND.x, PLAYGROUND.x] : [-P.x, P.x]
     const dest = outsideClick
-      ? new THREE.Vector3(THREE.MathUtils.clamp(hit.x, (hit.z > PLOT_FRONT ? walkSpan[0] : -P.x) + 0.6, (hit.z > PLOT_FRONT ? walkSpan[1] : P.x) - 0.6), me.pos.y, Math.min(hit.z, CLIFF_Z - 1.4))
+      ? new THREE.Vector3(THREE.MathUtils.clamp(hit.x, span[0] + 0.6, span[1] - 0.6), me.pos.y, THREE.MathUtils.clamp(hit.z, PLAYGROUND.zFar + 0.8, CLIFF_Z - 1.4))
       : new THREE.Vector3(
         THREE.MathUtils.clamp(hit.x, (solo ? -HX : -COL) + 0.6, (solo ? HX : COL) - 0.6),
         me.pos.y,
@@ -479,8 +482,22 @@ export function createGame(container, opts = {}) {
   const endDrag = e => {
     if (editing()) { drag = null; return }
     // a plain click uses a lamp or curtain if there is one under the pointer; otherwise it walks there
-    if (drag && !drag.moved && e.type === 'pointerup' && !interactAt(e) && !closedIn()) clickMove(e)
+    if (drag && !drag.moved && e.type === 'pointerup' && !interactAt(e) && !stationAt(e) && !closedIn()) clickMove(e)
     drag = null
+  }
+
+  // ---- the playground's game stations: for now a click says the game is on its way ----
+  const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.5)
+  function stationAt(e) {
+    const r = el.getBoundingClientRect()
+    ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), active)
+    const p = new THREE.Vector3()
+    if (!ray.ray.intersectPlane(groundPlane, p)) return false
+    const st = house.playground.stations.find(s => Math.hypot(s.x - p.x, s.z - p.z) < 1.6)
+    if (!st) return false
+    opts.onNotice?.(`${st.name} is coming soon`)
+    opts.onSfx?.('click')
+    return true
   }
 
   // ---- things you can click: lamps switch off and on, curtains open and close ----
@@ -704,8 +721,7 @@ export function createGame(container, opts = {}) {
   let doorOpen = 0
   let calmMotion = false
   let sceneryT = 0
-  let gateOpen = 0
-  let doorWas = 0, gateWas = 0, stepT = 0
+  let doorWas = 0, stepT = 0
 
   function setOpacity(group, k) {
     group.traverse(o => {
@@ -924,11 +940,15 @@ export function createGame(container, opts = {}) {
     doorOpen += (doorWant - doorOpen) * Math.min(1, dt * 5)
     house.door.pivot.rotation.y = -1.75 * doorOpen
     // the garden gate swings outward the same way when you come near it, from either side
-    const gd = Math.hypot(me.pos.x, me.pos.z - house.gate.z)
-    const gateWant = gd < 2.4 && levelOf(me.pos.y) === 0 ? 1 : 0
-    if (gateWant !== gateWas) { gateWas = gateWant; opts.onSfx?.('gate') }
-    gateOpen += (gateWant - gateOpen) * Math.min(1, dt * 5)
-    house.gate.leaves.forEach(l => { l.pivot.rotation.y = l.side * 1.6 * gateOpen })
+    // the garden gates (front and back) swing outward the same way when you come near, from either side
+    house.gates.forEach(g => {
+      const want = Math.hypot(me.pos.x, me.pos.z - g.z) < 2.4 && levelOf(me.pos.y) === 0 ? 1 : 0
+      if (want !== (g.was || 0)) { g.was = want; opts.onSfx?.('gate') }
+      g.open = (g.open || 0) + (want - (g.open || 0)) * Math.min(1, dt * 5)
+      g.leaves.forEach(l => { l.pivot.rotation.y = l.side * 1.6 * g.open })
+    })
+    // the playground's game stations: their gems turn slowly and bob
+    house.playground.stations.forEach((st, k) => { st.gem.rotation.y = t * 0.8 + k; st.gem.position.y = -0.5 + 1.6 + Math.sin(t * 1.5 + k) * 0.12 })
     if (roofApplied !== roofFade) { roofApplied = roofFade; setOpacity(house.roof, roofFade) }
 
     // the merge: the house rises (after the cloud has gathered), then the cloud thins and drifts apart
