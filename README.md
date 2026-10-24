@@ -1,4 +1,4 @@
-# LoveBoxed
+# NeighBoxed
 
 A cosy little neighbourhood on a cliff by the sea, where friends and couples live as floating cubes in doll houses. You decorate your home, earn Boxets by spending time and playing together, and when two people become a couple their homes merge into one bigger house.
 

@@ -183,7 +183,7 @@ function App() {
       {eyes && !open && <p className="hud look-tip">hold and drag to look · scroll out to leave</p>}
 
       <header className="hud top-left">
-        <h1>LoveBoxed</h1>
+        <h1>NeighBoxed</h1>
         <p>{view.room}</p>
         <button className="pill" onClick={() => setOpen('shop')} aria-label={`${s.boxets} Boxets. Open the shop`}>
           <Boxet size={18} /> <b>{s.boxets.toLocaleString()}</b>

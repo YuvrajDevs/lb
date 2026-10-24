@@ -7,7 +7,7 @@ import { Icon } from './icons'
 const touch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
 
 const STEPS = [
-  { icon: 'heart', title: 'Welcome to LoveBoxed', text: 'This is your home, on a cliff above the sea. Decorate it, earn Boxets, and share it with your friends and your partner.' },
+  { icon: 'heart', title: 'Welcome to NeighBoxed', text: 'This is your home, on a cliff above the sea. Decorate it, earn Boxets, and share it with your friends and your partner.' },
   {
     icon: 'cube', title: 'Getting around',
     text: touch
