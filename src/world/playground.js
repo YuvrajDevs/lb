@@ -26,7 +26,7 @@ function labelTexture(title, sub) {
 
 export function buildPlayground() {
   const group = new THREE.Group()
-  const solids = [] // { minX, maxX, minZ, maxZ } things you can't walk through
+  const solids = [] // { minX, maxX, minZ, maxZ } the big frames you can't float through (the small things you can)
   const solid = (x, z, w, d) => solids.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 })
   const { x: HW, zNear, zFar } = PLAYGROUND
   const zc = (zNear + zFar) / 2
@@ -67,7 +67,6 @@ export function buildPlayground() {
   const plank = box(group, [4.4, 0.12, 0.45], [wx, Y + 0.62, wz], RED)
   plank.rotation.z = 0.16
   ;[-1, 1].forEach(s => box(group, [0.1, 0.4, 0.5], [wx + s * 1.9, Y + 0.62 + s * 0.3, wz], METAL))
-  solid(wx, wz, 4.6, 0.8)
 
   // roundabout
   const rx = 9, rz = -21
@@ -78,20 +77,17 @@ export function buildPlayground() {
     const bar = box(group, [0.06, 0.06, 1.6], [rx + Math.cos(a) * 0.8, Y + 1.0, rz + Math.sin(a) * 0.8], METAL)
     bar.rotation.y = -a
   }
-  solid(rx, rz, 3.4, 3.4)
 
   // sandpit
   const px = -10, pz = -21
   ;[[0, -1.6, 3.6, 0.2], [0, 1.6, 3.6, 0.2], [-1.7, 0, 0.2, 3.2], [1.7, 0, 0.2, 3.2]].forEach(([dx, dz, w, d]) => box(group, [w, 0.3, d], [px + dx, Y, pz + dz], WOOD))
   box(group, [3.2, 0.2, 3.0], [px, Y, pz], '#d8c08a')
   sphere(group, 0.35, [px - 0.6, Y + 0.25, pz + 0.4], '#d8c08a')
-  solid(px, pz, 3.8, 3.6)
 
   // benches and lamps along the sides
   ;[[-14, -9], [14, -9], [-14, -17], [14, -17]].forEach(([x, z]) => {
     box(group, [0.5, 0.45, 1.8], [x, Y, z], WOOD)
     box(group, [0.1, 0.5, 1.8], [x + (x < 0 ? -0.22 : 0.22), Y + 0.45, z], WOOD)
-    solid(x, z, 0.7, 2.0)
   })
   ;[[-14.5, -7.5], [14.5, -7.5], [-14.5, -26.5], [14.5, -26.5], [0, -13.5]].forEach(([x, z]) => {
     cyl(group, 0.07, 2.8, [x, Y, z], '#2f3138', {}, 8)
@@ -101,7 +97,6 @@ export function buildPlayground() {
     group.add(head)
     glow(group, [x, Y + 3.0, z], '#ffcc66', 2.4, 0.6)
     pool(group, [x, Y + 0.08, z], '#ffcc66', 3.2, 0.26)
-    solid(x, z, 0.3, 0.3)
   })
 
   // strings of warm fairy lights between the lamp posts, sagging a little, so the playground glows at night

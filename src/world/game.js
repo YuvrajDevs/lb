@@ -8,7 +8,7 @@ import { makeEnvironment } from './env.js'
 import { buildScenery, applyPalette, FOG_COLOR, FOG_NEAR, FOG_FAR, CLIFF_Z } from './scenery.js'
 import { bake } from './bake.js'
 import { setCurtain } from './switches.js'
-import { buildNeighbours, neighbourSpan } from './neighbours.js'
+import { buildNeighbours, neighbourSpan, neighbourPlots } from './neighbours.js'
 import { setSeaNear } from '../game/audio.js'
 import { findZFighting, settleCoplanar } from './zfight.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
@@ -145,7 +145,7 @@ export function createGame(container, opts = {}) {
   })
   if (!opts.layout) opts.onLayoutInit?.(layout)
   const walkSpan = neighbourSpan(opts.neighbours || [], plot().x) // how far the cliff walk reaches either side
-  const house = buildHouse({ layout, style: opts.style, fence: opts.fence, sign: opts.sign, switches: opts.switches, walk: walkSpan })
+  const house = buildHouse({ layout, style: opts.style, fence: opts.fence, sign: opts.sign, switches: opts.switches, walk: walkSpan, plots: neighbourPlots(opts.neighbours || [], plot().x) })
   scene.add(house.group, house.lights)
   // the cliff, the sea in front and the magical land behind
   // the time of day: 'night', 'evening', or 'auto' (evening from 5 to 8 pm on your own clock, night otherwise)
@@ -375,7 +375,7 @@ export function createGame(container, opts = {}) {
   const GRID = 0.25
   function findPath(fromV, toV, level) {
     const P = plot()
-    const minX = Math.min(-P.x, walkSpan[0], -PLAYGROUND.x) - 1, maxX = Math.max(P.x, walkSpan[1], PLAYGROUND.x) + 1, minZ = level === 0 ? PLAYGROUND.zFar - 1 : -HZ - 1, maxZ = level === 0 ? CLIFF_Z : HZ + 2
+    const minX = Math.min(-P.x, walkSpan[0], -PLAYGROUND.x) - 3, maxX = Math.max(P.x, walkSpan[1], PLAYGROUND.x) + 3, minZ = level === 0 ? PLAYGROUND.zFar - 1 : -HZ - 1, maxZ = level === 0 ? CLIFF_Z : HZ + 2
     const nx = Math.ceil((maxX - minX) / GRID), nz = Math.ceil((maxZ - minZ) / GRID)
     const idx = (i, j) => j * nx + i
     const cx = x => Math.round((x - minX) / GRID), cz = z => Math.round((z - minZ) / GRID)
@@ -461,11 +461,11 @@ export function createGame(container, opts = {}) {
     if (!ray.ray.intersectPlane(plane, hit)) return
     // on the ground floor you can click out in the garden or on the cliff walk too
     const ground = levelOf(me.pos.y) === 0
-    const P = plot()
     const houseHalf = solo ? HX + 0.3 : COL
     const outsideClick = ground && (hit.z > HZ + 0.6 || hit.z < -HZ - 0.6 || Math.abs(hit.x) > houseHalf)
     // outside: as far as that part of the world reaches (the cliff walk, the garden, or the playground)
-    const span = hit.z > PLOT_FRONT ? walkSpan : hit.z < -HZ - 1.4 ? [-PLAYGROUND.x, PLAYGROUND.x] : [-P.x, P.x]
+    // (anywhere on the open ground: the path finder goes round whatever is in the way)
+    const span = [Math.min(walkSpan[0] - 2, -PLAYGROUND.x - 1), Math.max(walkSpan[1] + 2, PLAYGROUND.x + 1)]
     const dest = outsideClick
       ? new THREE.Vector3(THREE.MathUtils.clamp(hit.x, span[0] + 0.6, span[1] - 0.6), me.pos.y, THREE.MathUtils.clamp(hit.z, PLAYGROUND.zFar + 0.8, CLIFF_Z - 1.4))
       : new THREE.Vector3(
@@ -639,7 +639,7 @@ export function createGame(container, opts = {}) {
   }, { passive: false })
 
   // ---- movement ----
-  // furniture the player has placed blocks walking too (rugs, lights, and things on tables do not)
+  // furniture the player has placed indoors blocks walking too (rugs, lights, and things on tables do not)
   const furnitureBlocks = [[], []]
   function rebuildBlocks() {
     furnitureBlocks[0] = []; furnitureBlocks[1] = []
@@ -652,11 +652,7 @@ export function createGame(container, opts = {}) {
         furnitureBlocks[r.level].push({ minX: r.ox - 5.4 + e.i * CELL, maxX: r.ox - 5.4 + (e.i + fp.cw) * CELL, minZ: -3.6 + e.j * CELL, maxZ: -3.6 + (e.j + fp.cd) * CELL })
       })
     })
-    ;(layout.garden || []).forEach(e => {
-      if (e.on || e.wall || infoOf(e.id).kind !== 'floor') return
-      const fp = footOf(e)
-      furnitureBlocks[0].push({ minX: -12.4 + e.i * CELL, maxX: -12.4 + (e.i + fp.cw) * CELL, minZ: 4.4 + e.j * CELL, maxZ: 4.4 + (e.j + fp.cd) * CELL })
-    })
+    // (things in the garden don't block: you float over them)
   }
   const hits = (list, x, z, skipStair = false) => list.some(c => !(skipStair && c.stair) && x > c.minX - HALF && x < c.maxX + HALF && z > c.minZ - HALF && z < c.maxZ + HALF)
   // standing in line with the staircase: its side colliders step aside so you can walk onto it from either end

@@ -14,6 +14,7 @@ import { WINDOWS, PLOTS, getHomeKind, gardenArea } from '../game/areas.js'
 import { furnishArea, paintTexture, floorTex } from './furnish.js'
 import { CLIFF_Z, streamX } from './scenery.js'
 import { buildPlayground } from './playground.js'
+import { NEIGHBOUR_PLOT_Z } from './neighbours.js'
 import { PLAYGROUND } from '../game/areas.js'
 
 export { H }
@@ -300,33 +301,35 @@ export function buildHouse(opts = {}) {
   const fw = 0.2
   gc.push({ minX: -PLOT.x - fw, maxX: -gate, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw }) // back fence, with its gate gap
   gc.push({ minX: gate, maxX: PLOT.x + fw, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw })
-  gc.push({ minX: gate + 0.68, maxX: gate + 0.82, minZ: PLOT.zBack + 0.48, maxZ: PLOT.zBack + 0.62 }) // the playground signpost
-  // the playground behind, and the invisible edge of everywhere you can walk: round the playground, and closing
-  // the gaps between it and the garden's side fences
-  const PG = PLAYGROUND
+  // the playground's big frames (swings, slide, the station boards); everything small out here you float through
   playground.solids.forEach(c => gc.push(c))
-  gc.push({ minX: -PG.x - 1, maxX: -PG.x, minZ: PG.zFar, maxZ: PLOT.zBack })
-  gc.push({ minX: PG.x, maxX: PG.x + 1, minZ: PG.zFar, maxZ: PLOT.zBack })
-  gc.push({ minX: -PG.x - 1, maxX: PG.x + 1, minZ: PG.zFar - 1, maxZ: PG.zFar })
-  gc.push({ minX: -PG.x - 1, maxX: -PLOT.x, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw })
-  gc.push({ minX: PLOT.x, maxX: PG.x + 1, minZ: PLOT.zBack - fw, maxZ: PLOT.zBack + fw })
+  // your garden's side fences
   gc.push({ minX: -PLOT.x - fw, maxX: -PLOT.x + fw, minZ: PLOT.zBack, maxZ: PLOT.zFront })
   gc.push({ minX: PLOT.x - fw, maxX: PLOT.x + fw, minZ: PLOT.zBack, maxZ: PLOT.zFront })
   gc.push({ minX: -PLOT.x, maxX: -gate, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw }) // front fence, with the gate gap
   gc.push({ minX: gate, maxX: PLOT.x, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw })
-  // out of the gate: the cliff walk, closed off by the railing at the edge and by the fog at the ends
-  // the walk outside runs as far as the outermost fence in the world: your own, or your neighbours' either side
+
+  // ---------- the open ground outside the fences: the whole neighbourhood is yours to wander ----------
+  // You can walk all round the outside of every plot, between the homes, along the cliff and out to the
+  // playground. Only the neighbours' fenced gardens, the stream and the cliff railing stop you, and an invisible
+  // edge where the land starts to rise (behind the homes) or the world ends (past the last home either side).
   const [walkL, walkR] = opts.walk || [-PLOT.x, PLOT.x]
-  gc.push({ minX: walkL, maxX: walkR, minZ: CLIFF_Z - 0.7 - fw, maxZ: CLIFF_Z + 2 })
-  gc.push({ minX: walkL - 2, maxX: walkL, minZ: PLOT.zFront - 2, maxZ: CLIFF_Z })
-  gc.push({ minX: walkR, maxX: walkR + 2, minZ: PLOT.zFront - 2, maxZ: CLIFF_Z })
-  // beyond your own plot, the fence line along the walk is closed (neighbours' gardens, and the stream between)
-  if (walkL < -PLOT.x) gc.push({ minX: walkL, maxX: -PLOT.x, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw })
-  if (walkR > PLOT.x) gc.push({ minX: PLOT.x, maxX: walkR, minZ: PLOT.zFront - fw, maxZ: PLOT.zFront + fw })
-  ;[-9.5, 9.5].forEach(x => gc.push({ minX: x - 0.15, maxX: x + 0.15, minZ: PLOT.zFront + 0.4, maxZ: PLOT.zFront + 0.7 })) // lamp posts, at the edge of the walk
-  gc.push({ minX: SX - 1.95, maxX: SX + 1.95, minZ: SZ - 0.25, maxZ: SZ + 0.25 })
-  gc.push({ minX: PX - 0.2, maxX: PX + 0.2, minZ: SZ - 0.2, maxZ: SZ + 0.2 })
-  BUSHES.forEach(([x, z, r]) => gc.push({ minX: x - r - 0.1, maxX: x + r + 0.1, minZ: z - r - 0.1, maxZ: z + r + 0.6 }))
+  const L = Math.min(walkL - 2, -PLAYGROUND.x - 1), R = Math.max(walkR + 2, PLAYGROUND.x + 1) // a little room past the outermost fence
+  const BACK = -7.6 // behind the homes the hills start: the band you can walk ends here (but the playground is open)
+  const PG = PLAYGROUND
+  gc.push({ minX: L - 3, maxX: L, minZ: PG.zFar - 3, maxZ: CLIFF_Z + 2 }) // the far left
+  gc.push({ minX: R, maxX: R + 3, minZ: PG.zFar - 3, maxZ: CLIFF_Z + 2 }) // the far right
+  gc.push({ minX: L, maxX: R, minZ: CLIFF_Z - 0.7 - fw, maxZ: CLIFF_Z + 2 }) // the cliff railing
+  gc.push({ minX: L, maxX: -PG.x, minZ: PG.zFar - 3, maxZ: BACK }) // the hills behind, either side of the playground
+  gc.push({ minX: PG.x, maxX: R, minZ: PG.zFar - 3, maxZ: BACK })
+  gc.push({ minX: -PG.x, maxX: PG.x, minZ: PG.zFar - 3, maxZ: PG.zFar }) // the playground's far edge
+  // the neighbours' gardens are theirs: walk round them, and up to their gates
+  ;(opts.plots || []).forEach(({ x, half }) => gc.push({ minX: x - half - fw, maxX: x + half + fw, minZ: NEIGHBOUR_PLOT_Z[0] - fw, maxZ: NEIGHBOUR_PLOT_Z[1] + fw }))
+  // the stream runs down to the waterfall in a little valley; it is crossed on the deck along the cliff walk
+  for (let z = BACK; z < PLOT.zFront - 0.6; z += 0.5) {
+    const sx = streamX(z + 0.25)
+    gc.push({ minX: sx - 3.2, maxX: sx + 3.2, minZ: z, maxZ: z + 0.5, stream: true })
+  }
 
   // ---------- global lights: an evening sky (rose above, violet below) and the low sun over the sea ----------
   const lights = new THREE.Group()

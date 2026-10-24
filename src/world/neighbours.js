@@ -52,7 +52,7 @@ function home(group, x, member, k) {
   roof.userData.keep = true
   g.add(roof)
   // a low fence round the plot, with a gap for the gate, and a lantern either side of it
-  const zb = -(d / 2 + 1.4), zf = d / 2 + 5.2
+  const [zb, zf] = NEIGHBOUR_PLOT_Z
   const rail = (x0, z0, x1, z1) => {
     const len = Math.hypot(x1 - x0, z1 - z0)
     ;[0.2, 0.45].forEach(y => { const r = box(g, [0.05, 0.07, len], [(x0 + x1) / 2, -0.5 + y, (z0 + z1) / 2], '#f2eadb'); r.rotation.y = Math.atan2(x1 - x0, z1 - z0) })
@@ -69,13 +69,26 @@ function home(group, x, member, k) {
   return half
 }
 
-/** how far the neighbours' plots reach to the left and right ([left, right] x), so the cliff walk can run that far */
-export function neighbourSpan(members, myHalf) {
-  let right = myHalf, left = -myHalf, r = myHalf + 1.2, l = -26
-  members.forEach((m, k) => {
+/** NEIGHBOUR_PLOT_Z: the back and front of every neighbour's fenced plot (the same depth as yours) */
+export const NEIGHBOUR_PLOT_Z = [-(7.8 / 2 + 1.4), 7.8 / 2 + 5.2]
+
+/**
+ * Where each neighbour's plot goes ([{ x, half }], in the order of `members`): to the right first, then to the
+ * left beyond the stream (the stream and its bridge lie between your plot and the left side).
+ */
+export function neighbourPlots(members, myHalf) {
+  let right = myHalf + 1.2, left = -26
+  return members.map((m, k) => {
     const half = m.kind === 'couple' ? 12.8 : 9.3
-    if (k % 2 === 0) { right = r + half * 2; r += half * 2 + 1.2 } else { left = l - half * 2; l -= half * 2 + 1.2 }
+    if (k % 2 === 0) { const x = right + half; right += half * 2 + 1.2; return { x, half } }
+    const x = left - half; left -= half * 2 + 1.2; return { x, half }
   })
+}
+
+/** how far the neighbours' plots reach to the left and right ([left, right] x), so the walk outside can run that far */
+export function neighbourSpan(members, myHalf) {
+  let left = -myHalf, right = myHalf
+  neighbourPlots(members, myHalf).forEach(p => { left = Math.min(left, p.x - p.half); right = Math.max(right, p.x + p.half) })
   return [left, right]
 }
 
@@ -85,12 +98,8 @@ export function neighbourSpan(members, myHalf) {
  */
 export function buildNeighbours(members, myHalf) {
   const group = new THREE.Group()
-  let right = myHalf + 1.2, left = -26 // (the stream and its bridge lie between your plot and the left side)
   const spots = []
-  members.forEach((m, k) => {
-    const half = m.kind === 'couple' ? 12.8 : 9.3
-    if (k % 2 === 0) { home(group, right + half, m, k); spots.push(right + half); right += half * 2 + 1.2 } else { home(group, left - half, m, k); spots.push(left - half); left -= half * 2 + 1.2 }
-  })
+  neighbourPlots(members, myHalf).forEach(({ x }, k) => { home(group, x, members[k], k); spots.push(x) })
   group.userData.spots = spots // each neighbour's plot centre (x), in the same order as `members`
   bake(group)
   return group
