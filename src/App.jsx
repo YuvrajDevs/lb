@@ -7,7 +7,7 @@ import { autoFurnish } from './world/autofurnish'
 import { setAudio, startOnFirstGesture, sfx } from './game/audio'
 import { ITEM_BY_ID } from './game/catalog'
 import { store } from './game/store'
-import { startAccount } from './net/account'
+import { startAccount, signInWithGoogle } from './net/account'
 import { onLive, joinLive, leaveLive, track, sendMove, sendEmote, sendChat, chatHistory, sendKnock, sendAllow } from './net/live'
 import Chat from './ui/Chat'
 import Joystick from './ui/Joystick'
@@ -41,12 +41,12 @@ const VIEWS = [
   ['playground', 'playground'],
 ]
 const HINTS = {
-  house: 'drag or Q/E to spin · scroll in for a room, out for the street · click lamps and curtains',
-  room: 'WASD or click the floor to move · scroll in to get close, out for the whole house · click lamps and curtains',
-  close: 'WASD or click the floor to move · scroll in to see through your eyes, out for the room',
-  eyes: 'W/S walk · A/D step aside · drag to look · click lamps and curtains · scroll out to leave',
-  street: 'a bird\'s-eye view that follows you · click anywhere to walk there · scroll in to come back',
-  playground: 'click anywhere to walk there · walk up to a glowing station to play · scroll in to come back',
+  house: 'drag or Q/E to spin · click anywhere to walk there · the eye button changes the view · click lamps and curtains',
+  room: 'WASD or click the floor to move · the eye button changes the view · click lamps and curtains',
+  close: 'WASD or click anywhere to move · the eye button changes the view',
+  eyes: 'W/S walk · A/D step aside · drag to look · click lamps and curtains',
+  street: 'a bird\'s-eye view that follows you · click anywhere to walk there',
+  playground: 'click anywhere to walk there · walk up to a glowing station to play',
 }
 const debug = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug')
 
@@ -76,6 +76,17 @@ function App() {
   // the street: who lives next door (the world is rebuilt when that changes, which is rare)
   const street = s.world.members.filter(m => !m.you).map(m => `${m.id}:${m.kind}`).join('|')
   const isOnline = s.net?.status === 'online'
+  const wasOnline = useRef(false)
+  useEffect(() => {
+    if (isOnline) { wasOnline.current = true; return }
+    if (wasOnline.current && s.net?.status === 'guest') {
+      wasOnline.current = false
+      setOpen(null); setWelcome(null); setTitle(true)
+      arriving.current = false
+    }
+  }, [isOnline, s.net?.status])
+  // a brand-new account: asked its name first
+  useEffect(() => { if (isOnline && !s.settings.arrived && !s.settings.onboarded) arriving.current = true }, [isOnline, s.settings.arrived, s.settings.onboarded])
   const titleRef = useRef(true)
   titleRef.current = title
   const lastKind = useRef(homeKind)
@@ -201,7 +212,7 @@ function App() {
   // a drag in the game is always a look-around or a furniture move, never the browser dragging a picture of the
   // page (Firefox would otherwise float a ghost of the screen under the cursor)
   useEffect(() => {
-    const stop = e => { if (!e.target.closest?.('input, textarea')) e.preventDefault() }
+    const stop = e => { if (!e.target.closest?.('input, textarea, [draggable="true"]')) e.preventDefault() }
     window.addEventListener('dragstart', stop)
     return () => window.removeEventListener('dragstart', stop)
   }, [])
@@ -338,13 +349,19 @@ function App() {
     arriving.current = false
     setWelcome('guide') // then straight in, with the guide
   }
-  const titleItems = [
+  // signed out, the only way in is signing in (playing needs an account)
+  const canPlay = store.canPlay()
+  const titleItems = canPlay ? [
     { id: 'enter', label: firstTime ? 'Begin' : 'Continue', enter: true },
-    { id: 'account', label: signedIn ? 'Account' : 'Sign in' },
+    { id: 'account', label: 'Account' },
     { id: 'guide', label: 'How to play', enter: true },
+    { id: 'settings', label: 'Settings' },
+  ] : s.net?.status === 'loading' ? [] : [
+    { id: 'google', label: 'Sign in with Google' },
     { id: 'settings', label: 'Settings' },
   ]
   const pickTitle = id => {
+    if (id === 'google') { signInWithGoogle().catch(e => store.notify(e.message, 'warn')); return }
     if (id === 'settings' || id === 'account') { setOpen(id); return }
     if (id === 'guide') store.setSetting('onboarded', false)
     sfx('whoosh')
@@ -352,7 +369,7 @@ function App() {
     setTimeout(() => setTitle(false), 650)
     // someone new (or still called by the old default name) is asked who they are first
     const p = store.get().profile
-    if (arriving.current || !p.name || p.name === 'Sera') setTimeout(() => setWelcome('name'), 700)
+    if (arriving.current || !p.name) setTimeout(() => setWelcome('name'), 700)
   }
   const tryItem = useCallback((slot, tier) => { setTryOn(t => ({ ...t, [slot]: tier })); if (tier != null) store.questEvent('tryon') }, [])
   const openShopAt = useCallback(cat => { setShopCat(cat); setOpen('shop') }, [])
@@ -382,12 +399,12 @@ function App() {
     <div className={`stage ${editing ? 'editing' : ''}`}>
       <div ref={mount} className="world" />
       {eyes && <div className="eye-vignette" />}
-      {eyes && !open && <p className="hud look-tip">hold and drag to look · scroll out to leave</p>}
+      {eyes && !open && <p className="hud look-tip">hold and drag to look · the eye button to leave</p>}
 
       {title && ready && <Title items={titleItems} onPick={pickTitle}
         worlds={signedIn ? s.world.list || [] : []} world={s.world.id}
-        onWorld={id => store.server()?.switchWorld(id).catch(e => store.notify(e.message, 'warn'))} footnote={signedIn ? `Signed in · ${s.profile.name} ${s.profile.tag}` : s.net?.status === 'loading' ? 'Opening your account…' : 'Guest · your home is saved on this device'} />}
-      {welcome === 'name' && !title && <Welcome initialName={s.profile.name === 'Sera' ? '' : s.profile.name} onDone={moveIn} />}
+        onWorld={id => store.server()?.switchWorld(id).catch(e => store.notify(e.message, 'warn'))} footnote={signedIn ? `Signed in · ${s.profile.name} ${s.profile.tag}` : s.net?.status === 'loading' ? 'Opening your account…' : 'Sign in to move in and play with friends'} />}
+      {welcome === 'name' && !title && <Welcome initialName={s.profile.name} onDone={moveIn} />}
       {!cinematic && <>
       <header className="hud top-left">
         <div className="hud-id">

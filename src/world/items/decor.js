@@ -171,7 +171,7 @@ function signTexture(text, t) {
 }
 export { signTexture }
 
-export function signs(t, g, text = 'Sera & DeM') {
+export function signs(t, g, text = '') {
   const w = 2.2 + (t > 6 ? 0.3 : 0)
   const mat = new THREE.MeshStandardMaterial({ map: signTexture(text, t), roughness: t === 7 ? 0.2 : 0.8, emissive: '#ffffff', emissiveMap: null, emissiveIntensity: 0 })
   if (t === 6 || t === 10 || t === 9) { mat.emissiveMap = mat.map; mat.emissive = new THREE.Color(t === 6 ? '#ff7ae0' : t === 10 ? '#5fffd0' : '#ffd25a'); mat.emissiveIntensity = t === 9 ? 0.35 : 0.9 }

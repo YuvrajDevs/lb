@@ -695,6 +695,8 @@ export function createGame(container, opts = {}) {
   let pushIn = 0
   el.addEventListener('wheel', e => {
     e.preventDefault()
+    // views are chosen with the eye button; the wheel only zooms while editing a room
+    if (view.mode !== 'edit') return
     if (Math.abs(e.deltaY) < 1) return
     const zoomIn = e.deltaY < 0
     if (view.mode === 'eyes') {
@@ -1144,10 +1146,10 @@ export function createGame(container, opts = {}) {
     scenery.update(sceneryT, pr, container.clientHeight)
     // front door swings open when you walk up to it
     const dd = Math.hypot(me.pos.x - house.door.x, me.pos.z - (HZ + 1.0))
-    const doorWant = dd < 2.6 && levelOf(me.pos.y) === 0 ? 1 : 0
+    const doorWant = dd < 1.9 && levelOf(me.pos.y) === 0 ? 1 : 0
     if (doorWant !== doorWas) { doorWas = doorWant; opts.onSfx?.('door') }
     doorOpen += (doorWant - doorOpen) * Math.min(1, dt * 5)
-    house.door.pivot.rotation.y = -1.75 * doorOpen
+    house.door.pivot.rotation.y = -1.2 * doorOpen // (opens about 70 degrees: still in view, not flat against the wall)
     // the garden gate swings outward the same way when you come near it, from either side
     // the garden gates (front and back) swing outward the same way when you come near, from either side
     house.gates.forEach(g => {
@@ -1160,10 +1162,10 @@ export function createGame(container, opts = {}) {
     others.forEach(n => {
       if (!n.allowed) return
       const near = levelOf(me.pos.y) === 0
-      const want = near && Math.hypot(me.pos.x - n.door.x, me.pos.z - (HZ + 1.0)) < 2.6 ? 1 : 0
+      const want = near && Math.hypot(me.pos.x - n.door.x, me.pos.z - (HZ + 1.0)) < 1.9 ? 1 : 0
       if (want !== n.doorWas) { n.doorWas = want; opts.onSfx?.('door') }
       n.doorOpen += (want - n.doorOpen) * Math.min(1, dt * 5)
-      n.door.pivot.rotation.y = -1.75 * n.doorOpen
+      n.door.pivot.rotation.y = -1.2 * n.doorOpen
       n.house.gates.forEach(g => {
         const w = near && Math.hypot(me.pos.x - n.x, me.pos.z - g.z) < 2.4 ? 1 : 0
         if (w !== (g.was || 0)) { g.was = w; opts.onSfx?.('gate') }

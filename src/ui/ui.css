@@ -687,3 +687,6 @@ h4.sub { margin: 26px 0 10px; font: 700 10.5px var(--words); letter-spacing: .24
 .face-btn img { width: 24px; height: 24px; display: block; }
 .emote-row { flex-wrap: wrap; justify-content: flex-end; max-width: 250px; border-radius: 18px; }
 .emote-row button img { width: 32px; height: 32px; display: block; margin: auto; }
+.slot.movable { cursor: grab; }
+.slot.movable:hover { border-color: var(--rule-2); }
+.slot.dragging { opacity: .4; }

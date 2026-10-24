@@ -90,9 +90,11 @@ export const FRONT_FLAT = 7.5 // in front of this line (towards the sea) the lan
 // left end of it, and the land stays level along all of it. Set before the scenery and the house are built.
 let STREAM_BASE = -20
 let BAND = [-58, 58]
+let STREET = [-12, 12] // the homes themselves (and a little room): the only part of the band kept clear
 export function setStreet(left, right) {
   STREAM_BASE = Math.min(-20, left - 8)
   BAND = [Math.min(-58, left - 14), Math.max(58, right + 14)]
+  STREET = [left - 2.5, right + 2.5]
 }
 export const streetBand = () => BAND
 export const streamX = z => STREAM_BASE + Math.sin(z * 0.075) * 4.5 + Math.sin(z * 0.19) * 1.2
@@ -594,7 +596,9 @@ export function buildScenery(palette = 'night') {
     lawn: flat('#3b4f6e'), rock: flat('#4b3c6e'),
   }
   const stoneMats = [flat('#6c5a9a'), flat('#8a78bc'), flat('#54467e')]
-  const free = (x, z) => !(x > BAND[0] - 2 && x < BAND[1] + 2 && z > -9) && !(Math.abs(x) < 21 && z > -33) && Math.abs(x - streamX(z)) > 2.4 && z < FRONT_FLAT - 1.5 // nothing grows on the cliff walk
+  // (trees grow everywhere but the street itself, the playground clearing, the stream and the cliff walk: the empty
+  //  land beside the homes is forest, and it gives way as the street grows with new neighbours)
+  const free = (x, z) => !(x > STREET[0] && x < STREET[1] && z > -9) && !(Math.abs(x) < 21 && z > -33) && Math.abs(x - streamX(z)) > 2.4 && z < FRONT_FLAT - 1.5
 
   // a forest that thickens toward the hills behind
   for (let i = 0; i < 160; i++) {
@@ -606,7 +610,14 @@ export function buildScenery(palette = 'night') {
   }
   // a frame of trees right behind the house, so the roofline has a backdrop
   // (they ring the playground clearing, so the roofline still has a backdrop from the front)
-  [[-22, -12, 2.2], [-19, -24, 1.8], [-10, -34, 2.5], [2, -35, 2.1], [12, -34, 2.6], [21, -22, 2.0], [23, -10, 2.4]].forEach(([x, z, s]) => pine(statics, x, z, s, mats))
+  [[-22, -12, 2.2], [-19, -24, 1.8], [-10, -34, 2.5], [2, -35, 2.1], [12, -34, 2.6], [21, -22, 2.0], [23, -10, 2.4]].filter(([x, z]) => free(x, z)).forEach(([x, z, s]) => pine(statics, x, z, s, mats))
+  // the woods either side of the street, on the level ground where future neighbours' homes will stand
+  for (let i = 0; i < 90; i++) {
+    const side = i % 2 ? 1 : -1
+    const x = side > 0 ? STREET[1] + 1.5 + rnd() * 34 : STREET[0] - 1.5 - rnd() * 34
+    const z = -8 + rnd() * (FRONT_FLAT - 9)
+    if (free(x, z)) pine(statics, x, z, 0.9 + rnd() * 1.1, mats)
+  }
   for (let i = 0; i < 70; i++) {
     const x = (rnd() - 0.5) * 120, z = -70 + rnd() * 80
     if (free(x, z)) stone(statics, x, z, 0.5 + rnd() * 1.4, stoneMats[i % 3])

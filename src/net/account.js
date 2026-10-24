@@ -55,12 +55,11 @@ async function connect(u) {
   user = u
   store.setNet({ status: 'loading', email: u.email })
   try {
-    const guest = store.guestSnapshot()
     // a new account is named after the guest you played as, unless that was still the default: then your first name
     const fromGoogle = (u.user_metadata?.given_name || u.user_metadata?.full_name || u.user_metadata?.name || '').split(' ')[0]
-    const name = guest.profile.name && guest.profile.name !== 'Sera' ? guest.profile.name : fromGoogle || 'Neighbour'
+    const name = fromGoogle || 'Neighbour' // (a new player confirms or changes it in the welcome)
     const profile = await rpc('start_player', { p_name: name, p_tz: tz() })
-    const snap = await loadAll(profile, guest)
+    const snap = await loadAll(profile)
     store.goOnline(server, snap, u.id)
     listen()
     store.setNet({ status: 'online', email: u.email })
@@ -80,7 +79,7 @@ function disconnect() {
 }
 
 /** everything that is yours, shaped the way the store keeps it */
-async function loadAll(profile, guest) {
+async function loadAll(profile) {
   const uid = profile.id
   const [wallet, inv, home, couple, today] = await Promise.all([
     one(supabase.from('wallets').select('boxets').eq('user_id', uid).single()),
@@ -91,11 +90,8 @@ async function loadAll(profile, guest) {
   ])
   ownData = home?.data || {}
 
-  // a brand-new account takes the guest's home with it (only the furniture the account actually owns)
-  if (!ownData.solo && guest.layout && !couple) {
-    ownData = { ...ownData, solo: { layout: keepOwned(guest.layout, countOf(inv)), style: guest.style, switches: guest.switches, fence: null, sign: null }, cube: { skin: null, hat: null } }
-    await supabase.from('homes').update({ data: ownData, updated_at: new Date().toISOString() }).eq('user_id', uid)
-  }
+  // a brand-new account (its home never saved yet) is welcomed in: its name, then the guide
+  const isNew = !ownData.solo && !ownData.couple
 
   // the house you live in: your own, or the couple house kept in user_a's row
   let owned = countOf(inv)
@@ -135,6 +131,7 @@ async function loadAll(profile, guest) {
     equipped: { skin: ownData.cube?.skin ?? null, hat: ownData.cube?.hat ?? null, fence: house.fence ?? null, sign: house.sign ?? null },
     joined: profile.joined,
     today,
+    isNew,
     claimedDays: claims.map(c => c.day),
     quests,
     earned: { date: today, total: earnings.reduce((n, e) => n + e.amount, 0), by, visited: [] },
@@ -157,7 +154,8 @@ async function loadWorld(uid, preferred) {
   try { localStorage.setItem(`nb:world:${uid}`, worldId) } catch { /* private mode */ }
   const [worlds, members, couples] = await Promise.all([
     many(supabase.from('worlds').select('id, name, creator, slots, fund, owner:profiles!worlds_creator_fkey(name)').in('id', mine.map(m => m.world_id))),
-    many(supabase.from('world_members').select('user_id, joined_at, profiles(name, tag, house_name, last_seen)').eq('world_id', worldId).order('joined_at')),
+    // (in the order the creator arranged them along the street; anyone not placed yet, in the order they came)
+    many(supabase.from('world_members').select('user_id, joined_at, slot, profiles(name, tag, house_name, last_seen)').eq('world_id', worldId).order('slot', { ascending: true, nullsFirst: false }).order('joined_at')),
     many(supabase.from('couples').select('user_a, user_b').eq('world_id', worldId)),
   ])
   const w = worlds.find(x => x.id === worldId)
@@ -232,7 +230,7 @@ async function refresh(parts = ['world', 'social']) {
 async function reloadAll() {
   if (!user) return
   const profile = await one(supabase.from('profiles').select('*').eq('id', user.id).single())
-  const snap = await loadAll(profile, store.guestSnapshot())
+  const snap = await loadAll(profile)
   store.goOnline(server, snap, user.id)
 }
 
@@ -320,6 +318,13 @@ export const server = {
   renameWorld: async name => { await rpc('world_rename', { p_world: worldId, p_name: name }); await refresh(['world']) },
   switchWorld: async id => { worldId = id; await refresh(['world']) }, // (remembered as your last world)
   addToFund: async n => { await rpc('fund_add', { p_world: worldId, p_amount: n }); await refresh(['world']) },
+  /** the creator's order for the homes along the street (plot ids, left to right) */
+  arrange: async plotIds => {
+    const plots = store.get().world.members
+    const order = plotIds.flatMap(id => plots.find(p => p.id === id)?.ids || [id])
+    await rpc('world_arrange', { p_world: worldId, p_order: order })
+    await refresh(['world'])
+  },
   buySlot: async () => { await rpc('slot_buy', { p_world: worldId }); await refresh(['world']) },
   // visiting: a neighbour's home (their plot from world.members) as they furnished it
   async loadHome(plot) {
@@ -350,18 +355,3 @@ export const server = {
 async function one(q) { const { data, error } = await q; if (error) throw new Error(error.message); return data }
 async function many(q) { const { data, error } = await q; if (error) throw new Error(error.message); return data || [] }
 function countOf(rows) { return Object.fromEntries(rows.map(r => [r.item_id, r.count])) }
-/** a layout with only as many of each item as `owned` allows (extras are dropped, nothing is invented) */
-function keepOwned(layout, owned) {
-  const used = {}
-  const out = {}
-  Object.entries(layout || {}).forEach(([area, list]) => {
-    const dropped = new Set()
-    out[area] = list.filter(e => {
-      // (whatever stood on a dropped table goes with it)
-      if ((e.on && dropped.has(e.on)) || (used[e.id] || 0) >= (owned[e.id] || 0)) { dropped.add(e.uid); return false }
-      used[e.id] = (used[e.id] || 0) + 1
-      return true
-    })
-  })
-  return out
-}

@@ -11,7 +11,10 @@ import { sfx } from './audio.js'
 
 // ?debug&save=name keeps a separate save, so testing never touches the real one
 const testSave = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug') && new URLSearchParams(location.search).get('save')
-const GUEST_KEY = testSave ? `cc:v3:test:${testSave}` : 'cc:v3'
+// Playing needs an account: signed out there is nothing saved on the device (the old guest save is erased).
+// The one exception is a developer's test save (?debug&save=name), which plays offline for testing.
+const GUEST_KEY = testSave ? `cc:v3:test:${testSave}` : null
+try { localStorage.removeItem('cc:v3') } catch { /* private mode */ }
 let KEY = GUEST_KEY
 let server = null // set while signed in (net/account.js)
 const HOME_KEYS = ['layout', 'style', 'switches', 'equipped', 'access'] // changing any of these saves your home
@@ -63,6 +66,7 @@ let state = load()
 if (KEY !== GUEST_KEY) state.net = { status: 'loading' }
 
 function load() {
+  if (!KEY) return fresh() // signed out: nothing on the device
   try {
     const raw = localStorage.getItem(KEY)
     if (raw) {
@@ -85,6 +89,7 @@ function load() {
 }
 
 function persist() {
+  if (!KEY) return
   try { localStorage.setItem(KEY, JSON.stringify({ ...state, toasts: [], net: undefined })) } catch { /* private mode */ }
 }
 
@@ -365,30 +370,28 @@ export const store = {
   online: () => !!server,
   server: () => server,
   setNet(net) { set({ net }) },
-  /** the guest's own save on this device (what a new account starts from) */
-  guestSnapshot() {
-    if (!server) return state
-    try { const raw = localStorage.getItem(GUEST_KEY); if (raw) return { ...fresh(), ...JSON.parse(raw) } } catch { /* private mode */ }
-    return fresh()
-  },
+  /** can you play right now: signed in (or a developer's test save) */
+  canPlay: () => !!server || !!testSave,
   /** signed in: the account's data takes over (settings stay this device's) */
   goOnline(srv, snap, uid) {
     server = null // (no saving back while loading)
     KEY = `cc:v3:u:${uid}`
     undoStack = []; redoStack = []
-    const settings = state.settings
+    // (settings stay this device's; a brand-new account is welcomed: asked its name, then the guide)
+    const settings = snap.isNew ? { ...state.settings, arrived: false, onboarded: false } : state.settings
     state = { ...fresh(), ...snap, settings, toasts: state.toasts, net: state.net }
     server = srv
     persist()
     listeners.forEach(l => l())
   },
-  /** signed out: back to the guest save on this device */
+  /** signed out (or the account deleted): nothing is left on screen but the title, and nothing on the device */
   goOffline() {
     server = null
+    try { if (KEY && KEY !== GUEST_KEY) localStorage.removeItem(KEY) } catch { /* private mode */ }
     KEY = GUEST_KEY
     undoStack = []; redoStack = []
     const toasts = state.toasts
-    state = { ...load(), toasts }
+    state = { ...load(), toasts, settings: { ...state.settings } }
     listeners.forEach(l => l())
   },
   /** news from the server (a top-up, a new friend, a partner's change): no save back */
@@ -412,7 +415,7 @@ export const store = {
     /** try either home: become a couple with a made-up partner, or go back to being on your own */
     toggleCouple() {
       const on = state.couple.state !== 'active'
-      const partner = 'DeM'
+      const partner = 'Partner'
       set({
         couple: on ? { partner, since: toDateStr(new Date()), state: 'active' } : { partner: null, since: null, state: 'none' },
         profile: { ...state.profile, house: on ? `${state.profile.name} & ${partner}` : `${state.profile.name}'s home` },

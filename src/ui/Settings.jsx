@@ -13,7 +13,7 @@ const KEYS = [
   ['W A S D / arrows', 'Move your cube'],
   ['Click the floor', 'Walk there'],
   ['Q / E', 'Spin the view'],
-  ['Scroll', 'Zoom: eyes · close-up · room · house · street'],
+  ['Eye button', 'Views: my eyes · close-up · room · house · outside · playground'],
   ['Click a lamp or curtain', 'Switch it off and on · open and shut'],
   ['Hold Shift or Space', 'Run (Shift is twice as fast)'],
   ['Drag (my eyes)', 'Look around · scroll out to leave'],

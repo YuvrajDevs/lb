@@ -21,7 +21,7 @@ npm run build
 ## Moving and looking
 
 - **WASD / arrows** to move; **hold Space** to run. **Click** anywhere on the floor, in the garden or on the cliff walk to walk there: the path goes around furniture and through the front door and garden gate.
-- **Scroll** to change view: your eyes ↔ close-up ↔ room ↔ the whole house ↔ the street. Or pick a view from the **eye button** under the compass.
+- The **eye button** under the compass picks the view: my eyes, close-up (behind you), room, house, outside (from above, following you), playground.
 - **First person** (my eyes): hold and drag to look around.
 - **Compass:** drag to spin, ‹ › to turn, click for the front view. Walls facing the camera fade so you can see in.
 - **Stairs** are walked up and down. **Doors and the garden gate** open as you come near. You can step out onto the **balcony**.

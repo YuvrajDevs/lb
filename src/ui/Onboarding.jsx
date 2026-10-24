@@ -14,7 +14,7 @@ const STEPS = name => [
       ? 'Tap anywhere to walk there, or use the arrow pad. You can wander the whole street, out to the cliff and the playground behind your home.'
       : 'Click anywhere to walk there, or use W A S D. Hold Shift to run. Wander the whole street, out to the cliff and the playground behind your home.',
   },
-  { icon: 'eye', title: 'Looking around', text: `${touch ? 'Use' : 'Scroll, or use'} the eye button by the compass, to go from your own eyes to the room, the house and the street. Drag to turn.` },
+  { icon: 'eye', title: 'Looking around', text: 'The eye button by the compass changes the view: your own eyes, close behind you, the room, the house, outside from above, or the playground. Drag to turn.' },
   { icon: 'lamp', title: 'Make it yours', text: 'Tap lamps and curtains to switch them. Edit home places furniture, names your sign, and chooses who can come in without asking.' },
   { icon: 'world', title: 'Neighbours', text: "Everyone's home is on the street. At a neighbour's gate you can ask to visit; when they say yes, in you go. Sign in to invite friends." },
   { icon: 'gift', title: 'Boxets', text: 'Play and earn: every 30 minutes, three quests a day, a daily gift, and Star catch at the playground. Spend it all in the shop.' },

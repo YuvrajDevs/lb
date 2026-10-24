@@ -92,11 +92,23 @@ function WorldTab({ s }) {
     )
   }
 
+  // the creator drags the homes into the order they stand along the street
+  const [drag, setDrag] = useState(null)
+  const drop = to => {
+    if (drag == null || drag === to || to >= w.members.length) return setDrag(null)
+    const ids = w.members.map(m => m.id)
+    const [moved] = ids.splice(drag, 1)
+    ids.splice(to, 0, moved)
+    setDrag(null)
+    run('arrange', () => srv.arrange(ids), 'The street is rearranged')
+  }
   const slots = Array.from({ length: WORLD_MAX_SLOTS }, (_, i) => {
     const m = w.members[i]
     if (m) {
       return (
-        <div className="slot filled" key={m.id}>
+        <div className={`slot filled ${creator ? 'movable' : ''} ${drag === i ? 'dragging' : ''}`} key={m.id}
+          draggable={creator} onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; setDrag(i) }} onDragEnd={() => setDrag(null)}
+          onDragOver={e => { if (creator) e.preventDefault() }} onDrop={e => { e.preventDefault(); drop(i) }}>
           <span className={`presence ${m.online ? 'on' : ''}`} title={m.online ? 'Online' : 'Offline'} />
           <div className="avatar"><Icon name={m.kind === 'couple' ? 'couple' : 'world'} size={20} /></div>
           <div><b>{m.you ? `${m.house} (you)` : m.house}</b><small>{m.kind === 'couple' ? 'a couple' : m.name}</small></div>
@@ -118,6 +130,7 @@ function WorldTab({ s }) {
             {w.list.map(x => <button key={x.id} className={`chip ${x.id === w.id ? 'on' : ''}`} onClick={() => run('sw', () => srv.switchWorld(x.id))}>{x.name}</button>)}
           </div>
         )}
+        {creator && w.members.length > 1 && <p className="soft small">Drag the homes to choose the order they stand in along the street, left to right.</p>}
         <div className="slots">{slots}</div>
 
         <h4 className="sub">Invite someone</h4>
